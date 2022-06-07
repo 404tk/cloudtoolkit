@@ -34,7 +34,7 @@ func New(options schema.OptionBlock) (*Provider, error) {
 	token, _ := options.GetMetadata(utils.SessionToken)
 	region, _ := options.GetMetadata(utils.Region)
 	if region == "" {
-		if v, _ := options.GetMetadata("version"); v == "China" {
+		if v, _ := options.GetMetadata(utils.Version); v == "China" {
 			conf.WithRegion("cn-northwest-1")
 		} else {
 			conf.WithRegion("us-east-1")

@@ -3,13 +3,18 @@ package alibaba
 import (
 	"context"
 
+	_ecs "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/ecs"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/ecs"
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/resourcemanager"
 )
 
 // Provider is a data provider for alibaba API
 type Provider struct {
-	vendor string
+	vendor         string
+	EcsClient      *ecs.Client
+	resourceGroups []string
 }
 
 // New creates a new provider client for alibaba API
@@ -22,8 +27,35 @@ func New(options schema.OptionBlock) (*Provider, error) {
 	if !ok {
 		return nil, &schema.ErrNoSuchKey{Name: secretKey}
 	}
+	region, _ := options.GetMetadata(utils.Region)
+	if region == "" {
+		region = "cn-hangzhou"
+	}
+	ecsClient, err := ecs.NewClientWithAccessKey(region, accessKey, secretKey)
+	if err != nil {
+		return nil, err
+	}
+	rmClient, err := resourcemanager.NewClientWithAccessKey(accessKey, secretKey, region)
+	if err != nil {
+		return nil, err
+	}
+	resourceGroups := []string{""}
+	listResourceGroupsRequest := resourcemanager.CreateListResourceGroupsRequest()
+	resp, err := rmClient.ListResourceGroups(listResourceGroupsRequest)
+	if err == nil {
+		if len(resp.ResourceGroups.ResourceGroup) > 0 {
+			resourceGroups = []string{}
+			for _, group := range resp.ResourceGroups.ResourceGroup {
+				resourceGroups = append(resourceGroups, group.Id)
+			}
+		}
+	}
 
-	return &Provider{vendor: "alibaba"}, nil
+	return &Provider{
+		vendor:         "alibaba",
+		EcsClient:      ecsClient,
+		resourceGroups: resourceGroups,
+	}, nil
 }
 
 // Name returns the name of the provider
@@ -35,6 +67,9 @@ func (p *Provider) Name() string {
 func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
+	ec2provider := &_ecs.InstanceProvider{
+		Client: p.EcsClient, ResourceGroups: p.resourceGroups}
+	list.Hosts, _ = ec2provider.GetResource(ctx)
 
 	return list, nil
 }
