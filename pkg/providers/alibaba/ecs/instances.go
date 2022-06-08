@@ -25,6 +25,7 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 	if err != nil {
 		return list, err
 	}
+	count := 0
 	for _, r := range resp.Regions.Region {
 		for _, resourceGroupId := range d.ResourceGroups {
 			page := 1
@@ -74,8 +75,9 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 				}
 				page++
 			}
-			progress := fmt.Sprintf("Inquiring %s regionId,number of discovered hosts: %d", r.RegionId, len(list))
+			progress := fmt.Sprintf("Inquiring %s regionId,number of discovered hosts: %d", r.RegionId, len(list)-count)
 			log.Println(progress)
+			count = len(list)
 		}
 	}
 

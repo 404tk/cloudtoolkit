@@ -6,6 +6,9 @@ require (
 	github.com/aliyun/alibaba-cloud-sdk-go v1.61.1628
 	github.com/aws/aws-sdk-go v1.44.28
 	github.com/c-bata/go-prompt v0.2.6
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.0.415
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm v1.0.415
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/lighthouse v1.0.415
 )
 
 require (

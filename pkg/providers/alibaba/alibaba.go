@@ -7,7 +7,6 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ecs"
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/resourcemanager"
 )
 
 // Provider is a data provider for alibaba API
@@ -35,20 +34,23 @@ func New(options schema.OptionBlock) (*Provider, error) {
 	if err != nil {
 		return nil, err
 	}
-	rmClient, err := resourcemanager.NewClientWithAccessKey(region, accessKey, secretKey)
-	if err != nil {
-		return nil, err
-	}
-	req := resourcemanager.CreateListResourceGroupsRequest()
-	req.Scheme = "https"
-	resp, err := rmClient.ListResourceGroups(req)
-	if err != nil {
-		return nil, err
-	}
-	var resourceGroups []string
-	for _, group := range resp.ResourceGroups.ResourceGroup {
-		resourceGroups = append(resourceGroups, group.Id)
-	}
+	/*
+		rmClient, err := resourcemanager.NewClientWithAccessKey(region, accessKey, secretKey)
+		if err != nil {
+			return nil, err
+		}
+		req := resourcemanager.CreateListResourceGroupsRequest()
+		req.Scheme = "https"
+		resp, err := rmClient.ListResourceGroups(req)
+		if err != nil {
+			return nil, err
+		}
+		var resourceGroups []string
+		for _, group := range resp.ResourceGroups.ResourceGroup {
+			resourceGroups = append(resourceGroups, group.Id)
+		}
+	*/
+	resourceGroups := []string{""}
 
 	return &Provider{
 		vendor:         "alibaba",
@@ -66,9 +68,8 @@ func (p *Provider) Name() string {
 func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
-	ec2provider := &_ecs.InstanceProvider{
-		Client: p.EcsClient, ResourceGroups: p.resourceGroups}
-	list.Hosts, _ = ec2provider.GetResource(ctx)
+	ecsprovider := &_ecs.InstanceProvider{Client: p.EcsClient, ResourceGroups: p.resourceGroups}
+	list.Hosts, _ = ecsprovider.GetResource(ctx)
 
 	return list, nil
 }
