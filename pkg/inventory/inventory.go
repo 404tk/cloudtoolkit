@@ -6,6 +6,7 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba"
 	"github.com/404tk/cloudtoolkit/pkg/providers/aws"
+	"github.com/404tk/cloudtoolkit/pkg/providers/huawei"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 )
@@ -50,6 +51,8 @@ func nameToProvider(value string, block schema.OptionBlock) (schema.Provider, er
 		return alibaba.New(block)
 	case "tencent":
 		return tencent.New(block)
+	case "huawei":
+		return huawei.New(block)
 	default:
 		return nil, fmt.Errorf("invalid provider name found: %s", value)
 	}
