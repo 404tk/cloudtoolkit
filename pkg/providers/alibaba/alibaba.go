@@ -35,20 +35,19 @@ func New(options schema.OptionBlock) (*Provider, error) {
 	if err != nil {
 		return nil, err
 	}
-	rmClient, err := resourcemanager.NewClientWithAccessKey(accessKey, secretKey, region)
+	rmClient, err := resourcemanager.NewClientWithAccessKey(region, accessKey, secretKey)
 	if err != nil {
 		return nil, err
 	}
-	resourceGroups := []string{""}
-	listResourceGroupsRequest := resourcemanager.CreateListResourceGroupsRequest()
-	resp, err := rmClient.ListResourceGroups(listResourceGroupsRequest)
-	if err == nil {
-		if len(resp.ResourceGroups.ResourceGroup) > 0 {
-			resourceGroups = []string{}
-			for _, group := range resp.ResourceGroups.ResourceGroup {
-				resourceGroups = append(resourceGroups, group.Id)
-			}
-		}
+	req := resourcemanager.CreateListResourceGroupsRequest()
+	req.Scheme = "https"
+	resp, err := rmClient.ListResourceGroups(req)
+	if err != nil {
+		return nil, err
+	}
+	var resourceGroups []string
+	for _, group := range resp.ResourceGroups.ResourceGroup {
+		resourceGroups = append(resourceGroups, group.Id)
 	}
 
 	return &Provider{
