@@ -31,6 +31,7 @@ var modules = []prompt.Suggest{
 	{Text: "openstack", Description: "OpenStack"},
 }
 
+/*
 var enumerate = []prompt.Suggest{
 	// {Text: utils.Provider, Description: "Vendor name"},
 	{Text: utils.AccessKey, Description: "key ID"},
@@ -38,6 +39,17 @@ var enumerate = []prompt.Suggest{
 	{Text: utils.SessionToken, Description: "session token(optional)"},
 	{Text: utils.Region, Description: "Region(optional)"},
 	{Text: utils.Version, Description: "International or custom edition(optional)"},
+}
+*/
+
+func getOpt() []prompt.Suggest {
+	var enumerate = []prompt.Suggest{}
+	for k := range config {
+		if k != utils.Provider {
+			enumerate = append(enumerate, prompt.Suggest{Text: k})
+		}
+	}
+	return enumerate
 }
 
 var opt = []prompt.Suggest{
@@ -74,7 +86,7 @@ func actionCompleter(d prompt.Document) []prompt.Suggest {
 		}
 	case "set":
 		if len(args) == 2 {
-			return prompt.FilterContains(enumerate, d.GetWordBeforeCursor(), true)
+			return prompt.FilterContains(getOpt(), d.GetWordBeforeCursor(), true)
 		}
 	}
 	return []prompt.Suggest{}

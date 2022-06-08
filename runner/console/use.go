@@ -8,13 +8,19 @@ import (
 	"github.com/c-bata/go-prompt"
 )
 
-var config = schema.OptionBlock{
-	utils.Provider:     "",
+var config map[string]string
+var config1 = schema.OptionBlock{
 	utils.AccessKey:    "",
 	utils.SecretKey:    "",
 	utils.SessionToken: "",
 	utils.Region:       "",
 	utils.Version:      "",
+}
+var config2 = schema.OptionBlock{
+	utils.AzureClientId:       "",
+	utils.AzureClientSecret:   "",
+	utils.AzureTenantId:       "",
+	utils.AzureSubscriptionId: "",
 }
 
 func Use(args []string) {
@@ -31,6 +37,12 @@ func Use(args []string) {
 }
 
 func loadModule(m string) {
+	switch m {
+	case "azure":
+		config = config2
+	default:
+		config = config1
+	}
 	config[utils.Provider] = m
 	p := prompt.New(
 		Executor,

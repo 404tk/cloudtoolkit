@@ -24,11 +24,11 @@ type Provider struct {
 func New(options schema.OptionBlock) (*Provider, error) {
 	accessKey, ok := options.GetMetadata(utils.AccessKey)
 	if !ok {
-		return nil, &schema.ErrNoSuchKey{Name: accessKey}
+		return nil, &schema.ErrNoSuchKey{Name: utils.AccessKey}
 	}
 	secretKey, ok := options.GetMetadata(utils.SecretKey)
 	if !ok {
-		return nil, &schema.ErrNoSuchKey{Name: secretKey}
+		return nil, &schema.ErrNoSuchKey{Name: utils.SecretKey}
 	}
 	auth := basic.NewCredentialsBuilder().
 		WithAk(accessKey).
