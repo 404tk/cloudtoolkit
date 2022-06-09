@@ -3,6 +3,7 @@ package console
 import (
 	"fmt"
 	"os"
+	"sort"
 
 	"github.com/404tk/cloudtoolkit/utils"
 )
@@ -38,8 +39,15 @@ func show(args []string) {
 	case "options":
 		fmt.Printf("\n%-10s\t%-60s\n", "Name", "Current Setting")
 		fmt.Printf("%-10s\t%-60s\n", "----", "---------------")
-		for k, v := range config {
-			fmt.Printf("%-10s\t%-60s\n", k, v)
+		var tmplist []string
+		for k := range config {
+			tmplist = append(tmplist, k)
+		}
+		sort.Strings(tmplist)
+		for _, k := range tmplist {
+			if v, ok := config[k]; ok {
+				fmt.Printf("%-15s\t%-60s\n", k, v)
+			}
 		}
 	}
 }

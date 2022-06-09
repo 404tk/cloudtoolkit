@@ -22,6 +22,9 @@ var config2 = schema.OptionBlock{
 	utils.AzureTenantId:       "",
 	utils.AzureSubscriptionId: "",
 }
+var config3 = schema.OptionBlock{
+	utils.GCPserviceAccountJSON: "",
+}
 
 func Use(args []string) {
 	if len(args) < 1 {
@@ -40,6 +43,8 @@ func loadModule(m string) {
 	switch m {
 	case "azure":
 		config = config2
+	case "gcp":
+		config = config3
 	default:
 		config = config1
 	}

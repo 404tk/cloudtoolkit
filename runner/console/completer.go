@@ -25,10 +25,7 @@ var modules = []prompt.Suggest{
 	{Text: "azure", Description: "Microsoft Azure"},
 	{Text: "alibaba", Description: "Alibaba Cloud"},
 	{Text: "tencent", Description: "Tencent Cloud"},
-	{Text: "ucloud", Description: "UCloud"},
 	{Text: "huawei", Description: "Huawei Cloud"},
-	{Text: "baidu", Description: "Baidu Cloud"},
-	{Text: "openstack", Description: "OpenStack"},
 }
 
 /*

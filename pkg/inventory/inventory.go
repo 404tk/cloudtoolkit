@@ -7,6 +7,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba"
 	"github.com/404tk/cloudtoolkit/pkg/providers/aws"
 	"github.com/404tk/cloudtoolkit/pkg/providers/azure"
+	"github.com/404tk/cloudtoolkit/pkg/providers/gcp"
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
@@ -50,6 +51,8 @@ func nameToProvider(value string, block schema.OptionBlock) (schema.Provider, er
 		return aws.New(block)
 	case "azure":
 		return azure.New(block)
+	case "gcp":
+		return gcp.New(block)
 	case "alibaba":
 		return alibaba.New(block)
 	case "tencent":

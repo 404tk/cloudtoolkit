@@ -10,8 +10,12 @@ const (
 )
 
 const (
-	AzureClientId       = "client_id"
-	AzureClientSecret   = "client_secret"
-	AzureTenantId       = "tenant_id"
-	AzureSubscriptionId = "subscription_id"
+	AzureClientId       = "clientId"
+	AzureClientSecret   = "clientSecret"
+	AzureTenantId       = "tenantId"
+	AzureSubscriptionId = "subscriptionId"
+)
+
+const (
+	GCPserviceAccountJSON = "base64Json"
 )

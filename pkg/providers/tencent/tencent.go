@@ -51,12 +51,14 @@ func (p *Provider) Name() string {
 func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
-	cvmprovider := &cvm.InstanceProvider{
-		Credential: p.credential, Cpf: p.cpf, Region: p.region}
-	list.Hosts, _ = cvmprovider.GetResource(ctx)
-	light := &lighthouse.InstanceProvider{
-		Credential: p.credential, Cpf: p.cpf, Region: p.region}
-	list.Hosts, _ = light.GetResource(ctx)
+
+	cvmprovider := &cvm.InstanceProvider{Credential: p.credential, Cpf: p.cpf, Region: p.region}
+	cvms, _ := cvmprovider.GetResource(ctx)
+	list.Hosts = append(list.Hosts, cvms...)
+
+	light := &lighthouse.InstanceProvider{Credential: p.credential, Cpf: p.cpf, Region: p.region}
+	lights, _ := light.GetResource(ctx)
+	list.Hosts = append(list.Hosts, lights...)
 
 	return list, nil
 }
