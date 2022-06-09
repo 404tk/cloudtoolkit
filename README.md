@@ -1,7 +1,7 @@
 # cloudtoolkit
 Cloud Security Penetration Toolkit
 
-# Supported providers
+## Supported Providers
 
 - AWS (Amazon web services)
     - EC2

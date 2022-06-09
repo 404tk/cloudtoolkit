@@ -2,12 +2,12 @@ package console
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/inventory"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/modood/table"
 )
 
 func cloudlist() {
@@ -26,7 +26,11 @@ func cloudlist() {
 			return
 		}
 
-		resp, _ := json.MarshalIndent(resources, "", "\t")
-		fmt.Printf("%s\n", resp)
+		if len(resources.Hosts) > 0 {
+			fmt.Println("Host results: ")
+			table.Output(resources.Hosts)
+		} else {
+			log.Println("No host result found.")
+		}
 	}
 }

@@ -20,6 +20,7 @@ type InstanceProvider struct {
 // GetResource returns all the resources in the store for a provider.
 func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
 	list := schema.NewResources().Hosts
+	log.Println("Start enumerating CVM ...")
 	var regions []string
 	if d.Region == "" {
 		client, err := cvm.NewClient(d.Credential, d.Region, d.Cpf)
@@ -58,6 +59,7 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 				PublicIPv4:  ipv4,
 				PrivateIpv4: privateIPv4,
 				Public:      ipv4 != "",
+				Region:      r,
 			}
 			list = append(list, host)
 		}

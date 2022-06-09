@@ -10,6 +10,7 @@ require (
 	github.com/aws/aws-sdk-go v1.44.28
 	github.com/c-bata/go-prompt v0.2.6
 	github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.0.91
+	github.com/modood/table v0.0.0-20220527013332-8d47e76dad33
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.0.415
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm v1.0.415
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/lighthouse v1.0.415
@@ -41,6 +42,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/pkg/term v1.2.0-beta.2 // indirect
+	github.com/smartystreets/goconvey v1.7.2 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4 // indirect
 	golang.org/x/net v0.0.0-20220607020251-c690dde0001d // indirect

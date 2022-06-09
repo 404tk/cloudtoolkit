@@ -35,10 +35,11 @@ type Resources struct {
 }
 
 type Host struct {
-	Public      bool
-	PublicIPv4  string
-	PrivateIpv4 string
-	DNSName     string
+	PublicIPv4  string `table:"Public IP"`
+	PrivateIpv4 string `table:"Private IP"`
+	DNSName     string `table:"DNS Name"`
+	Public      bool   `table:"Public"`
+	Region      string `table:"Region"`
 }
 
 type Storage struct {

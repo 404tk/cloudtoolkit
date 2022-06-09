@@ -15,6 +15,7 @@ type InstanceProvider struct {
 
 func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
 	list := schema.NewResources().Hosts
+	log.Println("Start enumerating Compute ...")
 
 	for _, project := range d.Projects {
 		zone := d.ComputeService.Zones.List(project)
@@ -26,7 +27,7 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 					continue
 				}
 				for _, instance := range res.Items {
-					_host := &schema.Host{}
+					_host := &schema.Host{Region: instance.Zone}
 					for _, networkInterface := range instance.NetworkInterfaces {
 						_host.PrivateIpv4 = networkInterface.NetworkIP
 						for _, accessConfig := range networkInterface.AccessConfigs {

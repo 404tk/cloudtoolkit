@@ -15,6 +15,7 @@ type CloudDNSProvider struct {
 
 func (d *CloudDNSProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
 	list := schema.NewResources().Hosts
+	log.Println("Start enumerating DNS ...")
 
 	for _, project := range d.Projects {
 		zone := d.Dns.ManagedZones.List(project)
@@ -22,7 +23,7 @@ func (d *CloudDNSProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 			for _, z := range resp.ManagedZones {
 				resources := d.Dns.ResourceRecordSets.List(project, z.Name)
 				err := resources.Pages(context.Background(), func(r *dns.ResourceRecordSetsListResponse) error {
-					items := d.parseRecordsForResourceSet(r)
+					items := d.parseRecordsForResourceSet(r, z.Name)
 					list = append(list, items...)
 					return nil
 				})
@@ -42,7 +43,7 @@ func (d *CloudDNSProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 }
 
 // parseRecordsForResourceSet parses and returns the records for a resource set
-func (d *CloudDNSProvider) parseRecordsForResourceSet(r *dns.ResourceRecordSetsListResponse) []*schema.Host {
+func (d *CloudDNSProvider) parseRecordsForResourceSet(r *dns.ResourceRecordSetsListResponse, zone string) []*schema.Host {
 	list := schema.NewResources().Hosts
 
 	for _, resource := range r.Rrsets {
@@ -55,6 +56,7 @@ func (d *CloudDNSProvider) parseRecordsForResourceSet(r *dns.ResourceRecordSetsL
 				DNSName:    resource.Name,
 				Public:     true,
 				PublicIPv4: data,
+				Region:     zone,
 			})
 		}
 	}

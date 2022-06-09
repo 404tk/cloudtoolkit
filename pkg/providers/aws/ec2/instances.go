@@ -2,6 +2,8 @@ package ec2
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
@@ -20,7 +22,9 @@ type InstanceProvider struct {
 // GetResource returns all the resources in the store for a provider.
 func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
 	list := schema.NewResources().Hosts
+	log.Println("Start enumerating EC2 ...")
 
+	count := 0
 	for _, region := range d.Regions {
 		req := &ec2.DescribeInstancesInput{
 			MaxResults: aws.Int64(1000),
@@ -48,6 +52,7 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 						PrivateIpv4: aws.StringValue(instance.PrivateIpAddress),
 						DNSName:     aws.StringValue(instance.PublicDnsName),
 						Public:      ip4 != "",
+						Region:      region,
 					}
 					list = append(list, &host)
 				}
@@ -57,6 +62,9 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 			}
 			req.SetNextToken(aws.StringValue(resp.NextToken))
 		}
+		progress := fmt.Sprintf("Inquiring %s regionId,number of discovered hosts: %d", region, len(list)-count)
+		log.Println(progress)
+		count = len(list)
 	}
 	return list, nil
 }

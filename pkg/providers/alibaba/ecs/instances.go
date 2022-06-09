@@ -20,6 +20,7 @@ type InstanceProvider struct {
 // GetResource returns all the resources in the store for a provider.
 func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
 	list := schema.NewResources().Hosts
+	log.Println("Start enumerating ECS ...")
 	req := ecs.CreateDescribeRegionsRequest()
 	resp, err := d.Client.DescribeRegions(req)
 	if err != nil {
@@ -67,6 +68,7 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 						PublicIPv4:  ipv4,
 						PrivateIpv4: privateIPv4,
 						Public:      ipv4 != "",
+						Region:      r.RegionId,
 					}
 					list = append(list, _host)
 				}

@@ -2,6 +2,7 @@ package compute
 
 import (
 	"context"
+	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/Azure/azure-sdk-for-go/profiles/latest/compute/mgmt/compute"
@@ -21,6 +22,7 @@ type VmProvider struct {
 // GetResource returns all the resources in the store for a provider.
 func (d *VmProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
 	list := schema.NewResources().Hosts
+	log.Println("Start enumerating VM ...")
 
 	groups, err := fetchResouceGroups(ctx, d)
 	if err != nil {
@@ -34,7 +36,7 @@ func (d *VmProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
 		}
 
 		for _, vm := range vmList {
-			_host := &schema.Host{}
+			_host := &schema.Host{Region: *vm.Location}
 			nics := *vm.NetworkProfile.NetworkInterfaces
 			for _, nic := range nics {
 				res, err := azure.ParseResourceID(*nic.ID)

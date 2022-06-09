@@ -1,6 +1,7 @@
 package inventory
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 
@@ -30,6 +31,8 @@ func New(options schema.Options) (*Inventory, error) {
 		provider, err := nameToProvider(value, block)
 		if err != nil {
 			return inventory, err
+		} else if IsNil(provider) {
+			return inventory, errors.New("It maybe Huawei Cloud SDK panic.")
 		}
 		inventory.Providers = append(inventory.Providers, provider)
 	}
