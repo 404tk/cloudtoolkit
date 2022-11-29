@@ -82,7 +82,8 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	list.Provider = p.vendor
 	ec2provider := &_ec2.InstanceProvider{
 		Ec2Client: p.EC2Client, Session: p.session, Regions: p.regions}
-	list.Hosts, _ = ec2provider.GetResource(ctx)
+	var err error
+	list.Hosts, err = ec2provider.GetResource(ctx)
 
-	return list, nil
+	return list, err
 }

@@ -3,6 +3,7 @@ package console
 import (
 	"strings"
 
+	"github.com/404tk/cloudtoolkit/pkg/plugins"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/c-bata/go-prompt"
 )
@@ -19,14 +20,12 @@ var action = []prompt.Suggest{
 	{Text: "run", Description: "run job"},
 }
 
-var modules = []prompt.Suggest{
-	{Text: "aws", Description: "Amazon Web Service"},
-	{Text: "gcp", Description: "Google Cloud Platform"},
-	{Text: "azure", Description: "Microsoft Azure"},
-	{Text: "alibaba", Description: "Alibaba Cloud"},
-	{Text: "tencent", Description: "Tencent Cloud"},
-	{Text: "huawei", Description: "Huawei Cloud"},
-}
+var modules = func() (m []prompt.Suggest) {
+	for k, v := range plugins.Providers {
+		m = append(m, prompt.Suggest{Text: k, Description: v.Desc()})
+	}
+	return m
+}()
 
 /*
 var enumerate = []prompt.Suggest{

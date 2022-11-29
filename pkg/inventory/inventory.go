@@ -5,12 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba"
-	"github.com/404tk/cloudtoolkit/pkg/providers/aws"
-	"github.com/404tk/cloudtoolkit/pkg/providers/azure"
-	"github.com/404tk/cloudtoolkit/pkg/providers/gcp"
-	"github.com/404tk/cloudtoolkit/pkg/providers/huawei"
-	"github.com/404tk/cloudtoolkit/pkg/providers/tencent"
+	"github.com/404tk/cloudtoolkit/pkg/plugins"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 )
 
@@ -48,21 +43,10 @@ func IsNil(i schema.Provider) bool {
 }
 
 // nameToProvider returns the provider for a name
-func nameToProvider(value string, block schema.OptionBlock) (schema.Provider, error) {
-	switch value {
-	case "aws":
-		return aws.New(block)
-	case "azure":
-		return azure.New(block)
-	case "gcp":
-		return gcp.New(block)
-	case "alibaba":
-		return alibaba.New(block)
-	case "tencent":
-		return tencent.New(block)
-	case "huawei":
-		return huawei.New(block)
-	default:
-		return nil, fmt.Errorf("invalid provider name found: %s", value)
+func nameToProvider(name string, block schema.OptionBlock) (schema.Provider, error) {
+	fmt.Println(plugins.Providers)
+	if v, ok := plugins.Providers[name]; ok {
+		return v.Check(block)
 	}
+	return nil, fmt.Errorf("invalid provider name found: %s", name)
 }
