@@ -33,7 +33,7 @@ func New(options schema.OptionBlock) (*Provider, error) {
 	conf := aws.NewConfig()
 	token, _ := options.GetMetadata(utils.SessionToken)
 	region, _ := options.GetMetadata(utils.Region)
-	if region == "" {
+	if region == "all" {
 		if v, _ := options.GetMetadata(utils.Version); v == "China" {
 			conf.WithRegion("cn-northwest-1")
 		} else {
@@ -51,7 +51,7 @@ func New(options schema.OptionBlock) (*Provider, error) {
 
 	ec2Client := ec2.New(session)
 	var regions []string
-	if region == "" {
+	if region == "all" {
 		resp, err := ec2Client.DescribeRegions(&ec2.DescribeRegionsInput{})
 		if err != nil {
 			return nil, err

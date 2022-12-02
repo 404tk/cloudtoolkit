@@ -42,7 +42,7 @@ func New(options schema.OptionBlock) (*Provider, error) {
 	}()
 
 	regionId, _ := options.GetMetadata(utils.Region)
-	if regionId == "" {
+	if regionId == "all" {
 		regionId = "cn-east-2"
 	}
 	client := iam.NewIamClient(

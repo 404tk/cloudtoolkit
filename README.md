@@ -1,5 +1,5 @@
 # cloudtoolkit
-Cloud Security Penetration Toolkit
+Cloud Penetration Testing Toolkit
 
 ## Supported Providers
 
@@ -12,6 +12,9 @@ Cloud Security Penetration Toolkit
     - Cloud DNS
 - Alibaba Cloud
     - ECS (Elastic Compute Service)
+    - OSS (Object Storage Service)
+    - RAM (Resource Access Management)
+    - RDS (Relational Database Service)
 - Tencent Cloud
     - CVM (Cloud Virtual Machine)
 - Huawei Cloud

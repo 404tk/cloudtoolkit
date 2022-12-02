@@ -13,7 +13,7 @@ var config1 = schema.OptionBlock{
 	utils.AccessKey:    "",
 	utils.SecretKey:    "",
 	utils.SessionToken: "",
-	utils.Region:       "",
+	utils.Region:       "all", // Default enumerate all
 	utils.Version:      "",
 }
 var config2 = schema.OptionBlock{

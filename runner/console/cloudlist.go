@@ -22,15 +22,19 @@ func cloudlist() {
 	for _, provider := range inventory.Providers {
 		resources, err := provider.Resources(context.Background())
 		if err != nil {
-			log.Println(err)
+			log.Println("[Failed]", err.Error())
 			return
 		}
-
-		if len(resources.Hosts) > 0 {
-			fmt.Println("Host results: ")
-			table.Output(resources.Hosts)
-		} else {
-			log.Println("No host result found.")
+		pprint := func(len int, tag string, res interface{}) {
+			if len > 0 {
+				fmt.Println(fmt.Sprintf("%s results:\n%s", tag, table.Table(res)))
+			}
 		}
+
+		pprint(len(resources.Hosts), "Hosts", resources.Hosts)
+		pprint(len(resources.Storages), "Storages", resources.Storages)
+		pprint(len(resources.Users), "Users", resources.Users)
+
+		log.Println("[+] Done.")
 	}
 }

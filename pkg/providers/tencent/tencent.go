@@ -33,6 +33,9 @@ func New(options schema.OptionBlock) (*Provider, error) {
 	credential := common.NewCredential(accessKey, secretKey)
 	cpf := profile.NewClientProfile()
 	region, _ := options.GetMetadata(utils.Region)
+	if region == "all" {
+		region = "ap-guangzhou"
+	}
 
 	return &Provider{
 		vendor:     "tencent",

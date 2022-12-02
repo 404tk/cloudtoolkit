@@ -2,17 +2,29 @@ package alibaba
 
 import (
 	"context"
+	"log"
+	"strings"
 
 	_ecs "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/ecs"
+	_oss "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/oss"
+	_ram "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/ram"
+	_rds "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/rds"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ecs"
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/ram"
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/rds"
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
+	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 )
 
 // Provider is a data provider for alibaba API
 type Provider struct {
 	vendor         string
 	EcsClient      *ecs.Client
+	OssClient      *oss.Client
+	RamClient      *ram.Client
+	RdsClient      *rds.Client
 	resourceGroups []string
 }
 
@@ -27,13 +39,32 @@ func New(options schema.OptionBlock) (*Provider, error) {
 		return nil, &schema.ErrNoSuchKey{Name: utils.SecretKey}
 	}
 	region, _ := options.GetMetadata(utils.Region)
-	if region == "" {
+	if region == "all" {
 		region = "cn-hangzhou"
 	}
-	ecsClient, err := ecs.NewClientWithAccessKey(region, accessKey, secretKey)
+	// Get current username
+	stsclient, err := sts.NewClientWithAccessKey(region, accessKey, secretKey)
+	request := sts.CreateGetCallerIdentityRequest()
+	request.Scheme = "https"
+	response, err := stsclient.GetCallerIdentity(request)
 	if err != nil {
 		return nil, err
 	}
+	accountArn := response.Arn
+	var userName string
+	if len(accountArn) >= 4 && accountArn[len(accountArn)-4:] == "root" {
+		userName = "root"
+	} else {
+		if u := strings.Split(accountArn, "/"); len(u) > 1 {
+			userName = u[1]
+		}
+	}
+	log.Printf("[+] Current user: %s\n", userName)
+
+	ecsClient, err := ecs.NewClientWithAccessKey(region, accessKey, secretKey)
+	ossClient, err := oss.New("oss-"+region+".aliyuncs.com", accessKey, secretKey)
+	ramClient, err := ram.NewClientWithAccessKey(region, accessKey, secretKey)
+	rdsClient, err := rds.NewClientWithAccessKey(region, accessKey, secretKey)
 	/*
 		rmClient, err := resourcemanager.NewClientWithAccessKey(region, accessKey, secretKey)
 		if err != nil {
@@ -50,13 +81,14 @@ func New(options schema.OptionBlock) (*Provider, error) {
 			resourceGroups = append(resourceGroups, group.Id)
 		}
 	*/
-	resourceGroups := []string{""}
-
 	return &Provider{
 		vendor:         "alibaba",
 		EcsClient:      ecsClient,
-		resourceGroups: resourceGroups,
-	}, nil
+		OssClient:      ossClient,
+		RamClient:      ramClient,
+		RdsClient:      rdsClient,
+		resourceGroups: []string{""},
+	}, err
 }
 
 // Name returns the name of the provider
@@ -68,8 +100,18 @@ func (p *Provider) Name() string {
 func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
+	var err error
 	ecsprovider := &_ecs.InstanceProvider{Client: p.EcsClient, ResourceGroups: p.resourceGroups}
-	list.Hosts, _ = ecsprovider.GetResource(ctx)
+	list.Hosts, err = ecsprovider.GetResource(ctx)
 
-	return list, nil
+	ossprovider := &_oss.BucketProvider{Client: p.OssClient}
+	list.Storages, err = ossprovider.GetBuckets(ctx)
+
+	ramprovider := &_ram.RamProvider{Client: p.RamClient}
+	list.Users, err = ramprovider.GetRamUser(ctx)
+
+	rdsprovider := &_rds.RdsProvider{Client: p.RdsClient, ResourceGroups: p.resourceGroups}
+	list.Databases, err = rdsprovider.GetDatabases(ctx)
+
+	return list, err
 }

@@ -44,7 +44,6 @@ func IsNil(i schema.Provider) bool {
 
 // nameToProvider returns the provider for a name
 func nameToProvider(name string, block schema.OptionBlock) (schema.Provider, error) {
-	fmt.Println(plugins.Providers)
 	if v, ok := plugins.Providers[name]; ok {
 		return v.Check(block)
 	}

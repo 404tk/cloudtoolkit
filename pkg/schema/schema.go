@@ -21,7 +21,7 @@ func NewResources() *Resources {
 	return &Resources{
 		Hosts:     make([]*Host, 0),
 		Storages:  make([]*Storage, 0),
-		IAMs:      make([]*IAM, 0),
+		Users:     make([]*User, 0),
 		Databases: make([]*Database, 0),
 	}
 }
@@ -30,7 +30,7 @@ type Resources struct {
 	Provider  string
 	Hosts     []*Host
 	Storages  []*Storage
-	IAMs      []*IAM
+	Users     []*User
 	Databases []*Database
 }
 
@@ -43,22 +43,24 @@ type Host struct {
 }
 
 type Storage struct {
-	BucketName     string
-	FileSystemName string
-	AccountName    string
-	Region         string
+	BucketName     string `table:"Bucket"`
+	FileSystemName string `table:"File System"`
+	AccountName    string `table:"Account"`
+	Region         string `table:"Region"`
 }
 
-type IAM struct {
-	User   string
-	UserId string
+type User struct {
+	UserName    string `table:"User"`
+	UserId      string `table:"ID"`
+	EnableLogin bool   `table:"Enable Login"`
+	LastLogin   string `table:"Last Login"`
 }
 
 type Database struct {
-	DBInstanceId  string
-	Engine        string
-	EngineVersion string
-	Region        string
+	DBInstanceId  string `table:"ID"`
+	Engine        string `table:"Engine"`
+	EngineVersion string `table:"Version"`
+	Region        string `table:"Region"`
 }
 
 // ErrNoSuchKey means no such key exists in metadata.
