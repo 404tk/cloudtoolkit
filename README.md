@@ -17,6 +17,8 @@ Cloud Penetration Testing Toolkit
     - RDS (Relational Database Service)
 - Tencent Cloud
     - CVM (Cloud Virtual Machine)
+    - COS (Cloud Object Storage)
+    - CAM (Cloud Access Management)
 - Huawei Cloud
     - ECS
 

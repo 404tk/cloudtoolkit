@@ -36,7 +36,6 @@ func (d *RamProvider) GetRamUser(ctx context.Context) ([]*schema.User, error) {
 				UserId:   user.UserId,
 			}
 
-			// 判断用户是否启用web控制台登录
 			request := ram.CreateGetLoginProfileRequest()
 			request.Scheme = "https"
 			request.UserName = user.UserName
@@ -46,9 +45,8 @@ func (d *RamProvider) GetRamUser(ctx context.Context) ([]*schema.User, error) {
 				getUserRequest := ram.CreateGetUserRequest()
 				getUserRequest.Scheme = "https"
 				getUserRequest.UserName = user.UserName
-				getUserResponse, _ := d.Client.GetUser(getUserRequest)
-
-				if getUserResponse.User.LastLoginDate != "" {
+				getUserResponse, err := d.Client.GetUser(getUserRequest)
+				if err == nil && getUserResponse.User.LastLoginDate != "" {
 					lastLoginDate, _ := time.Parse(time.RFC3339, getUserResponse.User.LastLoginDate)
 					_user.LastLogin = lastLoginDate.String()
 				}

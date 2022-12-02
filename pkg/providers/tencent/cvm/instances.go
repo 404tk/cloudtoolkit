@@ -13,22 +13,23 @@ import (
 
 type InstanceProvider struct {
 	Credential *common.Credential
-	Cpf        *profile.ClientProfile
 	Region     string
 }
 
 // GetResource returns all the resources in the store for a provider.
 func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
 	list := schema.NewResources().Hosts
-	log.Println("Start enumerating CVM ...")
+	log.Println("[*] Start enumerating CVM ...")
+	cpf := profile.NewClientProfile()
 	var regions []string
-	if d.Region == "" {
-		client, err := cvm.NewClient(d.Credential, d.Region, d.Cpf)
-		if err != nil {
-			return list, err
-		}
+	if d.Region == "all" {
+		client, _ := cvm.NewClient(d.Credential, "ap-guangzhou", cpf)
 		req := cvm.NewDescribeRegionsRequest()
 		resp, err := client.DescribeRegions(req)
+		if err != nil {
+			log.Println("[-] Enumerate CVM failed.")
+			return list, err
+		}
 		for _, r := range resp.Response.RegionSet {
 			regions = append(regions, *r.Region)
 		}
@@ -36,14 +37,11 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 		regions = append(regions, d.Region)
 	}
 	for _, r := range regions {
-		client, err := cvm.NewClient(d.Credential, r, d.Cpf)
-		if err != nil {
-			return list, err
-		}
-
+		client, _ := cvm.NewClient(d.Credential, r, cpf)
 		request := cvm.NewDescribeInstancesRequest()
 		response, err := client.DescribeInstances(request)
 		if err != nil {
+			log.Println("[-] Enumerate CVM failed.")
 			return list, err
 		}
 

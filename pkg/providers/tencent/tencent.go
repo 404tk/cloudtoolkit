@@ -2,20 +2,23 @@ package tencent
 
 import (
 	"context"
+	"log"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cam"
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cos"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cvm"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/lighthouse"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
+	sts "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sts/v20180813"
 )
 
 // Provider is a data provider for tencent API
 type Provider struct {
 	vendor     string
 	credential *common.Credential
-	cpf        *profile.ClientProfile
 	region     string
 }
 
@@ -33,14 +36,20 @@ func New(options schema.OptionBlock) (*Provider, error) {
 	credential := common.NewCredential(accessKey, secretKey)
 	cpf := profile.NewClientProfile()
 	region, _ := options.GetMetadata(utils.Region)
-	if region == "all" {
-		region = "ap-guangzhou"
+
+	request := sts.NewGetCallerIdentityRequest()
+	// cpf.HttpProfile.Endpoint = "sts.tencentcloudapi.com"
+	stsclient, _ := sts.NewClient(credential, "ap-guangzhou", cpf)
+	response, err := stsclient.GetCallerIdentity(request)
+	if err != nil {
+		return nil, err
 	}
+	log.Printf("[+] Current account type: %s\n", *response.Response.Type)
+	// accountId, _ := strconv.Atoi(*response.Response.UserId)
 
 	return &Provider{
 		vendor:     "tencent",
 		credential: credential,
-		cpf:        cpf,
 		region:     region,
 	}, nil
 }
@@ -54,14 +63,21 @@ func (p *Provider) Name() string {
 func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
+	var err error
 
-	cvmprovider := &cvm.InstanceProvider{Credential: p.credential, Cpf: p.cpf, Region: p.region}
-	cvms, _ := cvmprovider.GetResource(ctx)
+	cvmprovider := &cvm.InstanceProvider{Credential: p.credential, Region: p.region}
+	cvms, err := cvmprovider.GetResource(ctx)
 	list.Hosts = append(list.Hosts, cvms...)
 
-	light := &lighthouse.InstanceProvider{Credential: p.credential, Cpf: p.cpf, Region: p.region}
-	lights, _ := light.GetResource(ctx)
+	light := &lighthouse.InstanceProvider{Credential: p.credential, Region: p.region}
+	lights, err := light.GetResource(ctx)
 	list.Hosts = append(list.Hosts, lights...)
 
-	return list, nil
+	cosprovider := &cos.COSProvider{Credential: p.credential}
+	list.Storages, err = cosprovider.GetBuckets(ctx)
+
+	camprovider := &cam.CamUserProvider{Credential: p.credential}
+	list.Users, err = camprovider.GetCamUser(ctx)
+
+	return list, err
 }

@@ -54,6 +54,7 @@ type User struct {
 	UserId      string `table:"ID"`
 	EnableLogin bool   `table:"Enable Login"`
 	LastLogin   string `table:"Last Login"`
+	CreateTime  string `table:"Creat Time"`
 }
 
 type Database struct {

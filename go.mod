@@ -12,9 +12,12 @@ require (
 	github.com/c-bata/go-prompt v0.2.6
 	github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.0.91
 	github.com/modood/table v0.0.0-20220527013332-8d47e76dad33
-	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.0.415
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cam v1.0.550
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.0.550
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm v1.0.415
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/lighthouse v1.0.415
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sts v1.0.550
+	github.com/tencentyun/cos-go-sdk-v5 v0.7.40
 	google.golang.org/api v0.83.0
 )
 
@@ -28,10 +31,12 @@ require (
 	github.com/Azure/go-autorest/autorest/validation v0.3.1 // indirect
 	github.com/Azure/go-autorest/logger v0.2.1 // indirect
 	github.com/Azure/go-autorest/tracing v0.6.0 // indirect
+	github.com/clbanning/mxj v1.8.4 // indirect
 	github.com/dimchansky/utfbom v1.1.1 // indirect
 	github.com/golang-jwt/jwt/v4 v4.2.0 // indirect
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/google/go-querystring v1.0.0 // indirect
 	github.com/googleapis/gax-go/v2 v2.4.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/json-iterator/go v1.1.10 // indirect
@@ -40,8 +45,10 @@ require (
 	github.com/mattn/go-runewidth v0.0.9 // indirect
 	github.com/mattn/go-tty v0.0.3 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
+	github.com/mitchellh/mapstructure v1.4.3 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.1 // indirect
+	github.com/mozillazg/go-httpheader v0.2.1 // indirect
 	github.com/pkg/term v1.2.0-beta.2 // indirect
 	github.com/smartystreets/goconvey v1.7.2 // indirect
 	go.opencensus.io v0.23.0 // indirect
