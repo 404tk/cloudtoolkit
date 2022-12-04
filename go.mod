@@ -10,6 +10,7 @@ require (
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.6+incompatible
 	github.com/aws/aws-sdk-go v1.44.28
 	github.com/c-bata/go-prompt v0.2.6
+	github.com/huaweicloud/huaweicloud-sdk-go-obs v3.22.11+incompatible
 	github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.0.91
 	github.com/modood/table v0.0.0-20220527013332-8d47e76dad33
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cam v1.0.550
@@ -18,6 +19,7 @@ require (
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/lighthouse v1.0.415
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sts v1.0.550
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.40
+	github.com/tidwall/gjson v1.14.4
 	google.golang.org/api v0.83.0
 )
 
@@ -51,6 +53,8 @@ require (
 	github.com/mozillazg/go-httpheader v0.2.1 // indirect
 	github.com/pkg/term v1.2.0-beta.2 // indirect
 	github.com/smartystreets/goconvey v1.7.2 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.0 // indirect
 	go.opencensus.io v0.23.0 // indirect
 	golang.org/x/crypto v0.0.0-20220411220226-7b82a4e95df4 // indirect
 	golang.org/x/net v0.0.0-20220607020251-c690dde0001d // indirect

@@ -20,7 +20,9 @@ Cloud Penetration Testing Toolkit
     - COS (Cloud Object Storage)
     - CAM (Cloud Access Management)
 - Huawei Cloud
-    - ECS
+    - ECS (Elastic Cloud Server)
+    - OBS (Object Storage Service)
+    - IAM (Identity and Access Management)
 
 ## Thanks
 - [c-bata/go-prompt](https://github.com/c-bata/go-prompt)

@@ -21,7 +21,7 @@ type InstanceProvider struct {
 // GetResource returns all the resources in the store for a provider.
 func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
 	list := schema.NewResources().Hosts
-	log.Println("Start enumerating ECS ...")
+	log.Println("[*] Start enumerating ECS ...")
 	for _, r := range d.Regions {
 		_r := getRegion(r)
 		if _r == nil {
@@ -35,6 +35,7 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 		request := &model.ListServersDetailsRequest{}
 		response, err := client.ListServersDetails(request)
 		if err != nil {
+			log.Println("[-] Enumerate ECS failed.")
 			return list, err
 		}
 

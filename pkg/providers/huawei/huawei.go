@@ -5,6 +5,8 @@ import (
 	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/ecs"
+	_iam "github.com/404tk/cloudtoolkit/pkg/providers/huawei/iam"
+	_obs "github.com/404tk/cloudtoolkit/pkg/providers/huawei/obs"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
@@ -30,6 +32,14 @@ func New(options schema.OptionBlock) (*Provider, error) {
 	if !ok {
 		return nil, &schema.ErrNoSuchKey{Name: utils.SecretKey}
 	}
+
+	r := _iam.NewGetRequest()
+	userName, err := r.GetUserName(accessKey, secretKey)
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("[+] Current user: %s\n", userName)
+
 	auth := basic.NewCredentialsBuilder().
 		WithAk(accessKey).
 		WithSk(secretKey).
@@ -42,23 +52,24 @@ func New(options schema.OptionBlock) (*Provider, error) {
 	}()
 
 	regionId, _ := options.GetMetadata(utils.Region)
-	if regionId == "all" {
-		regionId = "cn-east-2"
-	}
-	client := iam.NewIamClient(
-		iam.IamClientBuilder().
-			WithRegion(region.ValueOf("cn-east-2")).
-			WithCredential(auth).
-			Build())
-
-	req := &model.KeystoneListRegionsRequest{}
-	resp, err := client.KeystoneListRegions(req)
-	if err != nil {
-		return nil, err
-	}
 	var regions []string
-	for _, r := range *resp.Regions {
-		regions = append(regions, r.Id)
+	if regionId == "all" {
+		client := iam.NewIamClient(
+			iam.IamClientBuilder().
+				WithRegion(region.ValueOf("cn-east-2")).
+				WithCredential(auth).
+				Build())
+		req := &model.KeystoneListRegionsRequest{}
+		resp, err := client.KeystoneListRegions(req)
+		if err != nil {
+			log.Println("[-] List regions failed.")
+			return nil, err
+		}
+		for _, r := range *resp.Regions {
+			regions = append(regions, r.Id)
+		}
+	} else {
+		regions = append(regions, "cn-east-2")
 	}
 
 	return &Provider{
@@ -77,8 +88,18 @@ func (p *Provider) Name() string {
 func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
+	var err error
 	ecsprovider := &ecs.InstanceProvider{Auth: p.auth, Regions: p.regions}
-	list.Hosts, _ = ecsprovider.GetResource(ctx)
+	list.Hosts, err = ecsprovider.GetResource(ctx)
 
-	return list, nil
+	obsprovider := &_obs.OBSProvider{Auth: p.auth, Regions: p.regions}
+	list.Storages, err = obsprovider.GetBuckets(ctx)
+
+	iamprovider := &_iam.IAMUserProvider{Auth: p.auth, Regions: p.regions}
+	list.Users, err = iamprovider.GetIAMUser(ctx)
+
+	//rdsprovider := &_rds.RdsProvider{Auth: p.auth, Regions: p.regions}
+	//list.Databases, err = rdsprovider.GetDatabases(ctx)
+
+	return list, err
 }
