@@ -23,7 +23,7 @@ func cloudlist() {
 		resources, err := provider.Resources(context.Background())
 		if err != nil {
 			log.Println("[Failed]", err.Error())
-			return
+			// return
 		}
 		pprint := func(len int, tag string, res interface{}) {
 			if len > 0 {

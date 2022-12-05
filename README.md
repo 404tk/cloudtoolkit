@@ -4,7 +4,9 @@ Cloud Penetration Testing Toolkit
 ## Supported Providers
 
 - AWS (Amazon web services)
-    - EC2
+    - EC2 (Elastic Compute Cloud)
+    - S3 (Simple Storage Service)
+    - IAM (Identity and Access Management)
 - Microsoft Azure
     - Virtual Machines
 - GCP (Google Cloud Platform)

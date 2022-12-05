@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	_ec2 "github.com/404tk/cloudtoolkit/pkg/providers/aws/ec2"
+	_iam "github.com/404tk/cloudtoolkit/pkg/providers/aws/iam"
+	_s3 "github.com/404tk/cloudtoolkit/pkg/providers/aws/s3"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/aws/aws-sdk-go/aws"
@@ -86,6 +88,12 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	var err error
 	ec2provider := &_ec2.InstanceProvider{Session: p.session, Region: p.region}
 	list.Hosts, err = ec2provider.GetResource(ctx)
+
+	s3provider := &_s3.S3Provider{Session: p.session}
+	list.Storages, err = s3provider.GetBuckets(ctx)
+
+	iamprovider := &_iam.IAMProvider{Session: p.session}
+	list.Users, err = iamprovider.GetIAMUser(ctx)
 
 	return list, err
 }

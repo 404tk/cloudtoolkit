@@ -45,6 +45,7 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 		for {
 			resp, err := ec2Client.DescribeInstances(req)
 			if err != nil {
+				log.Println("[-] Enumerate EC2 failed.")
 				return list, err
 			}
 			for _, reservation := range resp.Reservations {
