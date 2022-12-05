@@ -14,18 +14,21 @@ import (
 
 // InstanceProvider is an instance provider for aws API
 type InstanceProvider struct {
-	Ec2Client *ec2.EC2
-	Session   *session.Session
-	Regions   []string
+	Session *session.Session
+	Region  string
 }
 
 // GetResource returns all the resources in the store for a provider.
 func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
 	list := schema.NewResources().Hosts
-	log.Println("Start enumerating EC2 ...")
-
+	log.Println("[*] Start enumerating EC2 ...")
 	count := 0
-	for _, region := range d.Regions {
+	regions, err := d.GetEC2Regions()
+	if err != nil {
+		log.Println("[-] Enumerate EC2 failed.")
+		return list, err
+	}
+	for _, region := range regions {
 		req := &ec2.DescribeInstancesInput{
 			MaxResults: aws.Int64(1000),
 		}
@@ -67,4 +70,21 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 		count = len(list)
 	}
 	return list, nil
+}
+
+func (d *InstanceProvider) GetEC2Regions() ([]string, error) {
+	var regions []string
+	ec2Client := ec2.New(d.Session)
+	if d.Region == "all" {
+		resp, err := ec2Client.DescribeRegions(&ec2.DescribeRegionsInput{})
+		if err != nil {
+			return nil, err
+		}
+		for _, region := range resp.Regions {
+			regions = append(regions, aws.StringValue(region.RegionName))
+		}
+	} else {
+		regions = append(regions, d.Region)
+	}
+	return regions, nil
 }

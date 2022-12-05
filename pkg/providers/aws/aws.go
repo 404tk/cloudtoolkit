@@ -2,6 +2,8 @@ package aws
 
 import (
 	"context"
+	"log"
+	"strings"
 
 	_ec2 "github.com/404tk/cloudtoolkit/pkg/providers/aws/ec2"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
@@ -9,15 +11,14 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/aws/aws-sdk-go/service/sts"
 )
 
 // Provider is a data provider for aws API
 type Provider struct {
-	vendor    string
-	regions   []string
-	EC2Client *ec2.EC2
-	session   *session.Session
+	vendor  string
+	region  string
+	session *session.Session
 }
 
 // New creates a new provider client for aws API
@@ -49,25 +50,27 @@ func New(options schema.OptionBlock) (*Provider, error) {
 		return nil, err
 	}
 
-	ec2Client := ec2.New(session)
-	var regions []string
-	if region == "all" {
-		resp, err := ec2Client.DescribeRegions(&ec2.DescribeRegionsInput{})
-		if err != nil {
-			return nil, err
-		}
-		for _, region := range resp.Regions {
-			regions = append(regions, aws.StringValue(region.RegionName))
-		}
-	} else {
-		regions = append(regions, region)
+	// Get current username
+	stsclient := sts.New(session)
+	resp, err := stsclient.GetCallerIdentity(&sts.GetCallerIdentityInput{})
+	if err != nil {
+		return nil, err
 	}
+	accountArn := *resp.Arn
+	var userName string
+	if len(accountArn) >= 4 && accountArn[len(accountArn)-4:] == "root" {
+		userName = "root"
+	} else {
+		if u := strings.Split(accountArn, "/"); len(u) > 1 {
+			userName = u[1]
+		}
+	}
+	log.Printf("[+] Current user: %s\n", userName)
 
 	return &Provider{
-		vendor:    "aws",
-		regions:   regions,
-		EC2Client: ec2Client,
-		session:   session,
+		vendor:  "aws",
+		region:  region,
+		session: session,
 	}, nil
 }
 
@@ -80,9 +83,8 @@ func (p *Provider) Name() string {
 func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
-	ec2provider := &_ec2.InstanceProvider{
-		Ec2Client: p.EC2Client, Session: p.session, Regions: p.regions}
 	var err error
+	ec2provider := &_ec2.InstanceProvider{Session: p.session, Region: p.region}
 	list.Hosts, err = ec2provider.GetResource(ctx)
 
 	return list, err
