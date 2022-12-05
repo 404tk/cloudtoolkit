@@ -7,6 +7,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/ecs"
 	_iam "github.com/404tk/cloudtoolkit/pkg/providers/huawei/iam"
 	_obs "github.com/404tk/cloudtoolkit/pkg/providers/huawei/obs"
+	_rds "github.com/404tk/cloudtoolkit/pkg/providers/huawei/rds"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
@@ -98,8 +99,8 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	iamprovider := &_iam.IAMUserProvider{Auth: p.auth, Regions: p.regions}
 	list.Users, err = iamprovider.GetIAMUser(ctx)
 
-	//rdsprovider := &_rds.RdsProvider{Auth: p.auth, Regions: p.regions}
-	//list.Databases, err = rdsprovider.GetDatabases(ctx)
+	rdsprovider := &_rds.RdsProvider{Auth: p.auth, Regions: p.regions}
+	list.Databases, err = rdsprovider.GetDatabases(ctx)
 
 	return list, err
 }

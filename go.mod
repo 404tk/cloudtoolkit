@@ -11,7 +11,7 @@ require (
 	github.com/aws/aws-sdk-go v1.44.28
 	github.com/c-bata/go-prompt v0.2.6
 	github.com/huaweicloud/huaweicloud-sdk-go-obs v3.22.11+incompatible
-	github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.0.91
+	github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.0.97
 	github.com/modood/table v0.0.0-20220527013332-8d47e76dad33
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cam v1.0.550
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.0.550
@@ -66,5 +66,6 @@ require (
 	google.golang.org/genproto v0.0.0-20220602131408-e326c6e8e9c8 // indirect
 	google.golang.org/grpc v1.47.0 // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
-	gopkg.in/ini.v1 v1.66.2 // indirect
+	gopkg.in/ini.v1 v1.66.6 // indirect
+	gopkg.in/yaml.v2 v2.4.0 // indirect
 )

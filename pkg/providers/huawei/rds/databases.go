@@ -7,9 +7,9 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
-	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/as/v1/region"
 	rds "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/rds/v3"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/rds/v3/model"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/rds/v3/region"
 )
 
 type RdsProvider struct {

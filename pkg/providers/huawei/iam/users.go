@@ -6,7 +6,10 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
-	"github.com/tidwall/gjson"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/global"
+	iam "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3/model"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3/region"
 )
 
 type IAMUserProvider struct {
@@ -17,41 +20,29 @@ type IAMUserProvider struct {
 func (d *IAMUserProvider) GetIAMUser(ctx context.Context) ([]*schema.User, error) {
 	list := schema.NewResources().Users
 	log.Println("[*] Start enumerating IAM user ...")
-	r := NewGetRequest()
-	users, err := r.ListUsers(d.Auth.AK, d.Auth.SK)
+	auth := global.NewCredentialsBuilder().
+		WithAk(d.Auth.AK).
+		WithSk(d.Auth.SK).
+		Build()
+	client := iam.NewIamClient(iam.IamClientBuilder().
+		WithRegion(region.ValueOf(d.Regions[0])).
+		WithCredential(auth).
+		Build())
+	keystoneListUsersRequest := &model.KeystoneListUsersRequest{}
+	keystoneListUsersResponse, err := client.KeystoneListUsers(keystoneListUsersRequest)
 	if err != nil {
 		log.Println("[-] Enumerate IAM failed.")
 		return list, err
 	}
 
-	for _, u := range users {
-		_user := schema.User{
-			UserName:    u.Get("name").String(),
-			UserId:      u.Get("id").String(),
-			EnableLogin: u.Get("enabled").Bool(),
+	for _, user := range *keystoneListUsersResponse.Users {
+		_user := &schema.User{
+			UserName:    user.Name,
+			UserId:      user.Id,
+			EnableLogin: user.Enabled,
 		}
-		list = append(list, &_user)
+		list = append(list, _user)
 	}
 
 	return list, nil
-}
-
-func (r *DefaultHttpRequest) ListUsers(accesskey, secretkey string) ([]gjson.Result, error) {
-	r.Path = "/v3/users"
-	// r.QueryParams = map[string]interface{}{"enabled": reflect.ValueOf("true")}
-	auth, err := Sign(r, accesskey, secretkey)
-	if err != nil {
-		return nil, err
-	}
-	body, err := r.DoGetRequest(auth["Authorization"], r.HeaderParams["X-Sdk-Date"])
-	if err != nil {
-		return nil, err
-	}
-	/*
-		if strings.Contains(string(body),"Forbidden"){
-			return nil,errors.New("You are not authorized to perform the requested action.")
-		}
-	*/
-	users := gjson.Get(string(body), "users").Array()
-	return users, err
 }

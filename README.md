@@ -23,6 +23,7 @@ Cloud Penetration Testing Toolkit
     - ECS (Elastic Cloud Server)
     - OBS (Object Storage Service)
     - IAM (Identity and Access Management)
+    - RDS (Relational Database Service)
 
 ## Thanks
 - [c-bata/go-prompt](https://github.com/c-bata/go-prompt)
