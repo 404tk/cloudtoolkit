@@ -1,0 +1,68 @@
+before:
+  hooks:
+    - go mod tidy
+builds:
+  - id: "with-upx"
+    main: ./cmd/main.go
+    binary: ctk
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+      - arm
+      - 386
+    goarm:
+      - 6
+      - 7
+    flags:
+      - -trimpath
+      - -buildmode
+      - exe
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{ .CommitDate }} -X main.builtBy=goreleaser
+    ignore:
+      - goos: windows
+        goarch: arm64
+      - goos: windows
+        goarch: arm
+    hooks:
+       post: upx --best -f -q "{{ .Path }}"
+  
+  - id: "without-upx"
+    main: ./cmd/main.go
+    binary: ctk
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{ .CommitDate }} -X main.builtBy=goreleaser
+
+archives:
+  - 
+    name_template: "{{ .Binary }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+    format: binary
+    files:
+      - none*
+    replacements:
+      386: i386
+      amd64: x86_64
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
