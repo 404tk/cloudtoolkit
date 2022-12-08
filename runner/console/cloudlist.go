@@ -11,9 +11,7 @@ import (
 )
 
 func cloudlist() {
-	inventory, err := inventory.New(schema.Options{
-		config,
-	})
+	inventory, err := inventory.New(schema.Options{config})
 	if err != nil {
 		log.Println(err)
 		return

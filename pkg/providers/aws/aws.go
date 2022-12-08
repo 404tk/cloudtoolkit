@@ -10,6 +10,7 @@ import (
 	_s3 "github.com/404tk/cloudtoolkit/pkg/providers/aws/s3"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
+	"github.com/404tk/cloudtoolkit/utils/cache"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -68,6 +69,7 @@ func New(options schema.OptionBlock) (*Provider, error) {
 		}
 	}
 	log.Printf("[+] Current user: %s\n", userName)
+	cache.Cfg.CredInsert(userName, options)
 
 	return &Provider{
 		vendor:  "aws",

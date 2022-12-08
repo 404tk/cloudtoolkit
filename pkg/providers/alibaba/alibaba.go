@@ -11,6 +11,7 @@ import (
 	_rds "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/rds"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
+	"github.com/404tk/cloudtoolkit/utils/cache"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ecs"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ram"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/rds"
@@ -60,6 +61,7 @@ func New(options schema.OptionBlock) (*Provider, error) {
 		}
 	}
 	log.Printf("[+] Current user: %s\n", userName)
+	cache.Cfg.CredInsert(userName, options)
 
 	ecsClient, err := ecs.NewClientWithAccessKey(region, accessKey, secretKey)
 	ossClient, err := oss.New("oss-"+region+".aliyuncs.com", accessKey, secretKey)

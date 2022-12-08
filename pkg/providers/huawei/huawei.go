@@ -10,6 +10,7 @@ import (
 	_rds "github.com/404tk/cloudtoolkit/pkg/providers/huawei/rds"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
+	"github.com/404tk/cloudtoolkit/utils/cache"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
 	iam "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3/model"
@@ -40,6 +41,7 @@ func New(options schema.OptionBlock) (*Provider, error) {
 		return nil, err
 	}
 	log.Printf("[+] Current user: %s\n", userName)
+	cache.Cfg.CredInsert(userName, options)
 
 	auth := basic.NewCredentialsBuilder().
 		WithAk(accessKey).

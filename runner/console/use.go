@@ -3,28 +3,11 @@ package console
 import (
 	"fmt"
 
-	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/c-bata/go-prompt"
 )
 
 var config map[string]string
-var config1 = schema.OptionBlock{
-	utils.AccessKey:    "",
-	utils.SecretKey:    "",
-	utils.SessionToken: "",
-	utils.Region:       "all", // Default enumerate all
-	utils.Version:      "",
-}
-var config2 = schema.OptionBlock{
-	utils.AzureClientId:       "",
-	utils.AzureClientSecret:   "",
-	utils.AzureTenantId:       "",
-	utils.AzureSubscriptionId: "",
-}
-var config3 = schema.OptionBlock{
-	utils.GCPserviceAccountJSON: "",
-}
 
 func Use(args []string) {
 	if len(args) < 1 {
@@ -42,11 +25,11 @@ func Use(args []string) {
 func loadModule(m string) {
 	switch m {
 	case "azure":
-		config = config2
+		config = loadConfig2()
 	case "gcp":
-		config = config3
+		config = loadConfig3()
 	default:
-		config = config1
+		config = loadConfig1()
 	}
 	config[utils.Provider] = m
 	p := prompt.New(
@@ -56,4 +39,27 @@ func loadModule(m string) {
 		prompt.OptionInputTextColor(prompt.White),
 	)
 	p.Run()
+}
+
+func loadConfig1() map[string]string {
+	return map[string]string{
+		utils.AccessKey:    "",
+		utils.SecretKey:    "",
+		utils.SessionToken: "",
+		utils.Region:       "all", // Default enumerate all
+		utils.Version:      "",
+	}
+}
+
+func loadConfig2() map[string]string {
+	return map[string]string{
+		utils.AzureClientId:       "",
+		utils.AzureClientSecret:   "",
+		utils.AzureTenantId:       "",
+		utils.AzureSubscriptionId: "",
+	}
+}
+
+func loadConfig3() map[string]string {
+	return map[string]string{utils.GCPserviceAccountJSON: ""}
 }

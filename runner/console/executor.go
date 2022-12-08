@@ -6,6 +6,7 @@ import (
 	"sort"
 
 	"github.com/404tk/cloudtoolkit/utils"
+	"github.com/404tk/cloudtoolkit/utils/cache"
 )
 
 func Executor(s string) {
@@ -22,9 +23,12 @@ func Executor(s string) {
 		set(args)
 	case "run":
 		cloudlist()
+	case "sessions":
+		sessions(args)
 	case "clear":
 		os.Stdout.Write([]byte("\033[2J\033[H"))
 	case "exit", "quit":
+		cache.SaveFile()
 		os.Exit(0)
 	default:
 		fmt.Println("[Error] Unsupported command:", cmd)

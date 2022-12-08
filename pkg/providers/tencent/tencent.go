@@ -10,6 +10,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/lighthouse"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
+	"github.com/404tk/cloudtoolkit/utils/cache"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	sts "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sts/v20180813"
@@ -46,6 +47,7 @@ func New(options schema.OptionBlock) (*Provider, error) {
 	}
 	log.Printf("[+] Current account type: %s\n", *response.Response.Type)
 	// accountId, _ := strconv.Atoi(*response.Response.UserId)
+	cache.Cfg.CredInsert(*response.Response.Type, options)
 
 	return &Provider{
 		vendor:     "tencent",

@@ -10,6 +10,7 @@ import (
 
 var core = []prompt.Suggest{
 	{Text: "use", Description: "use module"},
+	{Text: "sessions", Description: "list cache credential"},
 	{Text: "clear", Description: "clear screen"},
 	{Text: "exit", Description: "exit console"},
 }
