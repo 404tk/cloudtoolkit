@@ -1,12 +1,13 @@
 package utils
 
 const (
-	Provider     = "provider"
-	AccessKey    = "accesskey"
-	SecretKey    = "secretkey"
-	SessionToken = "session"
-	Region       = "region"
-	Version      = "version"
+	Provider      = "provider"
+	Payload       = "payload"
+	AccessKey     = "accesskey"
+	SecretKey     = "secretkey"
+	SecurityToken = "token"
+	Region        = "region"
+	Version       = "version"
 )
 
 const (
@@ -18,4 +19,8 @@ const (
 
 const (
 	GCPserviceAccountJSON = "base64Json"
+)
+
+const (
+	BackdoorUser = "add ctkguest 1QAZ2wsx@"
 )

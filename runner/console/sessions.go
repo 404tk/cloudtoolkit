@@ -30,9 +30,9 @@ func sessions(args []string) {
 	if len(args) == 0 {
 		loadCred()
 		table.Output(creds)
+		return
 	} else if len(args) == 2 {
-		id, err := strconv.Atoi(args[1])
-		if err == nil {
+		if id, err := strconv.Atoi(args[1]); err == nil {
 			if uuid, ok := cred_ids[id]; ok {
 				switch args[0] {
 				case "-i":
@@ -40,12 +40,11 @@ func sessions(args []string) {
 				case "-k":
 					cache.Cfg.CredDelete(uuid)
 					loadCred()
-				default:
-					fmt.Println("[Error] Unsupported command:", args[0])
 				}
 			}
 		}
 	}
+	fmt.Println("Usage of sessions:\n\t-i, internation [id]\n\t-k, kill [id]")
 }
 
 func loadCred() {

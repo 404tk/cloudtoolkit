@@ -14,6 +14,7 @@ type Provider interface {
 	Name() string
 	// Resources returns the provider for an resource deployment source.
 	Resources(ctx context.Context) (*Resources, error)
+	UserManagement(action, uname, pwd string)
 }
 
 // NewResources creates a new resources structure

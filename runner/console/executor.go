@@ -2,9 +2,11 @@ package console
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"sort"
 
+	"github.com/404tk/cloudtoolkit/runner/payloads"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
 )
@@ -22,7 +24,7 @@ func Executor(s string) {
 	case "set":
 		set(args)
 	case "run":
-		cloudlist()
+		run()
 	case "sessions":
 		sessions(args)
 	case "clear":
@@ -53,6 +55,12 @@ func show(args []string) {
 				fmt.Printf("%-15s\t%-60s\n", k, v)
 			}
 		}
+	case "payloads":
+		fmt.Printf("\n%-10s\t%-60s\n", "Payload", "Details")
+		fmt.Printf("%-10s\t%-60s\n", "-------", "-------")
+		for k, v := range payloads.Payloads {
+			fmt.Printf("%-15s\t%-60s\n", k, v.Desc())
+		}
 	}
 }
 
@@ -65,5 +73,16 @@ func set(args []string) {
 			config[args[0]] = args[1]
 			fmt.Printf("%s => %s\n", args[0], args[1])
 		}
+	}
+	if args[0] == "payload" && args[1] == "backdoor-user" {
+		config["metadata"] = utils.BackdoorUser
+	}
+}
+
+func run() {
+	if v, ok := payloads.Payloads[config[utils.Payload]]; ok {
+		v.Run(config)
+	} else {
+		log.Println("[-] Please type `show payloads` to confirm the required payload.")
 	}
 }

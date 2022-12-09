@@ -43,11 +43,12 @@ func loadModule(m string) {
 
 func loadConfig1() map[string]string {
 	return map[string]string{
-		utils.AccessKey:    "",
-		utils.SecretKey:    "",
-		utils.SessionToken: "",
-		utils.Region:       "all", // Default enumerate all
-		utils.Version:      "",
+		utils.AccessKey:     "",
+		utils.SecretKey:     "",
+		utils.SecurityToken: "",
+		utils.Region:        "all",       // Default enumerate all
+		utils.Payload:       "cloudlist", // Default use cloudlist
+		utils.Version:       "",
 	}
 }
 

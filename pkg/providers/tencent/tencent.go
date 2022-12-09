@@ -83,3 +83,5 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 
 	return list, err
 }
+
+func (p *Provider) UserManagement(action, uname, pwd string) {}

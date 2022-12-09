@@ -51,6 +51,7 @@ func getOpt() []prompt.Suggest {
 
 var opt = []prompt.Suggest{
 	{Text: "options", Description: "Display options"},
+	{Text: "payloads", Description: "Display payloads"},
 }
 
 func Complete(d prompt.Document) []prompt.Suggest {

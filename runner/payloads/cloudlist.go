@@ -1,4 +1,4 @@
-package console
+package payloads
 
 import (
 	"context"
@@ -10,7 +10,9 @@ import (
 	"github.com/modood/table"
 )
 
-func cloudlist() {
+type CloudList struct{}
+
+func (p CloudList) Run(config map[string]string) {
 	inventory, err := inventory.New(schema.Options{config})
 	if err != nil {
 		log.Println(err)
@@ -32,7 +34,14 @@ func cloudlist() {
 		pprint(len(resources.Hosts), "Hosts", resources.Hosts)
 		pprint(len(resources.Storages), "Storages", resources.Storages)
 		pprint(len(resources.Users), "Users", resources.Users)
-
-		log.Println("[+] Done.")
 	}
+	log.Println("[+] Done.")
+}
+
+func (p CloudList) Desc() string {
+	return "Getting Assets from Cloud Providers to augment Attack Surface Management efforts."
+}
+
+func init() {
+	registerPayload("cloudlist", CloudList{})
 }

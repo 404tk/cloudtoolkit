@@ -35,7 +35,7 @@ func New(options schema.OptionBlock) (*Provider, error) {
 		return nil, &schema.ErrNoSuchKey{Name: utils.SecretKey}
 	}
 	conf := aws.NewConfig()
-	token, _ := options.GetMetadata(utils.SessionToken)
+	token, _ := options.GetMetadata(utils.SecurityToken)
 	region, _ := options.GetMetadata(utils.Region)
 	if region == "all" {
 		if v, _ := options.GetMetadata(utils.Version); v == "China" {
@@ -99,3 +99,5 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 
 	return list, err
 }
+
+func (p *Provider) UserManagement(action, uname, pwd string) {}
