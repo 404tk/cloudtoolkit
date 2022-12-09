@@ -13,6 +13,8 @@ import (
 
 type CamUserProvider struct {
 	Credential *common.Credential
+	UserName   string
+	Password   string
 }
 
 func (d *CamUserProvider) GetCamUser(ctx context.Context) ([]*schema.User, error) {

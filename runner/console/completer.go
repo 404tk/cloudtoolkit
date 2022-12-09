@@ -4,11 +4,13 @@ import (
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/plugins"
+	"github.com/404tk/cloudtoolkit/runner/payloads"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/c-bata/go-prompt"
 )
 
 var core = []prompt.Suggest{
+	{Text: "help", Description: "help menu"},
 	{Text: "use", Description: "use module"},
 	{Text: "sessions", Description: "list cache credential"},
 	{Text: "clear", Description: "clear screen"},
@@ -28,25 +30,20 @@ var modules = func() (m []prompt.Suggest) {
 	return m
 }()
 
-/*
-var enumerate = []prompt.Suggest{
-	// {Text: utils.Provider, Description: "Vendor name"},
-	{Text: utils.AccessKey, Description: "key ID"},
-	{Text: utils.SecretKey, Description: "Secret"},
-	{Text: utils.SessionToken, Description: "session token(optional)"},
-	{Text: utils.Region, Description: "Region(optional)"},
-	{Text: utils.Version, Description: "International or custom edition(optional)"},
-}
-*/
-
-func getOpt() []prompt.Suggest {
-	var enumerate = []prompt.Suggest{}
-	for k := range config {
-		if k != utils.Provider {
-			enumerate = append(enumerate, prompt.Suggest{Text: k})
-		}
-	}
-	return enumerate
+var optionsDesc = map[string]string{
+	// utils.Provider:              "Vendor Name",
+	utils.Payload:               "Module Name (Default: cloudlist)",
+	utils.AccessKey:             "Key ID",
+	utils.SecretKey:             "Secret",
+	utils.SecurityToken:         "Securit Token (Optional)",
+	utils.Region:                "Region (Default: all)",
+	utils.Version:               "International or custom edition (Optional)",
+	utils.AzureClientId:         "Key ID",
+	utils.AzureClientSecret:     "Secret",
+	utils.AzureTenantId:         "Tenant ID (Optional)",
+	utils.AzureSubscriptionId:   "Subscription ID (Optional)",
+	utils.GCPserviceAccountJSON: "GCP Credential encoded through Base64",
+	utils.Metadata:              "Set the payload with additional arguments (Optional)",
 }
 
 var opt = []prompt.Suggest{
@@ -84,7 +81,24 @@ func actionCompleter(d prompt.Document) []prompt.Suggest {
 		}
 	case "set":
 		if len(args) == 2 {
-			return prompt.FilterContains(getOpt(), d.GetWordBeforeCursor(), true)
+			getOpt := func() (p []prompt.Suggest) {
+				for k := range config {
+					if v, ok := optionsDesc[k]; ok { // && k != utils.Provider
+						p = append(p, prompt.Suggest{Text: k, Description: v})
+					}
+				}
+				return
+			}()
+			return prompt.FilterContains(getOpt, d.GetWordBeforeCursor(), true)
+		}
+		if len(args) == 3 && args[1] == utils.Payload {
+			getPayloads := func() (p []prompt.Suggest) {
+				for k, v := range payloads.Payloads {
+					p = append(p, prompt.Suggest{Text: k, Description: v.Desc()})
+				}
+				return
+			}()
+			return prompt.FilterContains(getPayloads, d.GetWordBeforeCursor(), true)
 		}
 	}
 	return []prompt.Suggest{}

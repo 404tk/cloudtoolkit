@@ -7,11 +7,9 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
-	"sync"
 )
 
 var Cfg *InitCfg
-var once sync.Once
 
 type InitCfg struct {
 	Path  string
@@ -19,9 +17,7 @@ type InitCfg struct {
 }
 
 func init() {
-	once.Do(func() {
-		Cfg = NewConfig()
-	})
+	Cfg = NewConfig()
 }
 
 func NewConfig() *InitCfg {
@@ -42,7 +38,7 @@ func NewConfig() *InitCfg {
 func getCreds(path string) (creds []Credential) {
 	file, err := os.Open(path)
 	if err != nil {
-		log.Println("[-] Get cache file failed:", err.Error())
+		// log.Println("[-] Get cache file failed:", err.Error())
 		return
 	}
 	defer file.Close()

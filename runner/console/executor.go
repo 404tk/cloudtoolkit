@@ -27,6 +27,8 @@ func Executor(s string) {
 		run()
 	case "sessions":
 		sessions(args)
+	case "help":
+		help()
 	case "clear":
 		os.Stdout.Write([]byte("\033[2J\033[H"))
 	case "exit", "quit":
@@ -75,7 +77,7 @@ func set(args []string) {
 		}
 	}
 	if args[0] == "payload" && args[1] == "backdoor-user" {
-		config["metadata"] = utils.BackdoorUser
+		config[utils.Metadata] = utils.BackdoorUser
 	}
 }
 
