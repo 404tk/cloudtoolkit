@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/aws/aws-sdk-go/aws"
@@ -32,14 +31,9 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 		req := &ec2.DescribeInstancesInput{
 			MaxResults: aws.Int64(1000),
 		}
-		endpointBuilder := &strings.Builder{}
-		endpointBuilder.WriteString("https://ec2.")
-		endpointBuilder.WriteString(region)
-		endpointBuilder.WriteString(".amazonaws.com")
 
 		ec2Client := ec2.New(
 			d.Session,
-			aws.NewConfig().WithEndpoint(endpointBuilder.String()),
 			aws.NewConfig().WithRegion(region),
 		)
 		for {

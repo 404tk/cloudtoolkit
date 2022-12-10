@@ -100,6 +100,13 @@ func actionCompleter(d prompt.Document) []prompt.Suggest {
 			}()
 			return prompt.FilterContains(getPayloads, d.GetWordBeforeCursor(), true)
 		}
+		if len(args) == 3 && args[1] == utils.Version {
+			var versions = []prompt.Suggest{
+				{Text: "Global", Description: "International Edition"},
+				{Text: "China", Description: "Chinese Edition"},
+			}
+			return prompt.FilterContains(versions, d.GetWordBeforeCursor(), true)
+		}
 	}
 	return []prompt.Suggest{}
 }

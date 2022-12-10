@@ -27,10 +27,10 @@ func (d *IAMProvider) GetIAMUser(ctx context.Context) ([]*schema.User, error) {
 		_user := &schema.User{
 			UserName:   *user.UserName,
 			UserId:     *user.UserId,
-			LastLogin:  user.PasswordLastUsed.Format(time.RFC3339),
 			CreateTime: user.CreateDate.Format(time.RFC3339),
 		}
-		if _user.LastLogin != "" {
+		if user.PasswordLastUsed != nil {
+			_user.LastLogin = user.PasswordLastUsed.Format(time.RFC3339)
 			_user.EnableLogin = true
 		}
 		list = append(list, _user)

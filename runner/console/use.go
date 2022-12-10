@@ -48,7 +48,7 @@ func loadConfig1() map[string]string {
 		utils.SecurityToken: "",
 		utils.Region:        "all",       // Default enumerate all
 		utils.Payload:       "cloudlist", // Default use cloudlist
-		utils.Version:       "",
+		utils.Version:       "Global",    // Default select International Edition
 	}
 }
 
