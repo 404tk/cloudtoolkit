@@ -31,7 +31,7 @@ func (p BackdoorUser) Run(config map[string]string) {
 	for _, provider := range inventory.Providers {
 		provider.UserManagement(action, uname, pwd)
 	}
-	log.Println("[+] Done.")
+	// log.Println("[+] Done.")
 }
 
 func (p BackdoorUser) Desc() string {

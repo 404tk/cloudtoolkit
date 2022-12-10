@@ -13,8 +13,10 @@ import (
 )
 
 type IAMUserProvider struct {
-	Auth    basic.Credentials
-	Regions []string
+	Auth     basic.Credentials
+	Regions  []string
+	Username string
+	Password string
 }
 
 func (d *IAMUserProvider) GetIAMUser(ctx context.Context) ([]*schema.User, error) {

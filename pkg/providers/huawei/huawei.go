@@ -55,8 +55,9 @@ func New(options schema.OptionBlock) (*Provider, error) {
 	}()
 
 	regionId, _ := options.GetMetadata(utils.Region)
+	payload, _ := options.GetMetadata(utils.Payload)
 	var regions []string
-	if regionId == "all" {
+	if regionId == "all" && payload == "cloudlist" {
 		client := iam.NewIamClient(
 			iam.IamClientBuilder().
 				WithRegion(region.ValueOf("cn-east-2")).
@@ -71,8 +72,10 @@ func New(options schema.OptionBlock) (*Provider, error) {
 		for _, r := range *resp.Regions {
 			regions = append(regions, r.Id)
 		}
-	} else {
+	} else if regionId == "all" && payload != "cloudlist" {
 		regions = append(regions, "cn-east-2")
+	} else {
+		regions = append(regions, regionId)
 	}
 
 	return &Provider{
@@ -107,4 +110,15 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	return list, err
 }
 
-func (p *Provider) UserManagement(action, uname, pwd string) {}
+func (p *Provider) UserManagement(action, uname, pwd string) {
+	ramprovider := &_iam.IAMUserProvider{
+		Auth: p.auth, Regions: p.regions, Username: uname, Password: pwd}
+	switch action {
+	case "add":
+		ramprovider.AddUser()
+	case "del":
+		ramprovider.DelUser()
+	default:
+		log.Println("[-] Please set metadata like \"add username password\" or \"del username\"")
+	}
+}
