@@ -24,11 +24,11 @@ func (d *RamProvider) AddUser() {
 		return
 	}
 	accountAlias := getAccountAlias(d.Client)
-	fmt.Printf("\n%-30s\t%-10s\t%-20s\n", "Username", "Password", "Login URL")
-	fmt.Printf("%-30s\t%-10s\t%-20s\n", "--------", "--------", "---------")
-	fmt.Printf("%-30s\t%-10s\t%-20s\n\n",
-		fmt.Sprintf("%s@%s", d.UserName, accountAlias),
-		d.PassWord, "https://signin.aliyun.com")
+	fmt.Printf("\n%-10s\t%-10s\t%-60s\n", "Username", "Password", "Login URL")
+	fmt.Printf("%-10s\t%-10s\t%-60s\n", "--------", "--------", "---------")
+	fmt.Printf("%-10s\t%-10s\t%-60s\n\n",
+		d.UserName, d.PassWord,
+		fmt.Sprintf("https://signin.aliyun.com/%s/login.htm", accountAlias))
 }
 
 func createUser(client *ram.Client, userName string) error {

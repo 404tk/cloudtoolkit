@@ -11,7 +11,9 @@ import (
 )
 
 type IAMProvider struct {
-	Session *session.Session
+	Session  *session.Session
+	Username string
+	Password string
 }
 
 func (d *IAMProvider) GetIAMUser(ctx context.Context) ([]*schema.User, error) {

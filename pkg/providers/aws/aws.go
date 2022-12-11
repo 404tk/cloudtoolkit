@@ -100,4 +100,15 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	return list, err
 }
 
-func (p *Provider) UserManagement(action, uname, pwd string) {}
+func (p *Provider) UserManagement(action, uname, pwd string) {
+	ramprovider := &_iam.IAMProvider{
+		Session: p.session, Username: uname, Password: pwd}
+	switch action {
+	case "add":
+		ramprovider.AddUser()
+	case "del":
+		ramprovider.DelUser()
+	default:
+		log.Println("[-] Please set metadata like \"add username password\" or \"del username\"")
+	}
+}

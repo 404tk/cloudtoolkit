@@ -30,9 +30,9 @@ func (d *IAMUserProvider) AddUser() {
 		return
 	}
 	name := getDomainName(client, domainid)
-	fmt.Printf("\n%-10s\t%-10s\t%-40s\n", "Username", "Password", "Login URL")
-	fmt.Printf("%-10s\t%-10s\t%-40s\n", "--------", "--------", "---------")
-	fmt.Printf("%-10s\t%-10s\t%-40s\n\n",
+	fmt.Printf("\n%-10s\t%-10s\t%-60s\n", "Username", "Password", "Login URL")
+	fmt.Printf("%-10s\t%-10s\t%-60s\n", "--------", "--------", "---------")
+	fmt.Printf("%-10s\t%-10s\t%-60s\n\n",
 		d.Username,
 		d.Password, "https://auth.huaweicloud.com/authui/login?id="+name)
 }
