@@ -69,3 +69,5 @@ require (
 	gopkg.in/ini.v1 v1.66.6 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
+
+replace github.com/c-bata/go-prompt => ./utils/go-prompt
