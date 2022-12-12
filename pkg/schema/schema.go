@@ -44,10 +44,9 @@ type Host struct {
 }
 
 type Storage struct {
-	BucketName     string `table:"Bucket"`
-	FileSystemName string `table:"File System"`
-	AccountName    string `table:"Account"`
-	Region         string `table:"Region"`
+	BucketName  string `table:"Bucket"`
+	AccountName string `table:"Storage Account"`
+	Region      string `table:"Region"`
 }
 
 type User struct {

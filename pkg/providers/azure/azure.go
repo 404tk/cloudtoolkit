@@ -2,10 +2,15 @@ package azure
 
 import (
 	"context"
+	"errors"
+	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/azure/compute"
+	"github.com/404tk/cloudtoolkit/pkg/providers/azure/storage"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
+	"github.com/404tk/cloudtoolkit/utils/cache"
+	"github.com/Azure/azure-sdk-for-go/profiles/latest/resources/mgmt/subscriptions"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 )
@@ -13,17 +18,13 @@ import (
 // Provider is a data provider for azure API
 type Provider struct {
 	vendor            string
-	SubscriptionID    string
+	SubscriptionIDs   []string
 	Authorizer        autorest.Authorizer
 	CredentialsConfig auth.ClientCredentialsConfig
 }
 
 // New creates a new provider client for azure API
 func New(options schema.OptionBlock) (*Provider, error) {
-	subscriptionID, ok := options.GetMetadata(utils.AzureSubscriptionId)
-	if !ok {
-		return nil, &schema.ErrNoSuchKey{Name: utils.AzureSubscriptionId}
-	}
 	clientID, ok := options.GetMetadata(utils.AzureClientId)
 	if !ok {
 		return nil, &schema.ErrNoSuchKey{Name: utils.AzureClientId}
@@ -43,9 +44,30 @@ func New(options schema.OptionBlock) (*Provider, error) {
 		return nil, err
 	}
 
+	var subscription_ids []string
+	subscriptionID, ok := options.GetMetadata(utils.AzureSubscriptionId)
+	if !ok {
+		client := subscriptions.NewClient()
+		client.Authorizer = authorizer
+		resp, err := client.List(context.Background())
+		if err != nil {
+			return nil, err
+		}
+		for _, v := range resp.Values() {
+			log.Printf("[+] Found Subscription: %s(%s)\n", *v.DisplayName, *v.SubscriptionID)
+			cache.Cfg.CredInsert(*v.DisplayName, options)
+			subscription_ids = append(subscription_ids, *v.SubscriptionID)
+		}
+	} else {
+		subscription_ids = append(subscription_ids, subscriptionID)
+	}
+	if len(subscription_ids) == 0 || subscription_ids[0] == "" {
+		return nil, errors.New("[-] No Subscription found.")
+	}
+
 	return &Provider{
 		vendor:            "azure",
-		SubscriptionID:    subscriptionID,
+		SubscriptionIDs:   subscription_ids,
 		Authorizer:        authorizer,
 		CredentialsConfig: config,
 	}, nil
@@ -60,10 +82,20 @@ func (p *Provider) Name() string {
 func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
-	vmProvider := &compute.VmProvider{SubscriptionID: p.SubscriptionID, Authorizer: p.Authorizer}
-	list.Hosts, _ = vmProvider.GetResource(ctx)
+	var err error
+	vmProvider := &compute.VmProvider{SubscriptionIDs: p.SubscriptionIDs, Authorizer: p.Authorizer}
+	list.Hosts, err = vmProvider.GetResource(ctx)
 
-	return list, nil
+	storageProvider := &storage.StorageAccountProvider{
+		SubscriptionIDs: p.SubscriptionIDs, Authorizer: p.Authorizer}
+	list.Storages, err = storageProvider.GetStorages(ctx)
+
+	// adProvider := activeDirectory.ADProvider{Config: p.CredentialsConfig}
+	// list.Users, err = adProvider.GetActiveDirectory(ctx)
+
+	return list, err
 }
 
-func (p *Provider) UserManagement(action, uname, pwd string) {}
+func (p *Provider) UserManagement(action, uname, pwd string) {
+	log.Println("[-] Not supported yet.")
+}

@@ -40,7 +40,7 @@ var optionsDesc = map[string]string{
 	utils.Version:               "International or custom edition (Optional)",
 	utils.AzureClientId:         "Key ID",
 	utils.AzureClientSecret:     "Secret",
-	utils.AzureTenantId:         "Tenant ID (Optional)",
+	utils.AzureTenantId:         "Tenant ID",
 	utils.AzureSubscriptionId:   "Subscription ID (Optional)",
 	utils.GCPserviceAccountJSON: "GCP Credential encoded through Base64",
 	utils.Metadata:              "Set the payload with additional arguments (Optional)",

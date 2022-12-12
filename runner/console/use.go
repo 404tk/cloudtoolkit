@@ -31,7 +31,10 @@ func loadModule(m string) {
 	default:
 		config = loadConfig1()
 	}
+
 	config[utils.Provider] = m
+	config[utils.Payload] = "cloudlist" // Default use cloudlist
+
 	p := prompt.New(
 		Executor,
 		actionCompleter,
@@ -46,9 +49,8 @@ func loadConfig1() map[string]string {
 		utils.AccessKey:     "",
 		utils.SecretKey:     "",
 		utils.SecurityToken: "",
-		utils.Region:        "all",       // Default enumerate all
-		utils.Payload:       "cloudlist", // Default use cloudlist
-		utils.Version:       "Global",    // Default select International Edition
+		utils.Region:        "all",    // Default enumerate all
+		utils.Version:       "Global", // Default select International Edition
 	}
 }
 
