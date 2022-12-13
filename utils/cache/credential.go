@@ -1,6 +1,7 @@
 package cache
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"log"
 
@@ -22,8 +23,8 @@ func (cfg *InitCfg) CredInsert(user string, data map[string]string) {
 	case "azure":
 		accessKey, _ = data[utils.AzureClientId]
 	case "gcp":
-		accessKey, _ = data[utils.GCPserviceAccountJSON]
-		accessKey = accessKey[:20]
+		tojson, _ := base64.StdEncoding.DecodeString(data[utils.GCPserviceAccountJSON])
+		accessKey = utils.Md5Encode(string(tojson))
 	}
 	uuid := utils.Md5Encode(accessKey + provider)
 	if Cfg.CredSelect(uuid) != "" {
@@ -52,13 +53,6 @@ func (cfg *InitCfg) CredSelect(uuid string) string {
 		}
 	}
 	return ""
-}
-
-func (cfg *InitCfg) CredSelectAll() (creds []string) {
-	for _, v := range cfg.Creds {
-		creds = append(creds, v.JsonData)
-	}
-	return
 }
 
 func (cfg *InitCfg) CredDelete(uuid string) {

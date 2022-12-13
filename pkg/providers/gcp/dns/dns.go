@@ -15,28 +15,22 @@ type CloudDNSProvider struct {
 
 func (d *CloudDNSProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
 	list := schema.NewResources().Hosts
-	log.Println("Start enumerating DNS ...")
+	log.Println("[*] Start enumerating DNS ...")
 
 	for _, project := range d.Projects {
-		zone := d.Dns.ManagedZones.List(project)
-		err := zone.Pages(context.Background(), func(resp *dns.ManagedZonesListResponse) error {
-			for _, z := range resp.ManagedZones {
-				resources := d.Dns.ResourceRecordSets.List(project, z.Name)
-				err := resources.Pages(context.Background(), func(r *dns.ResourceRecordSetsListResponse) error {
-					items := d.parseRecordsForResourceSet(r, z.Name)
-					list = append(list, items...)
-					return nil
-				})
-				if err != nil {
-					log.Printf("Could not get resource_records for zone %s in project %s: %s\n", z.Name, project, err.Error())
-					continue
-				}
-			}
-			return nil
-		})
+		resp, err := d.Dns.ManagedZones.List(project).Do()
 		if err != nil {
-			log.Printf("Could not get all zones for project %s: %s\n", project, err.Error())
-			continue
+			log.Printf("[-] Could not get all zones for project %s.\n", project)
+			return list, err
+		}
+		for _, z := range resp.ManagedZones {
+			resources, err := d.Dns.ResourceRecordSets.List(project, z.Name).Do()
+			if err != nil {
+				log.Printf("[-] Could not get resource_records for zone %s in project %s.\n", z.Name, project)
+				return list, err
+			}
+			items := d.parseRecordsForResourceSet(resources, z.Name)
+			list = append(list, items...)
 		}
 	}
 	return list, nil

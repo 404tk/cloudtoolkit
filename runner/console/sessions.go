@@ -37,9 +37,11 @@ func sessions(args []string) {
 				switch args[0] {
 				case "-i":
 					internation(uuid)
+					return
 				case "-k":
 					cache.Cfg.CredDelete(uuid)
 					loadCred()
+					return
 				}
 			}
 		}

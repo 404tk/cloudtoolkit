@@ -9,6 +9,7 @@ Cloud Penetration Testing Toolkit
     - IAM (Identity and Access Management)
 - Microsoft Azure
     - Virtual Machines
+    - Blob Storage
 - GCP (Google Cloud Platform)
     - Compute Engine
     - Cloud DNS

@@ -21,7 +21,7 @@ builds:
     flags:
       - -trimpath
       - -tags
-      - no_gcp,no_azure
+      - no_gcp
       - -buildmode
       - exe
     ldflags:
@@ -47,7 +47,7 @@ builds:
     flags:
       - -trimpath
       - -tags
-      - no_gcp,no_azure
+      - no_gcp
     ldflags:
       - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{ .CommitDate }} -X main.builtBy=goreleaser
 
