@@ -112,3 +112,22 @@ func (p *Provider) UserManagement(action, uname, pwd string) {
 		log.Println("[-] Please set metadata like \"add username password\" or \"del username\"")
 	}
 }
+
+func (p *Provider) BucketDump(action, bucketname string) {
+	s3provider := &_s3.S3Provider{Session: p.session}
+	switch action {
+	case "list":
+		var infos = make(map[string]string)
+		if bucketname == "all" {
+			buckets, _ := s3provider.GetBuckets(context.Background())
+			for _, b := range buckets {
+				infos[b.BucketName] = b.Region
+			}
+		} else {
+			infos[bucketname] = *p.session.Config.Region
+		}
+		s3provider.ListObjects(infos)
+	default:
+		log.Println("[-] Only the `list` operation is supported.")
+	}
+}

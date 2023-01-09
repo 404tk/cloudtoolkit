@@ -76,8 +76,13 @@ func set(args []string) {
 			fmt.Printf("%s => %s\n", args[0], args[1])
 		}
 	}
-	if args[0] == "payload" && args[1] == "backdoor-user" {
-		config[utils.Metadata] = utils.BackdoorUser
+	if args[0] == "payload" {
+		switch args[1] {
+		case "backdoor-user":
+			config[utils.Metadata] = utils.BackdoorUser
+		case "bucket-dump":
+			config[utils.Metadata] = utils.BucketDump
+		}
 	}
 }
 

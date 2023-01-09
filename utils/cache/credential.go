@@ -27,9 +27,6 @@ func (cfg *InitCfg) CredInsert(user string, data map[string]string) {
 		accessKey = utils.Md5Encode(string(tojson))
 	}
 	uuid := utils.Md5Encode(accessKey + provider)
-	if Cfg.CredSelect(uuid) != "" {
-		return
-	}
 
 	b, err := json.Marshal(data)
 	if err != nil {
@@ -37,13 +34,17 @@ func (cfg *InitCfg) CredInsert(user string, data map[string]string) {
 		return
 	}
 
-	cfg.Creds = append(cfg.Creds, Credential{
-		UUID:      uuid,
-		User:      user,
-		AccessKey: accessKey,
-		Provider:  provider,
-		JsonData:  string(b),
-	})
+	if Cfg.CredSelect(uuid) != "" {
+		Cfg.CredUpdate(uuid, string(b))
+	} else {
+		cfg.Creds = append(cfg.Creds, Credential{
+			UUID:      uuid,
+			User:      user,
+			AccessKey: accessKey,
+			Provider:  provider,
+			JsonData:  string(b),
+		})
+	}
 }
 
 func (cfg *InitCfg) CredSelect(uuid string) string {
@@ -55,6 +56,15 @@ func (cfg *InitCfg) CredSelect(uuid string) string {
 	return ""
 }
 
+func (cfg *InitCfg) CredUpdate(uuid, data string) {
+	for k, v := range cfg.Creds {
+		if v.UUID == uuid {
+			cfg.Creds[k].JsonData = data
+			return
+		}
+	}
+}
+
 func (cfg *InitCfg) CredDelete(uuid string) {
 	for index, v := range cfg.Creds {
 		if v.UUID == uuid {
@@ -63,6 +73,7 @@ func (cfg *InitCfg) CredDelete(uuid string) {
 			} else {
 				cfg.Creds = append(cfg.Creds[:index], cfg.Creds[index+1:]...)
 			}
+			return
 		}
 	}
 }

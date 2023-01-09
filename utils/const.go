@@ -24,4 +24,5 @@ const (
 const (
 	Metadata     = "metadata"
 	BackdoorUser = "add ctkguest 1QAZ2wsx@"
+	BucketDump   = "list all"
 )

@@ -122,3 +122,7 @@ func (p *Provider) UserManagement(action, uname, pwd string) {
 		log.Println("[-] Please set metadata like \"add username password\" or \"del username\"")
 	}
 }
+
+func (p *Provider) BucketDump(action, bucketname string) {
+	log.Println("[-] Not supported yet.")
+}

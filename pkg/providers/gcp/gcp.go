@@ -107,3 +107,7 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 func (p *Provider) UserManagement(action, uname, pwd string) {
 	log.Println("[-] Not supported yet.")
 }
+
+func (p *Provider) BucketDump(action, bucketname string) {
+	log.Println("[-] Not supported yet.")
+}
