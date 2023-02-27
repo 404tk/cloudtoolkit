@@ -33,10 +33,11 @@ func New(options schema.OptionBlock) (*Provider, error) {
 	if !ok {
 		return nil, &schema.ErrNoSuchKey{Name: utils.SecretKey}
 	}
-
-	credential := common.NewCredential(accessKey, secretKey)
-	cpf := profile.NewClientProfile()
+	token, _ := options.GetMetadata(utils.SecurityToken)
 	region, _ := options.GetMetadata(utils.Region)
+
+	credential := common.NewTokenCredential(accessKey, secretKey, token)
+	cpf := profile.NewClientProfile()
 
 	request := sts.NewGetCallerIdentityRequest()
 	// cpf.HttpProfile.Endpoint = "sts.tencentcloudapi.com"

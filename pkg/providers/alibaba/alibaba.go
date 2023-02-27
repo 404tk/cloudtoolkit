@@ -43,8 +43,10 @@ func New(options schema.OptionBlock) (*Provider, error) {
 	if region == "all" {
 		region = "cn-hangzhou"
 	}
+	token, _ := options.GetMetadata(utils.SecurityToken)
+
 	// Get current username
-	stsclient, err := sts.NewClientWithAccessKey(region, accessKey, secretKey)
+	stsclient, err := sts.NewClientWithStsToken(region, accessKey, secretKey, token)
 	request := sts.CreateGetCallerIdentityRequest()
 	request.Scheme = "https"
 	response, err := stsclient.GetCallerIdentity(request)
@@ -63,10 +65,10 @@ func New(options schema.OptionBlock) (*Provider, error) {
 	log.Printf("[+] Current user: %s\n", userName)
 	cache.Cfg.CredInsert(userName, options)
 
-	ecsClient, err := ecs.NewClientWithAccessKey(region, accessKey, secretKey)
-	ossClient, err := oss.New("oss-"+region+".aliyuncs.com", accessKey, secretKey)
-	ramClient, err := ram.NewClientWithAccessKey(region, accessKey, secretKey)
-	rdsClient, err := rds.NewClientWithAccessKey(region, accessKey, secretKey)
+	ecsClient, err := ecs.NewClientWithStsToken(region, accessKey, secretKey, token)
+	ossClient, err := oss.New("oss-"+region+".aliyuncs.com", accessKey, secretKey, oss.SecurityToken(token))
+	ramClient, err := ram.NewClientWithStsToken(region, accessKey, secretKey, token)
+	rdsClient, err := rds.NewClientWithStsToken(region, accessKey, secretKey, token)
 	/*
 		rmClient, err := resourcemanager.NewClientWithAccessKey(region, accessKey, secretKey)
 		if err != nil {

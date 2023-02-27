@@ -23,16 +23,16 @@ func (d *S3Provider) GetBuckets(ctx context.Context) ([]*schema.Storage, error) 
 		return list, err
 	}
 	for _, bucket := range buckets.Buckets {
+		_bucket := &schema.Storage{BucketName: *bucket.Name}
+
 		locationInput := &s3.GetBucketLocationInput{Bucket: bucket.Name}
 		bucketLocation, err := client.GetBucketLocation(locationInput)
 		if err != nil {
 			log.Println("[-] Get bucket info failed.")
 			return list, err
 		}
-
-		_bucket := &schema.Storage{
-			BucketName: *bucket.Name,
-			Region:     *bucketLocation.LocationConstraint,
+		if bucketLocation.LocationConstraint != nil {
+			_bucket.Region = *bucketLocation.LocationConstraint
 		}
 		list = append(list, _bucket)
 	}

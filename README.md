@@ -1,33 +1,16 @@
 # cloudtoolkit
 Cloud Penetration Testing Toolkit
 
-## Supported Providers
+## Capability overview
 
-- AWS (Amazon web services)
-    - EC2 (Elastic Compute Cloud)
-    - S3 (Simple Storage Service)
-    - IAM (Identity and Access Management)
-- Microsoft Azure
-    - Virtual Machines
-    - Blob Storage
-- GCP (Google Cloud Platform)
-    - Compute Engine
-    - Cloud DNS
-- Alibaba Cloud
-    - ECS (Elastic Compute Service)
-    - OSS (Object Storage Service)
-    - RAM (Resource Access Management)
-    - RDS (Relational Database Service)
-- Tencent Cloud
-    - CVM (Cloud Virtual Machine)
-    - Lighthouse
-    - COS (Cloud Object Storage)
-    - CAM (Cloud Access Management)
-- Huawei Cloud
-    - ECS (Elastic Cloud Server)
-    - OBS (Object Storage Service)
-    - IAM (Identity and Access Management)
-    - RDS (Relational Database Service)
+|          Providers          |                   Payload                   |                          Supported                           |
+| :-------------------------: | :-----------------------------------------: | :----------------------------------------------------------: |
+|        Alibaba Cloud        | cloudlist<br/>backdoor-user<br/>bucket-dump | ECS (Elastic Compute Service)<br/>OSS (Object Storage Service)<br/>RAM (Resource Access Management)<br/>RDS (Relational Database Service) |
+|        Tencent Cloud        |         cloudlist<br/>backdoor-user         | CVM (Cloud Virtual Machine)<br/>Lighthouse<br/>COS (Cloud Object Storage)<br/>CAM (Cloud Access Management) |
+|        Huawei Cloud         |         cloudlist<br/>backdoor-user         | ECS (Elastic Cloud Server)<br/>OBS (Object Storage Service)<br/>IAM (Identity and Access Management)<br/>RDS (Relational Database Service) |
+|       Microsoft Azure       |                  cloudlist                  |              Virtual Machines<br/>Blob Storage               |
+|  AWS (Amazon web services)  | cloudlist<br/>backdoor-user<br/>bucket-dump | EC2 (Elastic Compute Cloud)<br/>S3 (Simple Storage Service)<br/>IAM (Identity and Access Management) |
+| GCP (Google Cloud Platform) |                  cloudlist                  |                 Compute Engine<br/>Cloud DNS                 |
 
 ## Thanks
 - [c-bata/go-prompt](https://github.com/c-bata/go-prompt)
