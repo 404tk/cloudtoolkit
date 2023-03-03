@@ -29,7 +29,7 @@ type Provider struct {
 }
 
 // New creates a new provider client for gcp API
-func New(options schema.OptionBlock) (*Provider, error) {
+func New(options schema.Options) (*Provider, error) {
 	gcpKey, ok := options.GetMetadata(utils.GCPserviceAccountJSON)
 	if !ok {
 		return nil, &schema.ErrNoSuchKey{Name: utils.GCPserviceAccountJSON}

@@ -7,7 +7,7 @@ import (
 
 type AWS struct{}
 
-func (p AWS) Check(block schema.OptionBlock) (schema.Provider, error) {
+func (p AWS) Check(block schema.Options) (schema.Provider, error) {
 	return aws.New(block)
 }
 

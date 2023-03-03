@@ -7,7 +7,7 @@ import (
 )
 
 type Provider interface {
-	Check(block schema.OptionBlock) (schema.Provider, error)
+	Check(block schema.Options) (schema.Provider, error)
 	Desc() string
 }
 

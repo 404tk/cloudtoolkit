@@ -9,7 +9,7 @@ import (
 
 type GCP struct{}
 
-func (p GCP) Check(block schema.OptionBlock) (schema.Provider, error) {
+func (p GCP) Check(block schema.Options) (schema.Provider, error) {
 	return gcp.New(block)
 }
 

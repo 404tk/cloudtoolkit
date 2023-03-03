@@ -6,6 +6,7 @@ import (
 	"log"
 	"strconv"
 
+	"github.com/404tk/cloudtoolkit/pkg/plugins"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
 	"github.com/c-bata/go-prompt"
@@ -45,8 +46,11 @@ func sessions(args []string) {
 				}
 			}
 		}
+	} else if len(args) == 1 && args[0] == "-c" {
+		checkCred()
+		return
 	}
-	fmt.Println("Usage of sessions:\n\t-i, internation [id]\n\t-k, kill [id]")
+	fmt.Println("Usage of sessions:\n\t-i, internation [id]\n\t-k, kill [id]\n\t-c, check all")
 }
 
 func loadCred() {
@@ -79,5 +83,23 @@ func internation(uuid string) {
 			prompt.OptionInputTextColor(prompt.White),
 		)
 		p.Run()
+	}
+}
+
+func checkCred() {
+	for _, cred := range cache.Cfg.Creds {
+		m := make(map[string]string)
+		err := json.Unmarshal([]byte(cred.JsonData), &m)
+		if err != nil {
+			log.Println("[-] Unmarshal failed:", err.Error())
+		}
+		if value, ok := m[utils.Provider]; ok {
+			if v, ok := plugins.Providers[value]; ok {
+				_, err = v.Check(m)
+				if err != nil {
+					log.Printf("[-] %s(%s) check failed.\n", cred.User, cred.AccessKey)
+				}
+			}
+		}
 	}
 }

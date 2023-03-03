@@ -30,7 +30,7 @@ type Provider struct {
 }
 
 // New creates a new provider client for alibaba API
-func New(options schema.OptionBlock) (*Provider, error) {
+func New(options schema.Options) (*Provider, error) {
 	accessKey, ok := options.GetMetadata(utils.AccessKey)
 	if !ok {
 		return nil, &schema.ErrNoSuchKey{Name: utils.AccessKey}
@@ -95,6 +95,11 @@ func New(options schema.OptionBlock) (*Provider, error) {
 	}, err
 }
 
+/*
+func GetCredInfo(region, accessKey, secretKey, token string) bool {
+
+}
+*/
 // Name returns the name of the provider
 func (p *Provider) Name() string {
 	return p.vendor

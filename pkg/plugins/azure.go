@@ -9,7 +9,7 @@ import (
 
 type Azure struct{}
 
-func (p Azure) Check(block schema.OptionBlock) (schema.Provider, error) {
+func (p Azure) Check(block schema.Options) (schema.Provider, error) {
 	return azure.New(block)
 }
 

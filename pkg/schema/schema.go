@@ -76,13 +76,10 @@ func (e *ErrNoSuchKey) Error() string {
 }
 
 // Options contains configuration options for a provider
-type Options []OptionBlock
-
-// OptionBlock is a single option on which operation is possible
-type OptionBlock map[string]string
+type Options map[string]string
 
 // GetMetadata returns the value for a key if it exists.
-func (o OptionBlock) GetMetadata(key string) (string, bool) {
+func (o Options) GetMetadata(key string) (string, bool) {
 	data, ok := o[key]
 	if !ok || data == "" {
 		return "", false

@@ -7,7 +7,7 @@ import (
 
 type Alibaba struct{}
 
-func (p Alibaba) Check(block schema.OptionBlock) (schema.Provider, error) {
+func (p Alibaba) Check(block schema.Options) (schema.Provider, error) {
 	return alibaba.New(block)
 }
 

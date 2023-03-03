@@ -24,7 +24,7 @@ type Provider struct {
 }
 
 // New creates a new provider client for tencent API
-func New(options schema.OptionBlock) (*Provider, error) {
+func New(options schema.Options) (*Provider, error) {
 	accessKey, ok := options.GetMetadata(utils.AccessKey)
 	if !ok {
 		return nil, &schema.ErrNoSuchKey{Name: utils.AccessKey}

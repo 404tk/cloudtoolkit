@@ -7,30 +7,29 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/plugins"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils"
 )
 
 // Inventory is an inventory of providers
 type Inventory struct {
-	Providers []schema.Provider
+	Providers schema.Provider
 }
 
 // New creates a new inventory of providers
 func New(options schema.Options) (*Inventory, error) {
 	inventory := &Inventory{}
 
-	for _, block := range options {
-		value, ok := block.GetMetadata("provider")
-		if !ok {
-			return inventory, nil
-		}
-		provider, err := nameToProvider(value, block)
-		if err != nil {
-			return inventory, err
-		} else if IsNil(provider) {
-			return inventory, errors.New("It maybe Huawei Cloud SDK panic.")
-		}
-		inventory.Providers = append(inventory.Providers, provider)
+	value, ok := options.GetMetadata(utils.Provider)
+	if !ok {
+		return inventory, nil
 	}
+	provider, err := nameToProvider(value, options)
+	if err != nil {
+		return inventory, err
+	} else if IsNil(provider) {
+		return inventory, errors.New("It maybe Huawei Cloud SDK panic.")
+	}
+	inventory.Providers = provider
 	return inventory, nil
 }
 
@@ -43,7 +42,7 @@ func IsNil(i schema.Provider) bool {
 }
 
 // nameToProvider returns the provider for a name
-func nameToProvider(name string, block schema.OptionBlock) (schema.Provider, error) {
+func nameToProvider(name string, block schema.Options) (schema.Provider, error) {
 	if v, ok := plugins.Providers[name]; ok {
 		return v.Check(block)
 	}

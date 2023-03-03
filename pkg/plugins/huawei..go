@@ -7,7 +7,7 @@ import (
 
 type Huawei struct{}
 
-func (p Huawei) Check(block schema.OptionBlock) (schema.Provider, error) {
+func (p Huawei) Check(block schema.Options) (schema.Provider, error) {
 	return huawei.New(block)
 }
 

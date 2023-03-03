@@ -24,7 +24,7 @@ type Provider struct {
 }
 
 // New creates a new provider client for azure API
-func New(options schema.OptionBlock) (*Provider, error) {
+func New(options schema.Options) (*Provider, error) {
 	clientID, ok := options.GetMetadata(utils.AzureClientId)
 	if !ok {
 		return nil, &schema.ErrNoSuchKey{Name: utils.AzureClientId}

@@ -5,13 +5,12 @@ import (
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/inventory"
-	"github.com/404tk/cloudtoolkit/pkg/schema"
 )
 
 type BackdoorUser struct{}
 
 func (p BackdoorUser) Run(config map[string]string) {
-	inventory, err := inventory.New(schema.Options{config})
+	i, err := inventory.New(config)
 	if err != nil {
 		log.Println(err)
 		return
@@ -28,9 +27,7 @@ func (p BackdoorUser) Run(config map[string]string) {
 		}
 	}
 
-	for _, provider := range inventory.Providers {
-		provider.UserManagement(action, uname, pwd)
-	}
+	i.Providers.UserManagement(action, uname, pwd)
 	// log.Println("[+] Done.")
 }
 

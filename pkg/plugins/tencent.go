@@ -7,7 +7,7 @@ import (
 
 type Tencent struct{}
 
-func (p Tencent) Check(block schema.OptionBlock) (schema.Provider, error) {
+func (p Tencent) Check(block schema.Options) (schema.Provider, error) {
 	return tencent.New(block)
 }
 

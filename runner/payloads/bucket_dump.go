@@ -5,13 +5,12 @@ import (
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/inventory"
-	"github.com/404tk/cloudtoolkit/pkg/schema"
 )
 
 type BucketDump struct{}
 
 func (p BucketDump) Run(config map[string]string) {
-	inventory, err := inventory.New(schema.Options{config})
+	i, err := inventory.New(config)
 	if err != nil {
 		log.Println(err)
 		return
@@ -25,10 +24,7 @@ func (p BucketDump) Run(config map[string]string) {
 			bucketname = data[1]
 		}
 	}
-
-	for _, provider := range inventory.Providers {
-		provider.BucketDump(action, bucketname)
-	}
+	i.Providers.BucketDump(action, bucketname)
 	log.Println("[+] Done.")
 }
 
