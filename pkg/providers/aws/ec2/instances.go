@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/processbar"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
@@ -21,6 +22,8 @@ type InstanceProvider struct {
 func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
 	list := schema.NewResources().Hosts
 	log.Println("[*] Start enumerating EC2 ...")
+	flag := false
+	prevLength := 0
 	count := 0
 	regions, err := d.GetEC2Regions()
 	if err != nil {
@@ -60,9 +63,11 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 			}
 			req.SetNextToken(aws.StringValue(resp.NextToken))
 		}
-		progress := fmt.Sprintf("Inquiring %s regionId,number of discovered hosts: %d", region, len(list)-count)
-		log.Println(progress)
+		prevLength, flag = processbar.RegionPrint(region, len(list)-count, prevLength, flag)
 		count = len(list)
+	}
+	if !flag {
+		fmt.Printf("\n\033[F\033[K")
 	}
 	return list, nil
 }

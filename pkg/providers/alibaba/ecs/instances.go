@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/processbar"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ecs"
 )
@@ -27,6 +28,8 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 		log.Println("[-] Enumerate ECS failed.")
 		return list, err
 	}
+	flag := false
+	prevLength := 0
 	count := 0
 	for _, r := range resp.Regions.Region {
 		for _, resourceGroupId := range d.ResourceGroups {
@@ -78,10 +81,12 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 				}
 				page++
 			}
-			progress := fmt.Sprintf("Inquiring %s regionId,number of discovered hosts: %d", r.RegionId, len(list)-count)
-			log.Println(progress)
-			count = len(list)
 		}
+		prevLength, flag = processbar.RegionPrint(r.RegionId, len(list)-count, prevLength, flag)
+		count = len(list)
+	}
+	if !flag {
+		fmt.Printf("\n\033[F\033[K")
 	}
 
 	return list, nil

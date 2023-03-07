@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/processbar"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
@@ -36,6 +37,8 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 	} else {
 		regions = append(regions, d.Region)
 	}
+	flag := false
+	prevLength := 0
 	for _, r := range regions {
 		client, _ := cvm.NewClient(d.Credential, r, cpf)
 		request := cvm.NewDescribeInstancesRequest()
@@ -61,8 +64,10 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 			}
 			list = append(list, host)
 		}
-		progress := fmt.Sprintf("Inquiring %s regionId,number of discovered hosts: %d", r, len(response.Response.InstanceSet))
-		log.Println(progress)
+		prevLength, flag = processbar.RegionPrint(r, len(response.Response.InstanceSet), prevLength, flag)
+	}
+	if !flag {
+		fmt.Printf("\n\033[F\033[K")
 	}
 
 	return list, nil

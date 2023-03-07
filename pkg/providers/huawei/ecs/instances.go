@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/processbar"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
 	_region "github.com/huaweicloud/huaweicloud-sdk-go-v3/core/region"
 	ecs "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2"
@@ -22,6 +23,8 @@ type InstanceProvider struct {
 func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
 	list := schema.NewResources().Hosts
 	log.Println("[*] Start enumerating ECS ...")
+	flag := false
+	prevLength := 0
 	for _, r := range d.Regions {
 		_r := getRegion(r)
 		if _r == nil {
@@ -59,8 +62,10 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 			}
 			list = append(list, host)
 		}
-		progress := fmt.Sprintf("Inquiring %s regionId,number of discovered hosts: %d", r, len(*response.Servers))
-		log.Println(progress)
+		prevLength, flag = processbar.RegionPrint(r, len(*response.Servers), prevLength, flag)
+	}
+	if !flag {
+		fmt.Printf("\n\033[F\033[K")
 	}
 
 	return list, nil
