@@ -19,7 +19,12 @@ type CamUserProvider struct {
 
 func (d *CamUserProvider) GetCamUser(ctx context.Context) ([]*schema.User, error) {
 	list := schema.NewResources().Users
-	log.Println("[*] Start enumerating CAM ...")
+	select {
+	case <-ctx.Done():
+		return list, nil
+	default:
+		log.Println("[*] Start enumerating CAM ...")
+	}
 	cpf := profile.NewClientProfile()
 	// cpf.HttpProfile.Endpoint = "cam.tencentcloudapi.com"
 	client, _ := cam.NewClient(d.Credential, "", cpf)

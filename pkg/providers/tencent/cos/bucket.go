@@ -16,7 +16,12 @@ type COSProvider struct {
 
 func (d *COSProvider) GetBuckets(ctx context.Context) ([]*schema.Storage, error) {
 	list := schema.NewResources().Storages
-	log.Println("[*] Start enumerating COS ...")
+	select {
+	case <-ctx.Done():
+		return list, nil
+	default:
+		log.Println("[*] Start enumerating COS ...")
+	}
 	client := cos.NewClient(nil, &http.Client{
 		Transport: &cos.AuthorizationTransport{
 			SecretID:  d.Credential.SecretId,

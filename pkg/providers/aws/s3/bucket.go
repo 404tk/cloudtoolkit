@@ -15,7 +15,12 @@ type S3Provider struct {
 
 func (d *S3Provider) GetBuckets(ctx context.Context) ([]*schema.Storage, error) {
 	list := schema.NewResources().Storages
-	log.Println("[*] Start enumerating S3 ...")
+	select {
+	case <-ctx.Done():
+		return list, nil
+	default:
+		log.Println("[*] Start enumerating S3 ...")
+	}
 	client := s3.New(d.Session)
 	buckets, err := client.ListBuckets(&s3.ListBucketsInput{})
 	if err != nil {
@@ -35,6 +40,10 @@ func (d *S3Provider) GetBuckets(ctx context.Context) ([]*schema.Storage, error) 
 			_bucket.Region = *bucketLocation.LocationConstraint
 		}
 		list = append(list, _bucket)
+		select {
+		case <-ctx.Done():
+			return list, nil
+		}
 	}
 
 	return list, nil

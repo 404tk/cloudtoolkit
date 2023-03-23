@@ -11,29 +11,34 @@ import (
 
 type CloudList struct{}
 
-func (p CloudList) Run(config map[string]string) {
+func (p CloudList) Run(ctx context.Context, config map[string]string) {
 	i, err := inventory.New(config)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 
-	resources, err := i.Providers.Resources(context.Background())
+	resources, err := i.Providers.Resources(ctx)
 	if err != nil {
 		log.Println("[Failed]", err.Error())
 		// return
 	}
-	pprint := func(len int, tag string, res interface{}) {
-		if len > 0 {
-			fmt.Println(fmt.Sprintf("%s results:\n%s", tag, table.Table(res)))
+	select {
+	case <-ctx.Done():
+		return
+	default:
+		pprint := func(len int, tag string, res interface{}) {
+			if len > 0 {
+				fmt.Println(fmt.Sprintf("%s results:\n%s", tag, table.Table(res)))
+			}
 		}
+
+		pprint(len(resources.Hosts), "Hosts", resources.Hosts)
+		pprint(len(resources.Storages), "Storages", resources.Storages)
+		pprint(len(resources.Users), "Users", resources.Users)
+
+		log.Println("[+] Done.")
 	}
-
-	pprint(len(resources.Hosts), "Hosts", resources.Hosts)
-	pprint(len(resources.Storages), "Storages", resources.Storages)
-	pprint(len(resources.Users), "Users", resources.Users)
-
-	log.Println("[+] Done.")
 }
 
 func (p CloudList) Desc() string {

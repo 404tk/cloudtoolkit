@@ -17,7 +17,12 @@ type RdsProvider struct {
 
 func (d *RdsProvider) GetDatabases(ctx context.Context) ([]*schema.Database, error) {
 	list := schema.NewResources().Databases
-	log.Println("[*] Start enumerating RDS ...")
+	select {
+	case <-ctx.Done():
+		return list, nil
+	default:
+		log.Println("[*] Start enumerating RDS ...")
+	}
 	for _, resourceGroupId := range d.ResourceGroups {
 		page := 1
 		for {
@@ -48,6 +53,10 @@ func (d *RdsProvider) GetDatabases(ctx context.Context) ([]*schema.Database, err
 				break
 			}
 			page++
+			select {
+			case <-ctx.Done():
+				return list, nil
+			}
 		}
 	}
 	return list, nil

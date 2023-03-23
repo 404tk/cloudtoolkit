@@ -64,8 +64,14 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 			}
 			list = append(list, host)
 		}
-		prevLength, flag = processbar.RegionPrint(r, len(response.Response.InstanceSet), prevLength, flag)
+		select {
+		case <-ctx.Done():
+			goto done
+		default:
+			prevLength, flag = processbar.RegionPrint(r, len(response.Response.InstanceSet), prevLength, flag)
+		}
 	}
+done:
 	if !flag {
 		fmt.Printf("\n\033[F\033[K")
 	}

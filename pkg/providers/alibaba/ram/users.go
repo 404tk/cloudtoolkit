@@ -19,8 +19,13 @@ type RamProvider struct {
 
 func (d *RamProvider) GetRamUser(ctx context.Context) ([]*schema.User, error) {
 	list := schema.NewResources().Users
+	select {
+	case <-ctx.Done():
+		return list, nil
+	default:
+		log.Println("[*] Start enumerating RAM ...")
+	}
 	marker := ""
-	log.Println("[*] Start enumerating RAM ...")
 	for {
 		listUsersRequest := ram.CreateListUsersRequest()
 		listUsersRequest.Scheme = "https"
@@ -55,6 +60,10 @@ func (d *RamProvider) GetRamUser(ctx context.Context) ([]*schema.User, error) {
 			}
 
 			list = append(list, &_user)
+			select {
+			case <-ctx.Done():
+				return list, nil
+			}
 		}
 		if !response.IsTruncated {
 			break

@@ -21,7 +21,12 @@ type IAMUserProvider struct {
 
 func (d *IAMUserProvider) GetIAMUser(ctx context.Context) ([]*schema.User, error) {
 	list := schema.NewResources().Users
-	log.Println("[*] Start enumerating IAM user ...")
+	select {
+	case <-ctx.Done():
+		return list, nil
+	default:
+		log.Println("[*] Start enumerating IAM user ...")
+	}
 	auth := global.NewCredentialsBuilder().
 		WithAk(d.Auth.AK).
 		WithSk(d.Auth.SK).

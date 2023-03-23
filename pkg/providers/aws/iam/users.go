@@ -18,7 +18,12 @@ type IAMProvider struct {
 
 func (d *IAMProvider) GetIAMUser(ctx context.Context) ([]*schema.User, error) {
 	list := schema.NewResources().Users
-	log.Println("[*] Start enumerating IAM ...")
+	select {
+	case <-ctx.Done():
+		return list, nil
+	default:
+		log.Println("[*] Start enumerating IAM ...")
+	}
 	client := iam.New(d.Session)
 	users, err := client.ListUsers(&iam.ListUsersInput{})
 	if err != nil {

@@ -12,6 +12,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/bssopenapi"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ecs"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ram"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/rds"
@@ -62,8 +63,19 @@ func New(options schema.Options) (*Provider, error) {
 			userName = u[1]
 		}
 	}
-	log.Printf("[+] Current user: %s\n", userName)
+	msg := "[+] Current user: " + userName
 	cache.Cfg.CredInsert(userName, options)
+
+	bssclient, _ := bssopenapi.NewClientWithStsToken(region, accessKey, secretKey, token)
+	req_bss := bssopenapi.CreateQueryAccountBalanceRequest()
+	req_bss.Scheme = "https"
+	resp, err := bssclient.QueryAccountBalance(req_bss)
+	if err == nil {
+		if resp.Data.AvailableCashAmount != "" {
+			msg += ", available cash amount: " + resp.Data.AvailableCashAmount
+		}
+	}
+	log.Printf(msg)
 
 	ecsClient, err := ecs.NewClientWithStsToken(region, accessKey, secretKey, token)
 	ossClient, err := oss.New("oss-"+region+".aliyuncs.com", accessKey, secretKey, oss.SecurityToken(token))

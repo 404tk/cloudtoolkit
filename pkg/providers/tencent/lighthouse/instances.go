@@ -20,7 +20,12 @@ type InstanceProvider struct {
 // GetResource returns all the resources in the store for a provider.
 func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
 	list := schema.NewResources().Hosts
-	log.Println("[*] Start enumerating Lighthouse ...")
+	select {
+	case <-ctx.Done():
+		return list, nil
+	default:
+		log.Println("[*] Start enumerating Lighthouse ...")
+	}
 	cpf := profile.NewClientProfile()
 	var regions []string
 	if d.Region == "all" {
@@ -65,8 +70,14 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 			}
 			list = append(list, _host)
 		}
-		prevLength, flag = processbar.RegionPrint(r, len(response.Response.InstanceSet), prevLength, flag)
+		select {
+		case <-ctx.Done():
+			goto done
+		default:
+			prevLength, flag = processbar.RegionPrint(r, len(response.Response.InstanceSet), prevLength, flag)
+		}
 	}
+done:
 	if !flag {
 		fmt.Printf("\n\033[F\033[K")
 	}

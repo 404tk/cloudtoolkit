@@ -43,11 +43,14 @@ func sessions(args []string) {
 					cache.Cfg.CredDelete(uuid)
 					loadCred()
 					return
+				case "-c":
+					checkCred(uuid)
+					return
 				}
 			}
 		}
 	} else if len(args) == 1 && args[0] == "-c" {
-		checkCred()
+		checkCred("all")
 		return
 	}
 	fmt.Println("Usage of sessions:\n\t-i, internation [id]\n\t-k, kill [id]\n\t-c, check all")
@@ -86,8 +89,11 @@ func internation(uuid string) {
 	}
 }
 
-func checkCred() {
+func checkCred(uuid string) {
 	for _, cred := range cache.Cfg.Creds {
+		if uuid != "all" && cred.UUID != uuid {
+			continue
+		}
 		m := make(map[string]string)
 		err := json.Unmarshal([]byte(cred.JsonData), &m)
 		if err != nil {

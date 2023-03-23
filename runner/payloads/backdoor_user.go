@@ -1,6 +1,7 @@
 package payloads
 
 import (
+	"context"
 	"log"
 	"strings"
 
@@ -9,7 +10,7 @@ import (
 
 type BackdoorUser struct{}
 
-func (p BackdoorUser) Run(config map[string]string) {
+func (p BackdoorUser) Run(ctx context.Context, config map[string]string) {
 	i, err := inventory.New(config)
 	if err != nil {
 		log.Println(err)

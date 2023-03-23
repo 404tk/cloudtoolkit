@@ -63,9 +63,15 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 			}
 			req.SetNextToken(aws.StringValue(resp.NextToken))
 		}
-		prevLength, flag = processbar.RegionPrint(region, len(list)-count, prevLength, flag)
-		count = len(list)
+		select {
+		case <-ctx.Done():
+			goto done
+		default:
+			prevLength, flag = processbar.RegionPrint(region, len(list)-count, prevLength, flag)
+			count = len(list)
+		}
 	}
+done:
 	if !flag {
 		fmt.Printf("\n\033[F\033[K")
 	}

@@ -1,9 +1,11 @@
 package console
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"sort"
 
 	"github.com/404tk/cloudtoolkit/runner/payloads"
@@ -12,6 +14,18 @@ import (
 )
 
 func Executor(s string) {
+	// allow ctrl-c to generate signal
+	ctx, cancel := context.WithCancel(context.Background())
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+
+	go func() {
+		select {
+		case <-c:
+			cancel()
+		}
+	}()
+
 	if s == "" {
 		return
 	}
@@ -24,7 +38,7 @@ func Executor(s string) {
 	case "set":
 		set(args)
 	case "run":
-		run()
+		go func() { defer cancel(); run(ctx) }()
 	case "sessions":
 		sessions(args)
 	case "help":
@@ -36,6 +50,14 @@ func Executor(s string) {
 		os.Exit(0)
 	default:
 		fmt.Println("[Error] Unsupported command:", cmd)
+	}
+
+	if cmd != "run" {
+		return
+	}
+	select {
+	case <-ctx.Done():
+		return
 	}
 }
 
@@ -86,9 +108,9 @@ func set(args []string) {
 	}
 }
 
-func run() {
+func run(ctx context.Context) {
 	if v, ok := payloads.Payloads[config[utils.Payload]]; ok {
-		v.Run(config)
+		v.Run(ctx, config)
 	} else {
 		log.Println("[-] Please type `show payloads` to confirm the required payload.")
 	}

@@ -1,11 +1,12 @@
 package payloads
 
 import (
+	"context"
 	"log"
 )
 
 type Payload interface {
-	Run(map[string]string)
+	Run(context.Context, map[string]string)
 	Desc() string
 }
 

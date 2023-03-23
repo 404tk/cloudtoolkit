@@ -16,7 +16,12 @@ type OBSProvider struct {
 
 func (d *OBSProvider) GetBuckets(ctx context.Context) ([]*schema.Storage, error) {
 	list := schema.NewResources().Storages
-	log.Println("[*] Start enumerating OBS ...")
+	select {
+	case <-ctx.Done():
+		return list, nil
+	default:
+		log.Println("[*] Start enumerating OBS ...")
+	}
 	endPoint := "obs." + d.Regions[0] + ".myhuaweicloud.com"
 	client, err := obs.New(d.Auth.AK, d.Auth.SK, endPoint)
 	if err != nil {
