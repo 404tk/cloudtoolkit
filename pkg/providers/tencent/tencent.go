@@ -2,6 +2,7 @@ package tencent
 
 import (
 	"context"
+	"fmt"
 	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cam"
@@ -11,6 +12,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
+	billing "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/billing/v20180709"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	sts "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sts/v20180813"
@@ -46,9 +48,19 @@ func New(options schema.Options) (*Provider, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("[+] Current account type: %s\n", *response.Response.Type)
+	msg := "[+] Current account type: " + *response.Response.Type
 	// accountId, _ := strconv.Atoi(*response.Response.UserId)
 	cache.Cfg.CredInsert(*response.Response.Type, options)
+
+	// cpf.HttpProfile.Endpoint = "billing.tencentcloudapi.com"
+	client, _ := billing.NewClient(credential, "ap-guangzhou", cpf)
+	req_billing := billing.NewDescribeAccountBalanceRequest()
+	resp_billing, err := client.DescribeAccountBalance(req_billing)
+	if err == nil {
+		cash := *resp_billing.Response.RealBalance / 100
+		msg += fmt.Sprintf(", available cash amount: %v", cash)
+	}
+	log.Println(msg)
 
 	return &Provider{
 		vendor:     "tencent",

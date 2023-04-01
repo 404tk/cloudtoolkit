@@ -13,8 +13,9 @@ require (
 	github.com/huaweicloud/huaweicloud-sdk-go-obs v3.22.11+incompatible
 	github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.0.97
 	github.com/modood/table v0.0.0-20220527013332-8d47e76dad33
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/billing v1.0.628
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cam v1.0.557
-	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.0.557
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.0.628
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm v1.0.557
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/lighthouse v1.0.557
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sts v1.0.557

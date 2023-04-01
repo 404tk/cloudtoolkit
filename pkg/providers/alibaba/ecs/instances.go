@@ -22,10 +22,17 @@ type InstanceProvider struct {
 func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
 	list := schema.NewResources().Hosts
 	log.Println("[*] Start enumerating ECS ...")
+	// check permission
+	req_vpc := ecs.CreateDescribeVpcsRequest()
+	_, err := d.Client.DescribeVpcs(req_vpc)
+	if err != nil {
+		log.Println("[-] Describe vpcs failed.")
+		return list, err
+	}
 	req := ecs.CreateDescribeRegionsRequest()
 	resp, err := d.Client.DescribeRegions(req)
 	if err != nil {
-		log.Println("[-] Enumerate ECS failed.")
+		log.Println("[-] Describe regions failed.")
 		return list, err
 	}
 	flag := false
