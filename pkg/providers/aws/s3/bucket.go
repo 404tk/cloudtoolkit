@@ -43,6 +43,8 @@ func (d *S3Provider) GetBuckets(ctx context.Context) ([]*schema.Storage, error) 
 		select {
 		case <-ctx.Done():
 			return list, nil
+		default:
+			continue
 		}
 	}
 

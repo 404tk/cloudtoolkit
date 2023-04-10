@@ -34,6 +34,7 @@ type Resources struct {
 	Storages  []*Storage
 	Users     []*User
 	Databases []*Database
+	Sms       Sms
 }
 
 type Host struct {
@@ -63,6 +64,24 @@ type Database struct {
 	Engine        string `table:"Engine"`
 	EngineVersion string `table:"Version"`
 	Region        string `table:"Region"`
+}
+
+type Sms struct {
+	Signs     []SmsSign
+	Templates []SmsTemplate
+	DailySize int64
+}
+
+type SmsSign struct {
+	Name   string `table:"Name"`
+	Type   string `table:"Type"`
+	Status string `table:"Status"`
+}
+
+type SmsTemplate struct {
+	Name    string `table:"Name"`
+	Status  string `table:"Status"`
+	Content string `table:"Content"`
 }
 
 // ErrNoSuchKey means no such key exists in metadata.

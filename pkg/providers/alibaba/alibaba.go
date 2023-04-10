@@ -9,10 +9,12 @@ import (
 	_oss "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/oss"
 	_ram "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/ram"
 	_rds "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/rds"
+	_sms "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/sms"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/bssopenapi"
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/dysmsapi"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ecs"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ram"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/rds"
@@ -27,6 +29,7 @@ type Provider struct {
 	OssClient      *oss.Client
 	RamClient      *ram.Client
 	RdsClient      *rds.Client
+	SmsClient      *dysmsapi.Client
 	resourceGroups []string
 }
 
@@ -81,6 +84,7 @@ func New(options schema.Options) (*Provider, error) {
 	ossClient, err := oss.New("oss-"+region+".aliyuncs.com", accessKey, secretKey, oss.SecurityToken(token))
 	ramClient, err := ram.NewClientWithStsToken(region, accessKey, secretKey, token)
 	rdsClient, err := rds.NewClientWithStsToken(region, accessKey, secretKey, token)
+	smsclient, err := dysmsapi.NewClientWithStsToken(region, accessKey, secretKey, token)
 	/*
 		rmClient, err := resourcemanager.NewClientWithAccessKey(region, accessKey, secretKey)
 		if err != nil {
@@ -103,6 +107,7 @@ func New(options schema.Options) (*Provider, error) {
 		OssClient:      ossClient,
 		RamClient:      ramClient,
 		RdsClient:      rdsClient,
+		SmsClient:      smsclient,
 		resourceGroups: []string{""},
 	}, err
 }
@@ -133,6 +138,9 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 
 	rdsprovider := &_rds.RdsProvider{Client: p.RdsClient, ResourceGroups: p.resourceGroups}
 	list.Databases, err = rdsprovider.GetDatabases(ctx)
+
+	smsprovider := &_sms.SmsProvider{Client: p.SmsClient}
+	list.Sms, err = smsprovider.GetResource(ctx)
 
 	return list, err
 }

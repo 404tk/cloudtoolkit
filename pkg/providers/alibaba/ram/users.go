@@ -63,6 +63,8 @@ func (d *RamProvider) GetRamUser(ctx context.Context) ([]*schema.User, error) {
 			select {
 			case <-ctx.Done():
 				return list, nil
+			default:
+				continue
 			}
 		}
 		if !response.IsTruncated {

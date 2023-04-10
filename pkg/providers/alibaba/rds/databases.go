@@ -56,6 +56,8 @@ func (d *RdsProvider) GetDatabases(ctx context.Context) ([]*schema.Database, err
 			select {
 			case <-ctx.Done():
 				return list, nil
+			default:
+				continue
 			}
 		}
 	}
