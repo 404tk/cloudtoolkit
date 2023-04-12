@@ -2,8 +2,10 @@ package huawei
 
 import (
 	"context"
+	"fmt"
 	"log"
 
+	_bss "github.com/404tk/cloudtoolkit/pkg/providers/huawei/bss"
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/ecs"
 	_iam "github.com/404tk/cloudtoolkit/pkg/providers/huawei/iam"
 	_obs "github.com/404tk/cloudtoolkit/pkg/providers/huawei/obs"
@@ -14,7 +16,7 @@ import (
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
 	iam "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3/model"
-	region "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3/region"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3/region"
 )
 
 // Provider is a data provider for huawei API
@@ -23,6 +25,8 @@ type Provider struct {
 	auth    basic.Credentials
 	regions []string
 }
+
+var default_region = "cn-north-4"
 
 // New creates a new provider client for huawei API
 func New(options schema.Options) (*Provider, error) {
@@ -34,13 +38,20 @@ func New(options schema.Options) (*Provider, error) {
 	if !ok {
 		return nil, &schema.ErrNoSuchKey{Name: utils.SecretKey}
 	}
+	regionId, _ := options.GetMetadata(utils.Region)
 
-	r := _iam.NewGetRequest()
+	var r = &_iam.DefaultHttpRequest{}
+	if regionId == "all" {
+		r = _iam.NewGetRequest(default_region)
+	} else {
+		r = _iam.NewGetRequest(regionId)
+	}
+
 	userName, err := r.GetUserName(accessKey, secretKey)
 	if err != nil {
 		return nil, err
 	}
-	log.Printf("[+] Current user: %s\n", userName)
+	msg := "[+] Current user: " + userName
 	cache.Cfg.CredInsert(userName, options)
 
 	auth := basic.NewCredentialsBuilder().
@@ -48,19 +59,24 @@ func New(options schema.Options) (*Provider, error) {
 		WithSk(secretKey).
 		Build()
 
+	amount, err := _bss.QueryBalance(auth)
+	if err == nil {
+		msg += fmt.Sprintf(", available cash amount: %v", amount)
+	}
+	log.Println(msg)
+
 	defer func() {
 		if err := recover(); err != nil {
 			log.Println(err)
 		}
 	}()
 
-	regionId, _ := options.GetMetadata(utils.Region)
 	payload, _ := options.GetMetadata(utils.Payload)
 	var regions []string
 	if regionId == "all" && payload == "cloudlist" {
 		client := iam.NewIamClient(
 			iam.IamClientBuilder().
-				WithRegion(region.ValueOf("cn-east-2")).
+				WithRegion(region.ValueOf(default_region)).
 				WithCredential(auth).
 				Build())
 		req := &model.KeystoneListRegionsRequest{}
@@ -73,7 +89,7 @@ func New(options schema.Options) (*Provider, error) {
 			regions = append(regions, r.Id)
 		}
 	} else if regionId == "all" && payload != "cloudlist" {
-		regions = append(regions, "cn-east-2")
+		regions = append(regions, default_region)
 	} else {
 		regions = append(regions, regionId)
 	}

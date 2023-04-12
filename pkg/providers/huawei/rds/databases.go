@@ -19,7 +19,12 @@ type RdsProvider struct {
 
 func (d *RdsProvider) GetDatabases(ctx context.Context) ([]*schema.Database, error) {
 	list := schema.NewResources().Databases
-	log.Println("[*] Start enumerating RDS ...")
+	select {
+	case <-ctx.Done():
+		return list, nil
+	default:
+		log.Println("[*] Start enumerating RDS ...")
+	}
 	client := rds.NewRdsClient(rds.RdsClientBuilder().
 		WithRegion(region.ValueOf(d.Regions[0])). // Maybe need traverse region
 		WithCredential(d.Auth).
