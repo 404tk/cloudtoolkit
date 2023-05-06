@@ -1,3 +1,5 @@
+//go:build !no_tencent
+
 package plugins
 
 import (

@@ -4,39 +4,46 @@ import (
 	"context"
 	"log"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/gcp/request"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
-	"google.golang.org/api/compute/v1"
 )
 
 type InstanceProvider struct {
-	ComputeService *compute.Service
-	Projects       []string
+	Projects []string
+	Token    string
 }
 
 func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
 	list := schema.NewResources().Hosts
 	log.Println("[*] Start enumerating Compute ...")
-
+	r := &request.DefaultHttpRequest{
+		Endpoint: "compute.googleapis.com",
+		Method:   "GET",
+		Token:    d.Token,
+	}
 	for _, project := range d.Projects {
-		resp, err := d.ComputeService.Zones.List(project).Do()
+		zones, err := r.ListZones(project)
 		if err != nil {
-			log.Printf("[-] Could not get all zones for project %s.\n", project)
+			log.Printf("[-] List %s zones failed: %s.\n", project, err.Error())
 			return list, err
 		}
-		for _, z := range resp.Items {
-			res, err := d.ComputeService.Instances.List(project, z.Name).Context(ctx).Do()
+		for _, z := range zones {
+			instances, err := r.ListInstances(project, z)
 			if err != nil {
-				log.Printf("[-] Could not list instances for zone %s in project %s.\n", z.Name, project)
+				log.Printf("[-] List projects/%s/zones/%s/instances failed: %s\n", project, z, err.Error())
 				return list, err
 			}
-			for _, instance := range res.Items {
-				_host := &schema.Host{Region: instance.Zone}
-				for _, networkInterface := range instance.NetworkInterfaces {
-					_host.PrivateIpv4 = networkInterface.NetworkIP
-					for _, accessConfig := range networkInterface.AccessConfigs {
-						if accessConfig.NatIP != "" {
+			for _, i := range instances {
+				_host := &schema.Host{Region: i.Get("zone").String()}
+				network := i.Get("networkInterfaces").Array()
+				for _, n := range network {
+					_host.PrivateIpv4 = n.Get("networkIP").String()
+					conf := n.Get("networkInterfaces").Array()
+					for _, acc := range conf {
+						natIP := acc.Get("natIP").String()
+						if natIP != "" {
 							_host.Public = true
-							_host.PublicIPv4 = accessConfig.NatIP
+							_host.PublicIPv4 = natIP
 							goto save
 						}
 					}

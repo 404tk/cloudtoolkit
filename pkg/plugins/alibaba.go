@@ -1,3 +1,5 @@
+//go:build !no_alibaba
+
 package plugins
 
 import (

@@ -1,3 +1,5 @@
+//go:build !no_aws
+
 package plugins
 
 import (

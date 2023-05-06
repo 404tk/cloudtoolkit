@@ -38,8 +38,9 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 		request := &model.ListServersDetailsRequest{}
 		response, err := client.ListServersDetails(request)
 		if err != nil {
-			log.Println("[-] Enumerate ECS failed.")
-			return list, err
+			// log.Println("[-] Enumerate ECS failed.")
+			// return list, err
+			continue
 		}
 
 		for _, instances := range *response.Servers {

@@ -4,52 +4,62 @@ import (
 	"context"
 	"log"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/gcp/request"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
-	"google.golang.org/api/dns/v1"
+	"github.com/tidwall/gjson"
 )
 
 type CloudDNSProvider struct {
-	Dns      *dns.Service
 	Projects []string
+	Token    string
 }
 
 func (d *CloudDNSProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
 	list := schema.NewResources().Hosts
 	log.Println("[*] Start enumerating DNS ...")
+	r := &request.DefaultHttpRequest{
+		Endpoint: "dns.googleapis.com",
+		Method:   "GET",
+		Token:    d.Token,
+	}
 
 	for _, project := range d.Projects {
-		resp, err := d.Dns.ManagedZones.List(project).Do()
+		zones, err := r.ListManagedZones(project)
 		if err != nil {
-			log.Printf("[-] Could not get all zones for project %s.\n", project)
+			log.Printf("[-] List %s zones failed: %s.\n", project, err.Error())
 			return list, err
 		}
-		for _, z := range resp.ManagedZones {
-			resources, err := d.Dns.ResourceRecordSets.List(project, z.Name).Do()
+		for _, z := range zones {
+			resources, err := r.ListRRSets(project, z)
 			if err != nil {
-				log.Printf("[-] Could not get resource_records for zone %s in project %s.\n", z.Name, project)
+				log.Printf("[-] List projects/%s/managedZones/%s/rrsets failed: %s\n", project, z, err.Error())
 				return list, err
 			}
-			items := d.parseRecordsForResourceSet(resources, z.Name)
+			items := d.parseRecordsForResourceSet(resources, z)
 			list = append(list, items...)
 		}
 	}
+
 	return list, nil
 }
 
 // parseRecordsForResourceSet parses and returns the records for a resource set
-func (d *CloudDNSProvider) parseRecordsForResourceSet(r *dns.ResourceRecordSetsListResponse, zone string) []*schema.Host {
+func (d *CloudDNSProvider) parseRecordsForResourceSet(r []gjson.Result, zone string) []*schema.Host {
 	list := schema.NewResources().Hosts
 
-	for _, resource := range r.Rrsets {
-		if resource.Type != "A" && resource.Type != "CNAME" && resource.Type != "AAAA" {
+	for _, resource := range r {
+		_type := resource.Get("type").String()
+		if _type != "A" && _type != "CNAME" && _type != "AAAA" {
 			continue
 		}
 
-		for _, data := range resource.Rrdatas {
+		name := resource.Get("name").String()
+		datas := resource.Get("rrdatas").Array()
+		for _, data := range datas {
 			list = append(list, &schema.Host{
-				DNSName:    resource.Name,
+				DNSName:    name,
 				Public:     true,
-				PublicIPv4: data,
+				PublicIPv4: data.String(),
 				Region:     zone,
 			})
 		}

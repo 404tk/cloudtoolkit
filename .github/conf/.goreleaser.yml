@@ -20,8 +20,6 @@ builds:
       - 7
     flags:
       - -trimpath
-      - -tags
-      - no_gcp
       - -buildmode
       - exe
     ldflags:
@@ -46,8 +44,6 @@ builds:
       - arm64
     flags:
       - -trimpath
-      - -tags
-      - no_gcp
     ldflags:
       - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{ .CommitDate }} -X main.builtBy=goreleaser
 

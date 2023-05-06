@@ -3,29 +3,22 @@ package gcp
 import (
 	"context"
 	"encoding/base64"
-	"errors"
 	"log"
+	"time"
 
 	_compute "github.com/404tk/cloudtoolkit/pkg/providers/gcp/compute"
 	_dns "github.com/404tk/cloudtoolkit/pkg/providers/gcp/dns"
 	_iam "github.com/404tk/cloudtoolkit/pkg/providers/gcp/iam"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
-	"github.com/404tk/cloudtoolkit/utils/cache"
-	"google.golang.org/api/cloudresourcemanager/v1"
-	"google.golang.org/api/compute/v1"
-	"google.golang.org/api/dns/v1"
-	"google.golang.org/api/iam/v1"
-	"google.golang.org/api/option"
+	"golang.org/x/oauth2/google"
 )
 
 // Provider is a data provider for gcp API
 type Provider struct {
-	vendor         string
-	projects       []string
-	dnsService     *dns.Service
-	computeService *compute.Service
-	iamService     *iam.Service
+	vendor   string
+	projects []string
+	token    string
 }
 
 // New creates a new provider client for gcp API
@@ -39,45 +32,46 @@ func New(options schema.Options) (*Provider, error) {
 		return nil, err
 	}
 
-	creds := option.WithCredentialsJSON(tojson)
-
-	projects := []string{}
-	manager, err := cloudresourcemanager.NewService(context.Background(), creds)
+	var projects []string
+	var token string
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	credentials, err := google.CredentialsFromJSON(ctx, tojson, "https://www.googleapis.com/auth/cloud-platform")
 	if err != nil {
 		return nil, err
 	}
-	resp, err := manager.Projects.List().Do()
-	if err != nil {
-		return nil, err
-	}
-	for _, project := range resp.Projects {
-		projects = append(projects, project.ProjectId)
-	}
-	if len(projects) > 0 {
-		cache.Cfg.CredInsert(projects[0], options)
-	} else {
-		return nil, errors.New("[-] No project found.")
+	if credentials != nil {
+		projects = append(projects, credentials.ProjectID)
+		access, err := credentials.TokenSource.Token()
+		if err != nil {
+			return nil, err
+		}
+		token = access.AccessToken
 	}
 
-	dnsService, err := dns.NewService(context.Background(), creds)
-	if err != nil {
-		return nil, err
-	}
-	computeService, _ := compute.NewService(context.Background(), creds)
-	if err != nil {
-		return nil, err
-	}
-	iamService, err := iam.NewService(context.Background(), creds)
-	if err != nil {
-		return nil, err
-	}
+	/*
+		manager, err := cloudresourcemanager.NewService(context.Background(), creds)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := manager.Projects.List().Do()
+		if err != nil {
+			return nil, err
+		}
+		for _, project := range resp.Projects {
+			projects = append(projects, project.ProjectId)
+		}
+		if len(projects) > 0 {
+			cache.Cfg.CredInsert(projects[0], options)
+		} else {
+			return nil, errors.New("[-] No project found.")
+		}
+	*/
 
 	return &Provider{
-		vendor:         "gcp",
-		projects:       projects,
-		dnsService:     dnsService,
-		computeService: computeService,
-		iamService:     iamService,
+		vendor:   "gcp",
+		projects: projects,
+		token:    token,
 	}, err
 }
 
@@ -91,14 +85,14 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
 	var err error
-	cloudDNSProvider := &_dns.CloudDNSProvider{Dns: p.dnsService, Projects: p.projects}
+	cloudDNSProvider := &_dns.CloudDNSProvider{Projects: p.projects, Token: p.token}
 	list.Hosts, err = cloudDNSProvider.GetResource(ctx)
 
-	InstanceProvider := &_compute.InstanceProvider{ComputeService: p.computeService, Projects: p.projects}
+	InstanceProvider := &_compute.InstanceProvider{Projects: p.projects, Token: p.token}
 	computes, _ := InstanceProvider.GetResource(ctx)
 	list.Hosts = append(list.Hosts, computes...)
 
-	saProvider := &_iam.ServiceAccountProvider{IamService: p.iamService, Projects: p.projects}
+	saProvider := &_iam.ServiceAccountProvider{Projects: p.projects, Token: p.token}
 	list.Users, err = saProvider.GetServiceAccounts(ctx)
 
 	return list, err
