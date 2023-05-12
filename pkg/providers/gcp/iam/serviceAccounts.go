@@ -22,7 +22,6 @@ func (d *ServiceAccountProvider) GetServiceAccounts(ctx context.Context) ([]*sch
 		Token:    d.Token,
 	}
 	for _, project := range d.Projects {
-		log.Println(project)
 		// https://console.cloud.google.com/apis/api/iam.googleapis.com/metrics
 		accounts, err := r.ListServiceAccounts(project)
 		if err != nil {

@@ -11,6 +11,7 @@ import (
 	_iam "github.com/404tk/cloudtoolkit/pkg/providers/gcp/iam"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
+	"github.com/404tk/cloudtoolkit/utils/cache"
 	"golang.org/x/oauth2/google"
 )
 
@@ -47,26 +48,8 @@ func New(options schema.Options) (*Provider, error) {
 			return nil, err
 		}
 		token = access.AccessToken
+		cache.Cfg.CredInsert(projects[0], options)
 	}
-
-	/*
-		manager, err := cloudresourcemanager.NewService(context.Background(), creds)
-		if err != nil {
-			return nil, err
-		}
-		resp, err := manager.Projects.List().Do()
-		if err != nil {
-			return nil, err
-		}
-		for _, project := range resp.Projects {
-			projects = append(projects, project.ProjectId)
-		}
-		if len(projects) > 0 {
-			cache.Cfg.CredInsert(projects[0], options)
-		} else {
-			return nil, errors.New("[-] No project found.")
-		}
-	*/
 
 	return &Provider{
 		vendor:   "gcp",
