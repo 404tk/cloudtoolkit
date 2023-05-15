@@ -39,6 +39,12 @@ func (d *IAMProvider) GetIAMUser(ctx context.Context) ([]*schema.User, error) {
 		if user.PasswordLastUsed != nil {
 			_user.LastLogin = user.PasswordLastUsed.Format(time.RFC3339)
 			_user.EnableLogin = true
+		} else {
+			req := &iam.GetLoginProfileInput{UserName: user.UserName}
+			lp, err := client.GetLoginProfile(req)
+			if err == nil && lp.LoginProfile != nil {
+				_user.EnableLogin = true
+			}
 		}
 		list = append(list, _user)
 	}
