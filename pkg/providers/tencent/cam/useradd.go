@@ -26,7 +26,7 @@ func (d *CamUserProvider) AddUser() {
 		d.Password, "https://cloud.tencent.com/login/subAccount/"+OwnerID)
 }
 
-func createUser(client *cam.Client, userName string, password string) error {
+func createUser(client *cam.Client, userName, password string) error {
 	request := cam.NewAddUserRequest()
 	request.Name = common.StringPtr(userName)
 	request.ConsoleLogin = common.Uint64Ptr(1)
@@ -43,7 +43,7 @@ func attachPolicyToUser(client *cam.Client, userName string) error {
 	}
 	request := cam.NewAttachUserPolicyRequest()
 	request.PolicyId = common.Uint64Ptr(1)
-	request.AttachUin = common.Uint64Ptr(*resp.Response.Uin)
+	request.AttachUin = resp.Response.Uin
 	_, err = client.AttachUserPolicy(request)
 	return err
 }

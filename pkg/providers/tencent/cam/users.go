@@ -15,6 +15,8 @@ type CamUserProvider struct {
 	Credential *common.Credential
 	UserName   string
 	Password   string
+	RoleName   string
+	Uin        string
 }
 
 func (d *CamUserProvider) GetCamUser(ctx context.Context) ([]*schema.User, error) {

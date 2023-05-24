@@ -21,6 +21,7 @@ func (d *CamUserProvider) DelUser() {
 		log.Printf("[-] Delete user %s failed: %s\n", d.UserName, err.Error())
 		return
 	}
+	log.Println("[+] Done.")
 }
 
 func detachPolicyFromUser(client *cam.Client, userName string) error {
@@ -30,7 +31,7 @@ func detachPolicyFromUser(client *cam.Client, userName string) error {
 	}
 	request := cam.NewDetachUserPolicyRequest()
 	request.PolicyId = common.Uint64Ptr(1)
-	request.DetachUin = common.Uint64Ptr(*resp.Response.Uin)
+	request.DetachUin = resp.Response.Uin
 	_, err = client.DetachUserPolicy(request)
 	return err
 }

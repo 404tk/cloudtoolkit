@@ -97,14 +97,23 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	return list, err
 }
 
-func (p *Provider) UserManagement(action, uname, pwd string) {
-	ramprovider := &cam.CamUserProvider{
-		Credential: p.credential, UserName: uname, Password: pwd}
+func (p *Provider) UserManagement(action, args_1, args_2 string) {
+	camprovider := &cam.CamUserProvider{Credential: p.credential}
 	switch action {
 	case "add":
-		ramprovider.AddUser()
+		camprovider.UserName = args_1
+		camprovider.Password = args_2
+		camprovider.AddUser()
 	case "del":
-		ramprovider.DelUser()
+		camprovider.UserName = args_1
+		camprovider.DelUser()
+	case "shadow":
+		camprovider.RoleName = args_1
+		camprovider.Uin = args_2
+		camprovider.AddRole()
+	case "delrole":
+		camprovider.RoleName = args_1
+		camprovider.DelRole()
 	default:
 		log.Println("[-] Please set metadata like \"add username password\" or \"del username\"")
 	}
