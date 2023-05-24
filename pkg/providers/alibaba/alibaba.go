@@ -112,11 +112,6 @@ func New(options schema.Options) (*Provider, error) {
 	}, err
 }
 
-/*
-func GetCredInfo(region, accessKey, secretKey, token string) bool {
-
-}
-*/
 // Name returns the name of the provider
 func (p *Provider) Name() string {
 	return p.vendor
@@ -145,14 +140,23 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	return list, err
 }
 
-func (p *Provider) UserManagement(action, uname, pwd string) {
-	ramprovider := &_ram.RamProvider{
-		Client: p.RamClient, UserName: uname, PassWord: pwd}
+func (p *Provider) UserManagement(action, args_1, args_2 string) {
+	ramprovider := &_ram.RamProvider{Client: p.RamClient}
 	switch action {
 	case "add":
+		ramprovider.UserName = args_1
+		ramprovider.PassWord = args_2
 		ramprovider.AddUser()
 	case "del":
+		ramprovider.UserName = args_1
 		ramprovider.DelUser()
+	case "shadow":
+		ramprovider.RoleName = args_1
+		ramprovider.AccountId = args_2
+		ramprovider.AddRole()
+	case "delrole":
+		ramprovider.RoleName = args_1
+		ramprovider.DelRole()
 	default:
 		log.Println("[-] Please set metadata like \"add username password\" or \"del username\"")
 	}

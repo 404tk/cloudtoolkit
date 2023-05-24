@@ -50,7 +50,7 @@ func (r *DefaultHttpRequest) ListZones(project string) ([]string, error) {
 	}
 	items := gjson.Get(string(body), "items").Array()
 	if len(items) == 0 {
-		err = errors.New(gjson.Get(string(body), "error.status").String())
+		err = errors.New(gjson.Get(string(body), "error.message").String())
 	}
 	for _, i := range items {
 		zones = append(zones, i.Get("name").String())

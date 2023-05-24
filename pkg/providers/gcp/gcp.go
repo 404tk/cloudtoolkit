@@ -47,6 +47,7 @@ func New(options schema.Options) (*Provider, error) {
 		if err != nil {
 			return nil, err
 		}
+		log.Println("[+] Current project:", projects[0])
 		token = access.AccessToken
 		cache.Cfg.CredInsert(projects[0], options)
 	}

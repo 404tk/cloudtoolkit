@@ -17,6 +17,7 @@ func (d *RamProvider) DelUser() {
 		log.Printf("[-] Delete user %s failed: %s\n", d.UserName, err.Error())
 		return
 	}
+	log.Println("[+] Done.")
 }
 
 func detachPolicyFromUser(client *ram.Client, userName string) error {

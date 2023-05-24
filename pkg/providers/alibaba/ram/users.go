@@ -12,9 +12,11 @@ import (
 )
 
 type RamProvider struct {
-	Client   *ram.Client
-	UserName string
-	PassWord string
+	Client    *ram.Client
+	UserName  string
+	PassWord  string
+	RoleName  string
+	AccountId string
 }
 
 func (d *RamProvider) GetRamUser(ctx context.Context) ([]*schema.User, error) {
