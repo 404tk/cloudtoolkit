@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cam"
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cdb"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cos"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cvm"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/lighthouse"
@@ -87,6 +88,16 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	light := &lighthouse.InstanceProvider{Credential: p.credential, Region: p.region}
 	lights, err := light.GetResource(ctx)
 	list.Hosts = append(list.Hosts, lights...)
+
+	cdbprovider := cdb.CdbProvider{Credential: p.credential, Region: p.region}
+	mysqls, err := cdbprovider.ListMySQL(ctx)
+	list.Databases = append(list.Databases, mysqls...)
+	mariadbs, err := cdbprovider.ListMariaDB(ctx)
+	list.Databases = append(list.Databases, mariadbs...)
+	postgres, err := cdbprovider.ListPostgreSQL(ctx)
+	list.Databases = append(list.Databases, postgres...)
+	mssqls, err := cdbprovider.ListSQLServer(ctx)
+	list.Databases = append(list.Databases, mssqls...)
 
 	cosprovider := &cos.COSProvider{Credential: p.credential}
 	list.Storages, err = cosprovider.GetBuckets(ctx)

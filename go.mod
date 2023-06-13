@@ -15,9 +15,13 @@ require (
 	github.com/modood/table v0.0.0-20220527013332-8d47e76dad33
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/billing v1.0.628
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cam v1.0.557
-	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.0.628
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cdb v1.0.678
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.0.678
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm v1.0.557
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/lighthouse v1.0.557
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/mariadb v1.0.678
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/postgres v1.0.678
+	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sqlserver v1.0.678
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sts v1.0.557
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.40
 	github.com/tidwall/gjson v1.14.4

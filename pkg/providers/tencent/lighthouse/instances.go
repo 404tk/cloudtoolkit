@@ -33,7 +33,7 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 		req := lighthouse.NewDescribeRegionsRequest()
 		resp, err := client.DescribeRegions(req)
 		if err != nil {
-			log.Println("[-] Enumerate Lighthous failed.")
+			log.Println("[-] Enumerate Lighthouse failed.")
 			return list, err
 		}
 		for _, r := range resp.Response.RegionSet {
@@ -50,7 +50,7 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 		request := lighthouse.NewDescribeInstancesRequest()
 		response, err := client.DescribeInstances(request)
 		if err != nil {
-			log.Println("[-] Enumerate Lighthous failed.")
+			log.Println("[-] Enumerate Lighthouse failed.")
 			return list, err
 		}
 
