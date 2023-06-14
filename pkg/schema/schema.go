@@ -64,6 +64,7 @@ type Database struct {
 	Engine        string `table:"Engine"`
 	EngineVersion string `table:"Version"`
 	Region        string `table:"Region"`
+	Address       string `table:"Address"`
 }
 
 type Sms struct {

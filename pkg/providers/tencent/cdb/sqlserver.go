@@ -56,6 +56,11 @@ func (d *CdbProvider) ListSQLServer(ctx context.Context) ([]*schema.Database, er
 				EngineVersion: *instance.Version,
 				Region:        *instance.Region,
 			}
+			if *instance.DnsPodDomain != "" {
+				_db.Address = fmt.Sprintf("%s:%d", *instance.DnsPodDomain, *instance.TgwWanVPort)
+			} else {
+				_db.Address = fmt.Sprintf("%s:%d", *instance.Vip, *instance.Vport)
+			}
 			list = append(list, _db)
 		}
 		select {

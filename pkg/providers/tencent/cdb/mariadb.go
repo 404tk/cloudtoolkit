@@ -54,6 +54,11 @@ func (d *CdbProvider) ListMariaDB(ctx context.Context) ([]*schema.Database, erro
 				EngineVersion: *instance.DbVersion,
 				Region:        *instance.Region,
 			}
+			if *instance.WanStatus == 1 {
+				_db.Address = fmt.Sprintf("%s:%d", *instance.WanDomain, *instance.WanPort)
+			} else {
+				_db.Address = fmt.Sprintf("%s:%d", *instance.Vip, *instance.Vport)
+			}
 			list = append(list, _db)
 		}
 		select {

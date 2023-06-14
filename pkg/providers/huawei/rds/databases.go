@@ -2,8 +2,10 @@ package rds
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"reflect"
+	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
@@ -43,6 +45,19 @@ func (d *RdsProvider) GetDatabases(ctx context.Context) ([]*schema.Database, err
 			Engine:        engine,
 			EngineVersion: instance.Datastore.Version,
 			Region:        instance.Region,
+		}
+		if len(instance.PublicIps) > 0 {
+			addrs := []string{}
+			for _, ip := range instance.PublicIps {
+				addrs = append(addrs, fmt.Sprintf("%s:%d", ip, instance.Port))
+			}
+			_dbInstance.Address = strings.Join(addrs, "\n")
+		} else if len(instance.PrivateIps) > 0 {
+			addrs := []string{}
+			for _, ip := range instance.PrivateIps {
+				addrs = append(addrs, fmt.Sprintf("%s:%d", ip, instance.Port))
+			}
+			_dbInstance.Address = strings.Join(addrs, "\n")
 		}
 
 		list = append(list, _dbInstance)

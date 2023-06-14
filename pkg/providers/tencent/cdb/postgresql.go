@@ -56,6 +56,14 @@ func (d *CdbProvider) ListPostgreSQL(ctx context.Context) ([]*schema.Database, e
 				EngineVersion: *instance.DBInstanceVersion,
 				Region:        *instance.Region,
 			}
+			for _, info := range instance.DBInstanceNetInfo {
+				if *info.NetType == "public" && *info.Status == "opened" {
+					_db.Address = fmt.Sprintf("%s:%d", *info.Address, *info.Port)
+					break
+				} else {
+					_db.Address = fmt.Sprintf("%s:%d", *info.Ip, *info.Port)
+				}
+			}
 			list = append(list, _db)
 		}
 		select {
