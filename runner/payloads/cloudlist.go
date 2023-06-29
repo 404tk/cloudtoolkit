@@ -36,7 +36,7 @@ func (p CloudList) Run(ctx context.Context, config map[string]string) {
 		pprint(len(resources.Hosts), "Hosts", resources.Hosts)
 		pprint(len(resources.Storages), "Storages", resources.Storages)
 		pprint(len(resources.Users), "Users", resources.Users)
-		pprint(len(resources.Users), "Databases", resources.Databases)
+		pprint(len(resources.Databases), "Databases", resources.Databases)
 		pprint(len(resources.Sms.Signs), "SMS Signs", resources.Sms.Signs)
 		pprint(len(resources.Sms.Templates), "SMS Templates", resources.Sms.Templates)
 		if resources.Sms.DailySize > 0 {
