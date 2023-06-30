@@ -9,8 +9,8 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/plugins"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
+	"github.com/404tk/cloudtoolkit/utils/table"
 	"github.com/c-bata/go-prompt"
-	"github.com/modood/table"
 )
 
 type credential struct {

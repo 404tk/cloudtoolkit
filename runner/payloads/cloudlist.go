@@ -6,7 +6,7 @@ import (
 	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/inventory"
-	"github.com/modood/table"
+	"github.com/404tk/cloudtoolkit/utils/table"
 )
 
 type CloudList struct{}
@@ -29,7 +29,8 @@ func (p CloudList) Run(ctx context.Context, config map[string]string) {
 	default:
 		pprint := func(len int, tag string, res interface{}) {
 			if len > 0 {
-				fmt.Println(fmt.Sprintf("%s results:\n%s", tag, table.Table(res)))
+				fmt.Println(tag, "results:")
+				table.Output(res)
 			}
 		}
 

@@ -12,7 +12,7 @@ require (
 	github.com/c-bata/go-prompt v0.2.6
 	github.com/huaweicloud/huaweicloud-sdk-go-obs v3.22.11+incompatible
 	github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.0.97
-	github.com/modood/table v0.0.0-20220527013332-8d47e76dad33
+	github.com/olekukonko/tablewriter v0.0.5
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/billing v1.0.628
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cam v1.0.557
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cdb v1.0.678
@@ -58,7 +58,6 @@ require (
 	github.com/mozillazg/go-httpheader v0.2.1 // indirect
 	github.com/opentracing/opentracing-go v1.2.1-0.20220228012449-10b1cf09e00b // indirect
 	github.com/pkg/term v1.2.0-beta.2 // indirect
-	github.com/smartystreets/goconvey v1.7.2 // indirect
 	github.com/stretchr/testify v1.8.1 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
