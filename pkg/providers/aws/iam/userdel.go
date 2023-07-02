@@ -6,7 +6,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/iam"
 )
 
-func (d *IAMProvider) DelUser() {
+func (d *Driver) DelUser() {
 	client := iam.New(d.Session)
 	err := deleteLoginProfile(client, d.Username)
 	if err != nil {

@@ -8,12 +8,12 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 )
 
-type InstanceProvider struct {
+type Driver struct {
 	Projects []string
 	Token    string
 }
 
-func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
+func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := schema.NewResources().Hosts
 	log.Println("[*] Start enumerating Compute ...")
 	r := &request.DefaultHttpRequest{
@@ -34,7 +34,7 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 				return list, err
 			}
 			for _, i := range instances {
-				_host := &schema.Host{Region: i.Get("zone").String()}
+				_host := schema.Host{Region: i.Get("zone").String()}
 				network := i.Get("networkInterfaces").Array()
 				for _, n := range network {
 					_host.PrivateIpv4 = n.Get("networkIP").String()

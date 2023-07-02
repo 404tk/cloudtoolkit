@@ -7,7 +7,7 @@ import (
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ram"
 )
 
-func (d *RamProvider) AddUser() {
+func (d *Driver) AddUser() {
 	client := d.NewClient()
 	err := createUser(client, d.UserName)
 	if err != nil {

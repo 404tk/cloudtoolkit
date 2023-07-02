@@ -11,7 +11,7 @@ import (
 	postgres "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/postgres/v20170312"
 )
 
-func (d *CdbProvider) ListPostgreSQL(ctx context.Context) ([]*schema.Database, error) {
+func (d *Driver) ListPostgreSQL(ctx context.Context) ([]schema.Database, error) {
 	list := schema.NewResources().Databases
 	select {
 	case <-ctx.Done():
@@ -50,7 +50,7 @@ func (d *CdbProvider) ListPostgreSQL(ctx context.Context) ([]*schema.Database, e
 		}
 
 		for _, instance := range response.Response.DBInstanceSet {
-			_db := &schema.Database{
+			_db := schema.Database{
 				DBInstanceId:  *instance.DBInstanceId,
 				Engine:        *instance.DBEngine,
 				EngineVersion: *instance.DBInstanceVersion,

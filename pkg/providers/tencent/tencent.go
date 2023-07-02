@@ -76,20 +76,20 @@ func (p *Provider) Name() string {
 }
 
 // Resources returns the provider for a resource deployment source.
-func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
+func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
 	var err error
 
-	cvmprovider := &cvm.InstanceProvider{Credential: p.credential, Region: p.region}
+	cvmprovider := &cvm.Driver{Credential: p.credential, Region: p.region}
 	cvms, err := cvmprovider.GetResource(ctx)
 	list.Hosts = append(list.Hosts, cvms...)
 
-	light := &lighthouse.InstanceProvider{Credential: p.credential, Region: p.region}
+	light := &lighthouse.Driver{Credential: p.credential, Region: p.region}
 	lights, err := light.GetResource(ctx)
 	list.Hosts = append(list.Hosts, lights...)
 
-	cdbprovider := cdb.CdbProvider{Credential: p.credential, Region: p.region}
+	cdbprovider := cdb.Driver{Credential: p.credential, Region: p.region}
 	mysqls, err := cdbprovider.ListMySQL(ctx)
 	list.Databases = append(list.Databases, mysqls...)
 	mariadbs, err := cdbprovider.ListMariaDB(ctx)
@@ -99,32 +99,32 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	mssqls, err := cdbprovider.ListSQLServer(ctx)
 	list.Databases = append(list.Databases, mssqls...)
 
-	cosprovider := &cos.COSProvider{Credential: p.credential}
+	cosprovider := &cos.Driver{Credential: p.credential}
 	list.Storages, err = cosprovider.GetBuckets(ctx)
 
-	camprovider := &cam.CamUserProvider{Credential: p.credential}
+	camprovider := &cam.Driver{Credential: p.credential}
 	list.Users, err = camprovider.GetCamUser(ctx)
 
 	return list, err
 }
 
 func (p *Provider) UserManagement(action, args_1, args_2 string) {
-	camprovider := &cam.CamUserProvider{Credential: p.credential}
+	c := &cam.Driver{Credential: p.credential}
 	switch action {
 	case "add":
-		camprovider.UserName = args_1
-		camprovider.Password = args_2
-		camprovider.AddUser()
+		c.UserName = args_1
+		c.Password = args_2
+		c.AddUser()
 	case "del":
-		camprovider.UserName = args_1
-		camprovider.DelUser()
+		c.UserName = args_1
+		c.DelUser()
 	case "shadow":
-		camprovider.RoleName = args_1
-		camprovider.Uin = args_2
-		camprovider.AddRole()
+		c.RoleName = args_1
+		c.Uin = args_2
+		c.AddRole()
 	case "delrole":
-		camprovider.RoleName = args_1
-		camprovider.DelRole()
+		c.RoleName = args_1
+		c.DelRole()
 	default:
 		log.Println("[-] Please set metadata like \"add username password\" or \"del username\"")
 	}

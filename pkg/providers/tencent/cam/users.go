@@ -11,7 +11,7 @@ import (
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 )
 
-type CamUserProvider struct {
+type Driver struct {
 	Credential *common.Credential
 	UserName   string
 	Password   string
@@ -19,7 +19,7 @@ type CamUserProvider struct {
 	Uin        string
 }
 
-func (d *CamUserProvider) GetCamUser(ctx context.Context) ([]*schema.User, error) {
+func (d *Driver) GetCamUser(ctx context.Context) ([]schema.User, error) {
 	list := schema.NewResources().Users
 	select {
 	case <-ctx.Done():
@@ -37,7 +37,7 @@ func (d *CamUserProvider) GetCamUser(ctx context.Context) ([]*schema.User, error
 		return list, err
 	}
 	for _, user := range listUsersResponse.Response.Data {
-		_user := &schema.User{
+		_user := schema.User{
 			UserName: *user.Name,
 			UserId:   strconv.FormatUint(*user.Uid, 10),
 		}

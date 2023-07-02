@@ -9,7 +9,7 @@ import (
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 )
 
-func (d *CamUserProvider) AddRole() {
+func (d *Driver) AddRole() {
 	cpf := profile.NewClientProfile()
 	client, _ := cam.NewClient(d.Credential, "", cpf)
 	err := createRole(client, d.RoleName, d.Uin)

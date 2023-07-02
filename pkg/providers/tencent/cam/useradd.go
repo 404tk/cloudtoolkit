@@ -9,7 +9,7 @@ import (
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 )
 
-func (d *CamUserProvider) AddUser() {
+func (d *Driver) AddUser() {
 	cpf := profile.NewClientProfile()
 	client, _ := cam.NewClient(d.Credential, "", cpf)
 	err := createUser(client, d.UserName, d.Password)

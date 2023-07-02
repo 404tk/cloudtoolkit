@@ -9,12 +9,12 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-type CloudDNSProvider struct {
+type Driver struct {
 	Projects []string
 	Token    string
 }
 
-func (d *CloudDNSProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
+func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := schema.NewResources().Hosts
 	log.Println("[*] Start enumerating DNS ...")
 	r := &request.DefaultHttpRequest{
@@ -44,7 +44,7 @@ func (d *CloudDNSProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 }
 
 // parseRecordsForResourceSet parses and returns the records for a resource set
-func (d *CloudDNSProvider) parseRecordsForResourceSet(r []gjson.Result, zone string) []*schema.Host {
+func (d *Driver) parseRecordsForResourceSet(r []gjson.Result, zone string) []schema.Host {
 	list := schema.NewResources().Hosts
 
 	for _, resource := range r {
@@ -56,7 +56,7 @@ func (d *CloudDNSProvider) parseRecordsForResourceSet(r []gjson.Result, zone str
 		name := resource.Get("name").String()
 		datas := resource.Get("rrdatas").Array()
 		for _, data := range datas {
-			list = append(list, &schema.Host{
+			list = append(list, schema.Host{
 				DNSName:    name,
 				Public:     true,
 				PublicIPv4: data.String(),

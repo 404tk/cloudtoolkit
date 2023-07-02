@@ -12,13 +12,13 @@ import (
 	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
 )
 
-type InstanceProvider struct {
+type Driver struct {
 	Credential *common.Credential
 	Region     string
 }
 
 // GetResource returns all the resources in the store for a provider.
-func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
+func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := schema.NewResources().Hosts
 	log.Println("[*] Start enumerating CVM ...")
 	cpf := profile.NewClientProfile()
@@ -56,7 +56,7 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 			if len(instance.PrivateIpAddresses) > 0 {
 				privateIPv4 = *instance.PrivateIpAddresses[0]
 			}
-			host := &schema.Host{
+			host := schema.Host{
 				PublicIPv4:  ipv4,
 				PrivateIpv4: privateIPv4,
 				Public:      ipv4 != "",

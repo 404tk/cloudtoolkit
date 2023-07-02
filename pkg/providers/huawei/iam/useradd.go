@@ -10,7 +10,7 @@ import (
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3/region"
 )
 
-func (d *IAMUserProvider) AddUser() {
+func (d *Driver) AddUser() {
 	auth := global.NewCredentialsBuilder().
 		WithAk(d.Auth.AK).
 		WithSk(d.Auth.SK).

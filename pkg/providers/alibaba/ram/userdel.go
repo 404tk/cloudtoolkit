@@ -6,7 +6,7 @@ import (
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ram"
 )
 
-func (d *RamProvider) DelUser() {
+func (d *Driver) DelUser() {
 	client := d.NewClient()
 	err := detachPolicyFromUser(client, d.UserName)
 	if err != nil {

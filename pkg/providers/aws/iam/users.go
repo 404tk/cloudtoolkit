@@ -10,13 +10,13 @@ import (
 	"github.com/aws/aws-sdk-go/service/iam"
 )
 
-type IAMProvider struct {
+type Driver struct {
 	Session  *session.Session
 	Username string
 	Password string
 }
 
-func (d *IAMProvider) GetIAMUser(ctx context.Context) ([]*schema.User, error) {
+func (d *Driver) GetIAMUser(ctx context.Context) ([]schema.User, error) {
 	list := schema.NewResources().Users
 	select {
 	case <-ctx.Done():
@@ -31,7 +31,7 @@ func (d *IAMProvider) GetIAMUser(ctx context.Context) ([]*schema.User, error) {
 		return list, err
 	}
 	for _, user := range users.Users {
-		_user := &schema.User{
+		_user := schema.User{
 			UserName:   *user.UserName,
 			UserId:     *user.UserId,
 			CreateTime: user.CreateDate.Format(time.RFC3339),

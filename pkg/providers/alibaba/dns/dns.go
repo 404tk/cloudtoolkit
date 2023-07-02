@@ -10,13 +10,13 @@ import (
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/alidns"
 )
 
-type DnsProvider struct {
+type Driver struct {
 	Cred           *credentials.StsTokenCredential
 	Region         string
 	ResourceGroups []string
 }
 
-func (d *DnsProvider) GetDomains(ctx context.Context) ([]*schema.Domain, error) {
+func (d *Driver) GetDomains(ctx context.Context) ([]schema.Domain, error) {
 	list := schema.NewResources().Domains
 	select {
 	case <-ctx.Done():
@@ -41,7 +41,7 @@ func (d *DnsProvider) GetDomains(ctx context.Context) ([]*schema.Domain, error) 
 			return list, err
 		}
 		for _, domain := range response.Domains.Domain {
-			_domain := &schema.Domain{
+			_domain := schema.Domain{
 				DomainName: domain.DomainName,
 			}
 			req := alidns.CreateDescribeDomainRecordsRequest()

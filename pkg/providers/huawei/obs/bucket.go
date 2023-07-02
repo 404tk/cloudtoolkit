@@ -9,12 +9,12 @@ import (
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
 )
 
-type OBSProvider struct {
+type Driver struct {
 	Auth    basic.Credentials
 	Regions []string
 }
 
-func (d *OBSProvider) GetBuckets(ctx context.Context) ([]*schema.Storage, error) {
+func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	list := schema.NewResources().Storages
 	select {
 	case <-ctx.Done():
@@ -36,7 +36,7 @@ func (d *OBSProvider) GetBuckets(ctx context.Context) ([]*schema.Storage, error)
 	}
 
 	for _, bucket := range response.Buckets {
-		_bucket := &schema.Storage{
+		_bucket := schema.Storage{
 			BucketName: bucket.Name,
 			Region:     bucket.Location,
 		}

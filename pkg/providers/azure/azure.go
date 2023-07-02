@@ -79,14 +79,14 @@ func (p *Provider) Name() string {
 }
 
 // Resources returns the provider for an resource deployment source.
-func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
+func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
 	var err error
-	vmProvider := &compute.VmProvider{SubscriptionIDs: p.SubscriptionIDs, Authorizer: p.Authorizer}
+	vmProvider := &compute.Driver{SubscriptionIDs: p.SubscriptionIDs, Authorizer: p.Authorizer}
 	list.Hosts, err = vmProvider.GetResource(ctx)
 
-	storageProvider := &storage.StorageAccountProvider{
+	storageProvider := &storage.Driver{
 		SubscriptionIDs: p.SubscriptionIDs, Authorizer: p.Authorizer}
 	list.Storages, err = storageProvider.GetStorages(ctx)
 

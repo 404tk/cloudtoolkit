@@ -8,7 +8,7 @@ import (
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 )
 
-func (d *CamUserProvider) DelUser() {
+func (d *Driver) DelUser() {
 	cpf := profile.NewClientProfile()
 	client, _ := cam.NewClient(d.Credential, "", cpf)
 	err := detachPolicyFromUser(client, d.UserName)

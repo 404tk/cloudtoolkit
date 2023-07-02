@@ -9,12 +9,12 @@ import (
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 )
 
-type BucketProvider struct {
+type Driver struct {
 	Cred   *credentials.StsTokenCredential
 	Region string
 }
 
-func (d *BucketProvider) GetBuckets(ctx context.Context) ([]*schema.Storage, error) {
+func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	list := schema.NewResources().Storages
 	select {
 	case <-ctx.Done():
@@ -46,7 +46,7 @@ func (d *BucketProvider) GetBuckets(ctx context.Context) ([]*schema.Storage, err
 				continue
 			}
 		*/
-		_bucket := &schema.Storage{
+		_bucket := schema.Storage{
 			BucketName: bucket.Name,
 			Region:     bucket.Location,
 		}

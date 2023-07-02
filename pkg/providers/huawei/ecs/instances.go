@@ -14,13 +14,13 @@ import (
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/region"
 )
 
-type InstanceProvider struct {
+type Driver struct {
 	Auth    basic.Credentials
 	Regions []string
 }
 
 // GetResource returns all the resources in the store for a provider.
-func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
+func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := schema.NewResources().Hosts
 	log.Println("[*] Start enumerating ECS ...")
 	flag := false
@@ -55,7 +55,7 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 					}
 				}
 			}
-			host := &schema.Host{
+			host := schema.Host{
 				PublicIPv4:  ipv4,
 				PrivateIpv4: privateIPv4,
 				Public:      ipv4 != "",

@@ -9,11 +9,11 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 )
 
-type S3Provider struct {
+type Driver struct {
 	Session *session.Session
 }
 
-func (d *S3Provider) GetBuckets(ctx context.Context) ([]*schema.Storage, error) {
+func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	list := schema.NewResources().Storages
 	select {
 	case <-ctx.Done():
@@ -28,7 +28,7 @@ func (d *S3Provider) GetBuckets(ctx context.Context) ([]*schema.Storage, error) 
 		return list, err
 	}
 	for _, bucket := range buckets.Buckets {
-		_bucket := &schema.Storage{BucketName: *bucket.Name}
+		_bucket := schema.Storage{BucketName: *bucket.Name}
 
 		locationInput := &s3.GetBucketLocationInput{Bucket: bucket.Name}
 		bucketLocation, err := client.GetBucketLocation(locationInput)

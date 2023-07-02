@@ -7,7 +7,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 )
 
-func (d *S3Provider) ListObjects(buckets map[string]string) {
+func (d *Driver) ListObjects(buckets map[string]string) {
 	for b, r := range buckets {
 		d.Session.Config.Region = &r
 		client := s3.New(d.Session)

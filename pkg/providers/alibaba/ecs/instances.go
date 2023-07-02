@@ -14,15 +14,14 @@ import (
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ecs"
 )
 
-// InstanceProvider is an instance provider for alibaba API
-type InstanceProvider struct {
+type Driver struct {
 	Cred           *credentials.StsTokenCredential
 	Region         string
 	ResourceGroups []string
 }
 
 // GetResource returns all the resources in the store for a provider.
-func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
+func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := schema.NewResources().Hosts
 	log.Println("[*] Start enumerating ECS ...")
 	region := d.Region
@@ -94,7 +93,7 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 						ipv4 = instance.EipAddress.IpAddress
 					}
 
-					_host := &schema.Host{
+					_host := schema.Host{
 						PublicIPv4:  ipv4,
 						PrivateIpv4: privateIPv4,
 						Public:      ipv4 != "",

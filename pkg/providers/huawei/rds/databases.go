@@ -14,12 +14,12 @@ import (
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/rds/v3/region"
 )
 
-type RdsProvider struct {
+type Driver struct {
 	Auth    basic.Credentials
 	Regions []string
 }
 
-func (d *RdsProvider) GetDatabases(ctx context.Context) ([]*schema.Database, error) {
+func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 	list := schema.NewResources().Databases
 	select {
 	case <-ctx.Done():
@@ -40,7 +40,7 @@ func (d *RdsProvider) GetDatabases(ctx context.Context) ([]*schema.Database, err
 	for _, instance := range *response.Instances {
 		i := reflect.ValueOf(instance.Datastore.Type)
 		engine := i.FieldByName("value").String()
-		_dbInstance := &schema.Database{
+		_dbInstance := schema.Database{
 			DBInstanceId:  instance.Id,
 			Engine:        engine,
 			EngineVersion: instance.Datastore.Version,

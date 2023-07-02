@@ -10,7 +10,7 @@ import (
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3/region"
 )
 
-func (d *IAMUserProvider) DelUser() {
+func (d *Driver) DelUser() {
 	auth := global.NewCredentialsBuilder().
 		WithAk(d.Auth.AK).
 		WithSk(d.Auth.SK).

@@ -11,7 +11,7 @@ import (
 	mariadb "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/mariadb/v20170312"
 )
 
-func (d *CdbProvider) ListMariaDB(ctx context.Context) ([]*schema.Database, error) {
+func (d *Driver) ListMariaDB(ctx context.Context) ([]schema.Database, error) {
 	list := schema.NewResources().Databases
 	select {
 	case <-ctx.Done():
@@ -48,7 +48,7 @@ func (d *CdbProvider) ListMariaDB(ctx context.Context) ([]*schema.Database, erro
 		}
 
 		for _, instance := range response.Response.Instances {
-			_db := &schema.Database{
+			_db := schema.Database{
 				DBInstanceId:  *instance.InstanceId,
 				Engine:        "MariaDB",
 				EngineVersion: *instance.DbVersion,

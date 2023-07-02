@@ -65,18 +65,18 @@ func (p *Provider) Name() string {
 }
 
 // Resources returns the provider for an resource deployment source.
-func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
+func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
 	var err error
-	cloudDNSProvider := &_dns.CloudDNSProvider{Projects: p.projects, Token: p.token}
+	cloudDNSProvider := &_dns.Driver{Projects: p.projects, Token: p.token}
 	list.Hosts, err = cloudDNSProvider.GetResource(ctx)
 
-	InstanceProvider := &_compute.InstanceProvider{Projects: p.projects, Token: p.token}
+	InstanceProvider := &_compute.Driver{Projects: p.projects, Token: p.token}
 	computes, _ := InstanceProvider.GetResource(ctx)
 	list.Hosts = append(list.Hosts, computes...)
 
-	saProvider := &_iam.ServiceAccountProvider{Projects: p.projects, Token: p.token}
+	saProvider := &_iam.Driver{Projects: p.projects, Token: p.token}
 	list.Users, err = saProvider.GetServiceAccounts(ctx)
 
 	return list, err

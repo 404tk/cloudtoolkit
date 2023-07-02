@@ -8,7 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/iam"
 )
 
-func (d *IAMProvider) AddUser() {
+func (d *Driver) AddUser() {
 	client := iam.New(d.Session)
 	accountArn, err := createUser(client, d.Username)
 	if err != nil {

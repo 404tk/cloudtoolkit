@@ -13,14 +13,13 @@ import (
 	"github.com/Azure/go-autorest/autorest/azure"
 )
 
-// VmProvider is an instance provider for Azure API
-type VmProvider struct {
+type Driver struct {
 	SubscriptionIDs []string
 	Authorizer      autorest.Authorizer
 }
 
 // GetResource returns all the resources in the store for a provider.
-func (d *VmProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
+func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := schema.NewResources().Hosts
 	log.Println("[*] Start enumerating VM ...")
 
@@ -39,7 +38,7 @@ func (d *VmProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
 			}
 
 			for _, vm := range vmList {
-				_host := &schema.Host{Region: *vm.Location}
+				_host := schema.Host{Region: *vm.Location}
 				nics := *vm.NetworkProfile.NetworkInterfaces
 				for _, nic := range nics {
 					res, err := azure.ParseResourceID(*nic.ID)
@@ -89,7 +88,7 @@ func (d *VmProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
 	return list, nil
 }
 
-func fetchResouceGroups(ctx context.Context, sess *VmProvider) (map[string][]string, error) {
+func fetchResouceGroups(ctx context.Context, sess *Driver) (map[string][]string, error) {
 	resGrp := make(map[string][]string)
 	for _, subscription := range sess.SubscriptionIDs {
 		grClient := resources.NewGroupsClient(subscription)

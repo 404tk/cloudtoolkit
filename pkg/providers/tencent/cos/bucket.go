@@ -10,11 +10,11 @@ import (
 	"github.com/tencentyun/cos-go-sdk-v5"
 )
 
-type COSProvider struct {
+type Driver struct {
 	Credential *common.Credential
 }
 
-func (d *COSProvider) GetBuckets(ctx context.Context) ([]*schema.Storage, error) {
+func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	list := schema.NewResources().Storages
 	select {
 	case <-ctx.Done():
@@ -35,7 +35,7 @@ func (d *COSProvider) GetBuckets(ctx context.Context) ([]*schema.Storage, error)
 	}
 
 	for _, bucket := range buckets.Buckets {
-		_bucket := &schema.Storage{
+		_bucket := schema.Storage{
 			BucketName: bucket.Name,
 			Region:     bucket.Region,
 		}

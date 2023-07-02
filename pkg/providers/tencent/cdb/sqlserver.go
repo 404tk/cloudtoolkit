@@ -11,7 +11,7 @@ import (
 	sqlserver "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sqlserver/v20180328"
 )
 
-func (d *CdbProvider) ListSQLServer(ctx context.Context) ([]*schema.Database, error) {
+func (d *Driver) ListSQLServer(ctx context.Context) ([]schema.Database, error) {
 	list := schema.NewResources().Databases
 	select {
 	case <-ctx.Done():
@@ -50,7 +50,7 @@ func (d *CdbProvider) ListSQLServer(ctx context.Context) ([]*schema.Database, er
 		}
 
 		for _, instance := range response.Response.DBInstances {
-			_db := &schema.Database{
+			_db := schema.Database{
 				DBInstanceId:  *instance.InstanceId,
 				Engine:        *instance.VersionName,
 				EngineVersion: *instance.Version,

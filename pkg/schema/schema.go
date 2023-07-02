@@ -13,29 +13,29 @@ type Provider interface {
 	// Name returns the name of the provider
 	Name() string
 	// Resources returns the provider for an resource deployment source.
-	Resources(ctx context.Context) (*Resources, error)
+	Resources(ctx context.Context) (Resources, error)
 	UserManagement(action, uname, pwd string)
 	BucketDump(action, bucketname string)
 }
 
 // NewResources creates a new resources structure
-func NewResources() *Resources {
-	return &Resources{
-		Hosts:     make([]*Host, 0),
-		Storages:  make([]*Storage, 0),
-		Users:     make([]*User, 0),
-		Databases: make([]*Database, 0),
-		Domains:   make([]*Domain, 0),
+func NewResources() Resources {
+	return Resources{
+		Hosts:     make([]Host, 0),
+		Storages:  make([]Storage, 0),
+		Users:     make([]User, 0),
+		Databases: make([]Database, 0),
+		Domains:   make([]Domain, 0),
 	}
 }
 
 type Resources struct {
 	Provider  string
-	Hosts     []*Host
-	Storages  []*Storage
-	Users     []*User
-	Databases []*Database
-	Domains   []*Domain
+	Hosts     []Host
+	Storages  []Storage
+	Users     []User
+	Databases []Database
+	Domains   []Domain
 	Sms       Sms
 }
 

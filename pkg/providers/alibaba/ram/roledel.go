@@ -6,7 +6,7 @@ import (
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ram"
 )
 
-func (d *RamProvider) DelRole() {
+func (d *Driver) DelRole() {
 	client := d.NewClient()
 	err := detachPolicyFromRole(client, d.RoleName)
 	if err != nil {

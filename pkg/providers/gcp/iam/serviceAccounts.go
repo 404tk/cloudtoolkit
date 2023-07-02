@@ -8,12 +8,12 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 )
 
-type ServiceAccountProvider struct {
+type Driver struct {
 	Projects []string
 	Token    string
 }
 
-func (d *ServiceAccountProvider) GetServiceAccounts(ctx context.Context) ([]*schema.User, error) {
+func (d *Driver) GetServiceAccounts(ctx context.Context) ([]schema.User, error) {
 	list := schema.NewResources().Users
 	log.Println("[*] Start enumerating IAM ...")
 	r := &request.DefaultHttpRequest{
@@ -30,7 +30,7 @@ func (d *ServiceAccountProvider) GetServiceAccounts(ctx context.Context) ([]*sch
 		}
 
 		for name, id := range accounts {
-			_iam := &schema.User{
+			_iam := schema.User{
 				UserName: name,
 				UserId:   id,
 			}

@@ -107,48 +107,48 @@ func (p *Provider) Name() string {
 }
 
 // Resources returns the provider for a resource deployment source.
-func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
+func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
 	var err error
-	ecsprovider := &_ecs.InstanceProvider{Cred: p.cred, Region: p.region, ResourceGroups: p.resourceGroups}
+	ecsprovider := &_ecs.Driver{Cred: p.cred, Region: p.region, ResourceGroups: p.resourceGroups}
 	list.Hosts, err = ecsprovider.GetResource(ctx)
 
-	dnsprovider := &_dns.DnsProvider{Cred: p.cred, Region: p.region, ResourceGroups: p.resourceGroups}
+	dnsprovider := &_dns.Driver{Cred: p.cred, Region: p.region, ResourceGroups: p.resourceGroups}
 	list.Domains, err = dnsprovider.GetDomains(ctx)
 
-	ossprovider := &_oss.BucketProvider{Cred: p.cred, Region: p.region}
+	ossprovider := &_oss.Driver{Cred: p.cred, Region: p.region}
 	list.Storages, err = ossprovider.GetBuckets(ctx)
 
-	ramprovider := &_ram.RamProvider{Cred: p.cred, Region: p.region}
+	ramprovider := &_ram.Driver{Cred: p.cred, Region: p.region}
 	list.Users, err = ramprovider.GetRamUser(ctx)
 
-	rdsprovider := &_rds.RdsProvider{Cred: p.cred, Region: p.region, ResourceGroups: p.resourceGroups}
+	rdsprovider := &_rds.Driver{Cred: p.cred, Region: p.region, ResourceGroups: p.resourceGroups}
 	list.Databases, err = rdsprovider.GetDatabases(ctx)
 
-	smsprovider := &_sms.SmsProvider{Cred: p.cred, Region: p.region}
+	smsprovider := &_sms.Driver{Cred: p.cred, Region: p.region}
 	list.Sms, err = smsprovider.GetResource(ctx)
 
 	return list, err
 }
 
 func (p *Provider) UserManagement(action, args_1, args_2 string) {
-	ramprovider := &_ram.RamProvider{Cred: p.cred, Region: p.region}
+	r := &_ram.Driver{Cred: p.cred, Region: p.region}
 	switch action {
 	case "add":
-		ramprovider.UserName = args_1
-		ramprovider.PassWord = args_2
-		ramprovider.AddUser()
+		r.UserName = args_1
+		r.PassWord = args_2
+		r.AddUser()
 	case "del":
-		ramprovider.UserName = args_1
-		ramprovider.DelUser()
+		r.UserName = args_1
+		r.DelUser()
 	case "shadow":
-		ramprovider.RoleName = args_1
-		ramprovider.AccountId = args_2
-		ramprovider.AddRole()
+		r.RoleName = args_1
+		r.AccountId = args_2
+		r.AddRole()
 	case "delrole":
-		ramprovider.RoleName = args_1
-		ramprovider.DelRole()
+		r.RoleName = args_1
+		r.DelRole()
 	default:
 		log.Println("[-] Please set metadata like \"add username password\" or \"del username\"")
 	}

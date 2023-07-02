@@ -12,14 +12,14 @@ import (
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3/region"
 )
 
-type IAMUserProvider struct {
+type Driver struct {
 	Auth     basic.Credentials
 	Regions  []string
 	Username string
 	Password string
 }
 
-func (d *IAMUserProvider) GetIAMUser(ctx context.Context) ([]*schema.User, error) {
+func (d *Driver) GetIAMUser(ctx context.Context) ([]schema.User, error) {
 	list := schema.NewResources().Users
 	select {
 	case <-ctx.Done():
@@ -43,7 +43,7 @@ func (d *IAMUserProvider) GetIAMUser(ctx context.Context) ([]*schema.User, error
 	}
 
 	for _, user := range *keystoneListUsersResponse.Users {
-		_user := &schema.User{
+		_user := schema.User{
 			UserName:    user.Name,
 			UserId:      user.Id,
 			EnableLogin: user.Enabled,

@@ -7,7 +7,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/profiles/latest/storage/mgmt/storage"
 )
 
-func (d *StorageAccountProvider) GetBlobService(ctx context.Context, subscription, groupName, accountName string) []string {
+func (d *Driver) GetBlobService(ctx context.Context, subscription, groupName, accountName string) []string {
 	var blobs []string
 	client := storage.NewBlobServicesClient(subscription)
 	client.Authorizer = d.Authorizer

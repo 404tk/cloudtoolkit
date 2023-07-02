@@ -10,12 +10,12 @@ import (
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/dysmsapi"
 )
 
-type SmsProvider struct {
+type Driver struct {
 	Cred   *credentials.StsTokenCredential
 	Region string
 }
 
-func (d *SmsProvider) GetResource(ctx context.Context) (schema.Sms, error) {
+func (d *Driver) GetResource(ctx context.Context) (schema.Sms, error) {
 	res := schema.Sms{}
 	select {
 	case <-ctx.Done():

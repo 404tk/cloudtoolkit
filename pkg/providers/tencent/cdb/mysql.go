@@ -12,12 +12,12 @@ import (
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 )
 
-type CdbProvider struct {
+type Driver struct {
 	Credential *common.Credential
 	Region     string
 }
 
-func (d *CdbProvider) ListMySQL(ctx context.Context) ([]*schema.Database, error) {
+func (d *Driver) ListMySQL(ctx context.Context) ([]schema.Database, error) {
 	list := schema.NewResources().Databases
 	select {
 	case <-ctx.Done():
@@ -54,7 +54,7 @@ func (d *CdbProvider) ListMySQL(ctx context.Context) ([]*schema.Database, error)
 		}
 
 		for _, instance := range response.Response.Items {
-			_db := &schema.Database{
+			_db := schema.Database{
 				DBInstanceId:  *instance.InstanceId,
 				Engine:        "MySQL",
 				EngineVersion: *instance.EngineVersion,

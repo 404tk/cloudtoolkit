@@ -84,24 +84,24 @@ func (p *Provider) Name() string {
 }
 
 // Resources returns the provider for an resource deployment source.
-func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
+func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
 	var err error
-	ec2provider := &_ec2.InstanceProvider{Session: p.session, Region: p.region}
+	ec2provider := &_ec2.Driver{Session: p.session, Region: p.region}
 	list.Hosts, err = ec2provider.GetResource(ctx)
 
-	s3provider := &_s3.S3Provider{Session: p.session}
+	s3provider := &_s3.Driver{Session: p.session}
 	list.Storages, err = s3provider.GetBuckets(ctx)
 
-	iamprovider := &_iam.IAMProvider{Session: p.session}
+	iamprovider := &_iam.Driver{Session: p.session}
 	list.Users, err = iamprovider.GetIAMUser(ctx)
 
 	return list, err
 }
 
 func (p *Provider) UserManagement(action, uname, pwd string) {
-	ramprovider := &_iam.IAMProvider{
+	ramprovider := &_iam.Driver{
 		Session: p.session, Username: uname, Password: pwd}
 	switch action {
 	case "add":
@@ -114,7 +114,7 @@ func (p *Provider) UserManagement(action, uname, pwd string) {
 }
 
 func (p *Provider) BucketDump(action, bucketname string) {
-	s3provider := &_s3.S3Provider{Session: p.session}
+	s3provider := &_s3.Driver{Session: p.session}
 	switch action {
 	case "list":
 		var infos = make(map[string]string)

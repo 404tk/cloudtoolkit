@@ -12,13 +12,13 @@ import (
 	lighthouse "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/lighthouse/v20200324"
 )
 
-type InstanceProvider struct {
+type Driver struct {
 	Credential *common.Credential
 	Region     string
 }
 
 // GetResource returns all the resources in the store for a provider.
-func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
+func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := schema.NewResources().Hosts
 	select {
 	case <-ctx.Done():
@@ -62,7 +62,7 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 			if len(instance.PrivateAddresses) > 0 {
 				privateIPv4 = *instance.PrivateAddresses[0]
 			}
-			_host := &schema.Host{
+			_host := schema.Host{
 				PublicIPv4:  ipv4,
 				PrivateIpv4: privateIPv4,
 				Public:      ipv4 != "",

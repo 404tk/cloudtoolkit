@@ -107,33 +107,33 @@ func (p *Provider) Name() string {
 }
 
 // Resources returns the provider for a resource deployment source.
-func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
+func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
 	var err error
-	ecsprovider := &ecs.InstanceProvider{Auth: p.auth, Regions: p.regions}
+	ecsprovider := &ecs.Driver{Auth: p.auth, Regions: p.regions}
 	list.Hosts, err = ecsprovider.GetResource(ctx)
 
-	obsprovider := &_obs.OBSProvider{Auth: p.auth, Regions: p.regions}
+	obsprovider := &_obs.Driver{Auth: p.auth, Regions: p.regions}
 	list.Storages, err = obsprovider.GetBuckets(ctx)
 
-	iamprovider := &_iam.IAMUserProvider{Auth: p.auth, Regions: p.regions}
+	iamprovider := &_iam.Driver{Auth: p.auth, Regions: p.regions}
 	list.Users, err = iamprovider.GetIAMUser(ctx)
 
-	rdsprovider := &_rds.RdsProvider{Auth: p.auth, Regions: p.regions}
+	rdsprovider := &_rds.Driver{Auth: p.auth, Regions: p.regions}
 	list.Databases, err = rdsprovider.GetDatabases(ctx)
 
 	return list, err
 }
 
 func (p *Provider) UserManagement(action, uname, pwd string) {
-	ramprovider := &_iam.IAMUserProvider{
+	r := &_iam.Driver{
 		Auth: p.auth, Regions: p.regions, Username: uname, Password: pwd}
 	switch action {
 	case "add":
-		ramprovider.AddUser()
+		r.AddUser()
 	case "del":
-		ramprovider.DelUser()
+		r.DelUser()
 	default:
 		log.Println("[-] Please set metadata like \"add username password\" or \"del username\"")
 	}

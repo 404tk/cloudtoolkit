@@ -10,11 +10,11 @@ import (
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 )
 
-type ADProvider struct {
+type Driver struct {
 	Config auth.ClientCredentialsConfig
 }
 
-func (d *ADProvider) GetActiveDirectory(ctx context.Context) ([]*schema.User, error) {
+func (d *Driver) GetActiveDirectory(ctx context.Context) ([]schema.User, error) {
 	list := schema.NewResources().Users
 	log.Println("[*] Start enumerating Active Directory ...")
 	usersClient := graphrbac.NewUsersClient(d.Config.TenantID)
@@ -28,7 +28,7 @@ func (d *ADProvider) GetActiveDirectory(ctx context.Context) ([]*schema.User, er
 	}
 
 	for _, user := range users.Values() {
-		_user := &schema.User{
+		_user := schema.User{
 			UserName:    *user.DisplayName,
 			UserId:      *user.ObjectID,
 			EnableLogin: *user.AccountEnabled,

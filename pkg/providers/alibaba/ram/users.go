@@ -13,7 +13,7 @@ import (
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ram"
 )
 
-type RamProvider struct {
+type Driver struct {
 	Cred      *credentials.StsTokenCredential
 	Region    string
 	UserName  string
@@ -22,7 +22,7 @@ type RamProvider struct {
 	AccountId string
 }
 
-func (d *RamProvider) NewClient() *ram.Client {
+func (d *Driver) NewClient() *ram.Client {
 	region := d.Region
 	if region == "all" {
 		region = "cn-hangzhou"
@@ -31,7 +31,7 @@ func (d *RamProvider) NewClient() *ram.Client {
 	return client
 }
 
-func (d *RamProvider) GetRamUser(ctx context.Context) ([]*schema.User, error) {
+func (d *Driver) GetRamUser(ctx context.Context) ([]schema.User, error) {
 	list := schema.NewResources().Users
 	select {
 	case <-ctx.Done():
@@ -74,7 +74,7 @@ func (d *RamProvider) GetRamUser(ctx context.Context) ([]*schema.User, error) {
 				}
 			}
 
-			list = append(list, &_user)
+			list = append(list, _user)
 			select {
 			case <-ctx.Done():
 				return list, nil

@@ -10,12 +10,12 @@ import (
 	"github.com/Azure/go-autorest/autorest/azure"
 )
 
-type StorageAccountProvider struct {
+type Driver struct {
 	SubscriptionIDs []string
 	Authorizer      autorest.Authorizer
 }
 
-func (d *StorageAccountProvider) GetStorages(ctx context.Context) ([]*schema.Storage, error) {
+func (d *Driver) GetStorages(ctx context.Context) ([]schema.Storage, error) {
 	list := schema.NewResources().Storages
 	log.Println("[*] Start enumerating Storage Accounts ...")
 	for _, subscription := range d.SubscriptionIDs {
@@ -35,7 +35,7 @@ func (d *StorageAccountProvider) GetStorages(ctx context.Context) ([]*schema.Sto
 
 			blobService := d.GetBlobService(ctx, subscription, accountId.ResourceGroup, *account.Name)
 			for _, s := range blobService {
-				_account := &schema.Storage{
+				_account := schema.Storage{
 					AccountName: *account.Name,
 					Region:      *account.Location,
 					BucketName:  s + "(Blob Service)",
@@ -45,7 +45,7 @@ func (d *StorageAccountProvider) GetStorages(ctx context.Context) ([]*schema.Sto
 
 			blobContainer := d.GetBlobContainer(ctx, subscription, accountId.ResourceGroup, *account.Name)
 			for _, c := range blobContainer {
-				_account := &schema.Storage{
+				_account := schema.Storage{
 					AccountName: *account.Name,
 					Region:      *account.Location,
 					BucketName:  c + "(Blob Container)",

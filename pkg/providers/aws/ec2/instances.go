@@ -12,14 +12,13 @@ import (
 	"github.com/aws/aws-sdk-go/service/ec2"
 )
 
-// InstanceProvider is an instance provider for aws API
-type InstanceProvider struct {
+type Driver struct {
 	Session *session.Session
 	Region  string
 }
 
 // GetResource returns all the resources in the store for a provider.
-func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
+func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := schema.NewResources().Hosts
 	log.Println("[*] Start enumerating EC2 ...")
 	flag := false
@@ -55,7 +54,7 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 						Public:      ip4 != "",
 						Region:      region,
 					}
-					list = append(list, &host)
+					list = append(list, host)
 				}
 			}
 			if aws.StringValue(resp.NextToken) == "" {
@@ -78,7 +77,7 @@ done:
 	return list, nil
 }
 
-func (d *InstanceProvider) GetEC2Regions() ([]string, error) {
+func (d *Driver) GetEC2Regions() ([]string, error) {
 	var regions []string
 	ec2Client := ec2.New(d.Session)
 	if d.Region == "all" {

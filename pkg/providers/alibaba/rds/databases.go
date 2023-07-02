@@ -12,13 +12,13 @@ import (
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/rds"
 )
 
-type RdsProvider struct {
+type Driver struct {
 	Cred           *credentials.StsTokenCredential
 	Region         string
 	ResourceGroups []string
 }
 
-func (d *RdsProvider) GetDatabases(ctx context.Context) ([]*schema.Database, error) {
+func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 	list := schema.NewResources().Databases
 	select {
 	case <-ctx.Done():
@@ -51,7 +51,7 @@ func (d *RdsProvider) GetDatabases(ctx context.Context) ([]*schema.Database, err
 			pageCount := int(math.Ceil(float64(response.TotalRecordCount) / 100))
 			for _, dbInstance := range response.Items.DBInstance {
 
-				_dbInstance := &schema.Database{
+				_dbInstance := schema.Database{
 					DBInstanceId:  dbInstance.DBInstanceId,
 					Engine:        dbInstance.Engine,
 					EngineVersion: dbInstance.EngineVersion,

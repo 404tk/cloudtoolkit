@@ -7,7 +7,7 @@ import (
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ram"
 )
 
-func (d *RamProvider) AddRole() {
+func (d *Driver) AddRole() {
 	client := d.NewClient()
 	err := createRole(client, d.RoleName, d.AccountId)
 	if err != nil {
