@@ -7,12 +7,13 @@ import (
 )
 
 func (d *RamProvider) DelRole() {
-	err := detachPolicyFromRole(d.Client, d.RoleName)
+	client := d.NewClient()
+	err := detachPolicyFromRole(client, d.RoleName)
 	if err != nil {
 		log.Printf("[-] Remove policy from %s failed: %s\n", d.RoleName, err.Error())
 		return
 	}
-	err = deleteRole(d.Client, d.RoleName)
+	err = deleteRole(client, d.RoleName)
 	if err != nil {
 		log.Printf("[-] Delete role %s failed: %s\n", d.RoleName, err.Error())
 		return

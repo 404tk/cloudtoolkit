@@ -5,11 +5,14 @@ import (
 	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
+	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/dysmsapi"
 )
 
 type SmsProvider struct {
-	Client *dysmsapi.Client
+	Cred   *credentials.StsTokenCredential
+	Region string
 }
 
 func (d *SmsProvider) GetResource(ctx context.Context) (schema.Sms, error) {
@@ -20,14 +23,21 @@ func (d *SmsProvider) GetResource(ctx context.Context) (schema.Sms, error) {
 	default:
 		log.Println("[*] List SMS resource ...")
 	}
-	var err error
-	res.Signs, err = listSmsSign(d.Client)
+	region := d.Region
+	if region == "all" {
+		region = "cn-hangzhou"
+	}
+	client, err := dysmsapi.NewClientWithOptions(region, sdk.NewConfig(), d.Cred)
+	if err != nil {
+		return res, err
+	}
+	res.Signs, err = listSmsSign(client)
 	if err != nil {
 		log.Println("[-] List SMS failed.")
 		return res, err
 	}
-	res.Templates, err = listSmsTemplate(d.Client)
-	res.DailySize, err = querySendStatistics(d.Client)
+	res.Templates, err = listSmsTemplate(client)
+	res.DailySize, err = querySendStatistics(client)
 
 	return res, err
 }

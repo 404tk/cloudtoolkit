@@ -2,9 +2,11 @@ package alibaba
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strings"
 
+	_dns "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/dns"
 	_ecs "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/ecs"
 	_oss "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/oss"
 	_ram "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/ram"
@@ -13,23 +15,18 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
+	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
+	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/bssopenapi"
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/dysmsapi"
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/ecs"
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/ram"
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/rds"
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/resourcemanager"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
-	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 )
 
 // Provider is a data provider for alibaba API
 type Provider struct {
 	vendor         string
-	EcsClient      *ecs.Client
-	OssClient      *oss.Client
-	RamClient      *ram.Client
-	RdsClient      *rds.Client
-	SmsClient      *dysmsapi.Client
+	cred           *credentials.StsTokenCredential
+	region         string
 	resourceGroups []string
 }
 
@@ -44,13 +41,11 @@ func New(options schema.Options) (*Provider, error) {
 		return nil, &schema.ErrNoSuchKey{Name: utils.SecretKey}
 	}
 	region, _ := options.GetMetadata(utils.Region)
-	if region == "all" {
-		region = "cn-hangzhou"
-	}
 	token, _ := options.GetMetadata(utils.SecurityToken)
+	cred := credentials.NewStsTokenCredential(accessKey, secretKey, token)
 
 	// Get current username
-	stsclient, err := sts.NewClientWithStsToken(region, accessKey, secretKey, token)
+	stsclient, err := sts.NewClientWithOptions("cn-hangzhou", sdk.NewConfig(), cred)
 	request := sts.CreateGetCallerIdentityRequest()
 	request.Scheme = "https"
 	response, err := stsclient.GetCallerIdentity(request)
@@ -69,7 +64,7 @@ func New(options schema.Options) (*Provider, error) {
 	msg := "[+] Current user: " + userName
 	cache.Cfg.CredInsert(userName, options)
 
-	bssclient, _ := bssopenapi.NewClientWithStsToken(region, accessKey, secretKey, token)
+	bssclient, _ := bssopenapi.NewClientWithOptions("cn-hangzhou", sdk.NewConfig(), cred)
 	req_bss := bssopenapi.CreateQueryAccountBalanceRequest()
 	req_bss.Scheme = "https"
 	resp, err := bssclient.QueryAccountBalance(req_bss)
@@ -80,35 +75,29 @@ func New(options schema.Options) (*Provider, error) {
 	}
 	log.Printf(msg)
 
-	ecsClient, err := ecs.NewClientWithStsToken(region, accessKey, secretKey, token)
-	ossClient, err := oss.New("oss-"+region+".aliyuncs.com", accessKey, secretKey, oss.SecurityToken(token))
-	ramClient, err := ram.NewClientWithStsToken(region, accessKey, secretKey, token)
-	rdsClient, err := rds.NewClientWithStsToken(region, accessKey, secretKey, token)
-	smsclient, err := dysmsapi.NewClientWithStsToken(region, accessKey, secretKey, token)
-	/*
-		rmClient, err := resourcemanager.NewClientWithAccessKey(region, accessKey, secretKey)
-		if err != nil {
-			return nil, err
-		}
-		req := resourcemanager.CreateListResourceGroupsRequest()
-		req.Scheme = "https"
-		resp, err := rmClient.ListResourceGroups(req)
-		if err != nil {
-			return nil, err
-		}
-		var resourceGroups []string
-		for _, group := range resp.ResourceGroups.ResourceGroup {
-			resourceGroups = append(resourceGroups, group.Id)
-		}
-	*/
+	rmClient, err := resourcemanager.NewClientWithOptions("cn-hangzhou", sdk.NewConfig(), cred)
+	if err != nil {
+		return nil, err
+	}
+	req_rm := resourcemanager.CreateListResourceGroupsRequest()
+	req_rm.Scheme = "https"
+	resp_rm, err := rmClient.ListResourceGroups(req_rm)
+	if err != nil {
+		return nil, err
+	}
+	var resourceGroups []string
+	for _, group := range resp_rm.ResourceGroups.ResourceGroup {
+		resourceGroups = append(resourceGroups, group.Id)
+	}
+	log.Printf("[*] Found %d ResourceGroups", len(resourceGroups))
+	if len(resourceGroups) == 0 {
+		return nil, fmt.Errorf("ResourceGroup not found.")
+	}
 	return &Provider{
 		vendor:         "alibaba",
-		EcsClient:      ecsClient,
-		OssClient:      ossClient,
-		RamClient:      ramClient,
-		RdsClient:      rdsClient,
-		SmsClient:      smsclient,
-		resourceGroups: []string{""},
+		cred:           cred,
+		region:         region,
+		resourceGroups: resourceGroups,
 	}, err
 }
 
@@ -122,26 +111,29 @@ func (p *Provider) Resources(ctx context.Context) (*schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
 	var err error
-	ecsprovider := &_ecs.InstanceProvider{Client: p.EcsClient, ResourceGroups: p.resourceGroups}
+	ecsprovider := &_ecs.InstanceProvider{Cred: p.cred, Region: p.region, ResourceGroups: p.resourceGroups}
 	list.Hosts, err = ecsprovider.GetResource(ctx)
 
-	ossprovider := &_oss.BucketProvider{Client: p.OssClient}
+	dnsprovider := &_dns.DnsProvider{Cred: p.cred, Region: p.region, ResourceGroups: p.resourceGroups}
+	list.Domains, err = dnsprovider.GetDomains(ctx)
+
+	ossprovider := &_oss.BucketProvider{Cred: p.cred, Region: p.region}
 	list.Storages, err = ossprovider.GetBuckets(ctx)
 
-	ramprovider := &_ram.RamProvider{Client: p.RamClient}
+	ramprovider := &_ram.RamProvider{Cred: p.cred, Region: p.region}
 	list.Users, err = ramprovider.GetRamUser(ctx)
 
-	rdsprovider := &_rds.RdsProvider{Client: p.RdsClient, ResourceGroups: p.resourceGroups}
+	rdsprovider := &_rds.RdsProvider{Cred: p.cred, Region: p.region, ResourceGroups: p.resourceGroups}
 	list.Databases, err = rdsprovider.GetDatabases(ctx)
 
-	smsprovider := &_sms.SmsProvider{Client: p.SmsClient}
+	smsprovider := &_sms.SmsProvider{Cred: p.cred, Region: p.region}
 	list.Sms, err = smsprovider.GetResource(ctx)
 
 	return list, err
 }
 
 func (p *Provider) UserManagement(action, args_1, args_2 string) {
-	ramprovider := &_ram.RamProvider{Client: p.RamClient}
+	ramprovider := &_ram.RamProvider{Cred: p.cred, Region: p.region}
 	switch action {
 	case "add":
 		ramprovider.UserName = args_1

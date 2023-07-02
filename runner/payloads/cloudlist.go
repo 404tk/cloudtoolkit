@@ -35,6 +35,9 @@ func (p CloudList) Run(ctx context.Context, config map[string]string) {
 		}
 
 		pprint(len(resources.Hosts), "Hosts", resources.Hosts)
+		for _, domain := range resources.Domains {
+			pprint(len(domain.Records), "Domain "+domain.DomainName, domain.Records)
+		}
 		pprint(len(resources.Storages), "Storages", resources.Storages)
 		pprint(len(resources.Users), "Users", resources.Users)
 		pprint(len(resources.Databases), "Databases", resources.Databases)

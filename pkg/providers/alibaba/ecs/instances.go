@@ -8,13 +8,16 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
+	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
+	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ecs"
 )
 
 // InstanceProvider is an instance provider for alibaba API
 type InstanceProvider struct {
-	Client         *ecs.Client
+	Cred           *credentials.StsTokenCredential
+	Region         string
 	ResourceGroups []string
 }
 
@@ -22,23 +25,39 @@ type InstanceProvider struct {
 func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, error) {
 	list := schema.NewResources().Hosts
 	log.Println("[*] Start enumerating ECS ...")
+	region := d.Region
+	if region == "all" {
+		region = "cn-hangzhou"
+	}
+	client, err := ecs.NewClientWithOptions(region, sdk.NewConfig(), d.Cred)
+	if err != nil {
+		return list, err
+	}
 	// check permission
 	req_vpc := ecs.CreateDescribeVpcsRequest()
-	_, err := d.Client.DescribeVpcs(req_vpc)
+	_, err = client.DescribeVpcs(req_vpc)
 	if err != nil {
 		log.Println("[-] Describe vpcs failed.")
 		return list, err
 	}
-	req := ecs.CreateDescribeRegionsRequest()
-	resp, err := d.Client.DescribeRegions(req)
-	if err != nil {
-		log.Println("[-] Describe regions failed.")
-		return list, err
+	var regions []string
+	if d.Region == "all" {
+		req := ecs.CreateDescribeRegionsRequest()
+		resp, err := client.DescribeRegions(req)
+		if err != nil {
+			log.Println("[-] Describe regions failed.")
+			return list, err
+		}
+		for _, r := range resp.Regions.Region {
+			regions = append(regions, r.RegionId)
+		}
+	} else {
+		regions = append(regions, d.Region)
 	}
 	flag := false
 	prevLength := 0
 	count := 0
-	for _, r := range resp.Regions.Region {
+	for _, r := range regions {
 		for _, resourceGroupId := range d.ResourceGroups {
 			page := 1
 			for {
@@ -46,9 +65,9 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 				request.PageSize = requests.NewInteger(100)
 				request.PageNumber = requests.NewInteger(page)
 				request.ResourceGroupId = resourceGroupId
-				request.RegionId = r.RegionId
+				request.RegionId = r
 				// Getting a list of instances
-				response, err := d.Client.DescribeInstances(request)
+				response, err := client.DescribeInstances(request)
 				if err != nil {
 					break
 				}
@@ -79,7 +98,7 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 						PublicIPv4:  ipv4,
 						PrivateIpv4: privateIPv4,
 						Public:      ipv4 != "",
-						Region:      r.RegionId,
+						Region:      r,
 					}
 					list = append(list, _host)
 				}
@@ -93,7 +112,7 @@ func (d *InstanceProvider) GetResource(ctx context.Context) ([]*schema.Host, err
 		case <-ctx.Done():
 			goto done
 		default:
-			prevLength, flag = processbar.RegionPrint(r.RegionId, len(list)-count, prevLength, flag)
+			prevLength, flag = processbar.RegionPrint(r, len(list)-count, prevLength, flag)
 			count = len(list)
 		}
 	}

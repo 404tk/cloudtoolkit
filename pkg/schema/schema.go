@@ -25,6 +25,7 @@ func NewResources() *Resources {
 		Storages:  make([]*Storage, 0),
 		Users:     make([]*User, 0),
 		Databases: make([]*Database, 0),
+		Domains:   make([]*Domain, 0),
 	}
 }
 
@@ -34,6 +35,7 @@ type Resources struct {
 	Storages  []*Storage
 	Users     []*User
 	Databases []*Database
+	Domains   []*Domain
 	Sms       Sms
 }
 
@@ -65,6 +67,18 @@ type Database struct {
 	EngineVersion string `table:"Version"`
 	Region        string `table:"Region"`
 	Address       string `table:"Address"`
+}
+
+type Domain struct {
+	DomainName string
+	Records    []Record
+}
+
+type Record struct {
+	RR     string
+	Type   string
+	Value  string
+	Status string
 }
 
 type Sms struct {

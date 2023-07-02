@@ -8,17 +8,18 @@ import (
 )
 
 func (d *RamProvider) AddRole() {
-	err := createRole(d.Client, d.RoleName, d.AccountId)
+	client := d.NewClient()
+	err := createRole(client, d.RoleName, d.AccountId)
 	if err != nil {
 		log.Println("[-] Create role failed:", err.Error())
 		return
 	}
-	err = attachPolicyToRole(d.Client, d.RoleName)
+	err = attachPolicyToRole(client, d.RoleName)
 	if err != nil {
 		log.Println("[-] Grant AdministratorAccess policy failed.")
 		return
 	}
-	accountAlias := getAccountAlias(d.Client)
+	accountAlias := getAccountAlias(client)
 	fmt.Printf("\n%-20s\t%-10s\t%-60s\n", "AccountAlias", "RoleName", "Switch URL")
 	fmt.Printf("%-20s\t%-10s\t%-60s\n", "------------", "--------", "----------")
 	fmt.Printf("%-20s\t%-10s\t%-60s\n\n",

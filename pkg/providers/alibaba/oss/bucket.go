@@ -5,11 +5,13 @@ import (
 	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 )
 
 type BucketProvider struct {
-	Client *oss.Client
+	Cred   *credentials.StsTokenCredential
+	Region string
 }
 
 func (d *BucketProvider) GetBuckets(ctx context.Context) ([]*schema.Storage, error) {
@@ -20,7 +22,19 @@ func (d *BucketProvider) GetBuckets(ctx context.Context) ([]*schema.Storage, err
 	default:
 		log.Println("[*] Start enumerating OSS ...")
 	}
-	response, err := d.Client.ListBuckets(oss.MaxKeys(1000))
+	region := d.Region
+	if region == "all" {
+		region = "cn-hangzhou"
+	}
+	client, err := oss.New(
+		"oss-"+region+".aliyuncs.com",
+		d.Cred.AccessKeyId,
+		d.Cred.AccessKeySecret,
+		oss.SecurityToken(d.Cred.AccessKeyStsToken))
+	if err != nil {
+		return list, err
+	}
+	response, err := client.ListBuckets(oss.MaxKeys(1000))
 	if err != nil {
 		log.Println("[-] Enumerate OSS failed.")
 		return list, err

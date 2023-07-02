@@ -8,22 +8,23 @@ import (
 )
 
 func (d *RamProvider) AddUser() {
-	err := createUser(d.Client, d.UserName)
+	client := d.NewClient()
+	err := createUser(client, d.UserName)
 	if err != nil {
 		log.Println("[-] Create user failed:", err.Error())
 		return
 	}
-	err = createLoginProfile(d.Client, d.UserName, d.PassWord)
+	err = createLoginProfile(client, d.UserName, d.PassWord)
 	if err != nil {
 		log.Println("[-] Create login password failed:", err.Error())
 		return
 	}
-	err = attachPolicyToUser(d.Client, d.UserName)
+	err = attachPolicyToUser(client, d.UserName)
 	if err != nil {
 		log.Println("[-] Grant AdministratorAccess policy failed.")
 		return
 	}
-	accountAlias := getAccountAlias(d.Client)
+	accountAlias := getAccountAlias(client)
 	fmt.Printf("\n%-10s\t%-10s\t%-60s\n", "Username", "Password", "Login URL")
 	fmt.Printf("%-10s\t%-10s\t%-60s\n", "--------", "--------", "---------")
 	fmt.Printf("%-10s\t%-10s\t%-60s\n\n",

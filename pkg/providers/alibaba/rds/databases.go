@@ -6,12 +6,15 @@ import (
 	"math"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
+	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/rds"
 )
 
 type RdsProvider struct {
-	Client         *rds.Client
+	Cred           *credentials.StsTokenCredential
+	Region         string
 	ResourceGroups []string
 }
 
@@ -23,6 +26,14 @@ func (d *RdsProvider) GetDatabases(ctx context.Context) ([]*schema.Database, err
 	default:
 		log.Println("[*] Start enumerating RDS ...")
 	}
+	region := d.Region
+	if region == "all" {
+		region = "cn-hangzhou"
+	}
+	client, err := rds.NewClientWithOptions(region, sdk.NewConfig(), d.Cred)
+	if err != nil {
+		return list, err
+	}
 	for _, resourceGroupId := range d.ResourceGroups {
 		page := 1
 		for {
@@ -32,7 +43,7 @@ func (d *RdsProvider) GetDatabases(ctx context.Context) ([]*schema.Database, err
 			}
 			describeDBInstancesRequest.PageSize = requests.NewInteger(100)
 			describeDBInstancesRequest.PageNumber = requests.NewInteger(page)
-			response, err := d.Client.DescribeDBInstances(describeDBInstancesRequest)
+			response, err := client.DescribeDBInstances(describeDBInstancesRequest)
 			if err != nil {
 				log.Println("[-] Enumerate RDS failed.")
 				return list, err

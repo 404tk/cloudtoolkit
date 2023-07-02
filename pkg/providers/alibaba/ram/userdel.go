@@ -7,12 +7,13 @@ import (
 )
 
 func (d *RamProvider) DelUser() {
-	err := detachPolicyFromUser(d.Client, d.UserName)
+	client := d.NewClient()
+	err := detachPolicyFromUser(client, d.UserName)
 	if err != nil {
 		log.Printf("[-] Remove policy from %s failed: %s\n", d.UserName, err.Error())
 		return
 	}
-	err = deleteUser(d.Client, d.UserName)
+	err = deleteUser(client, d.UserName)
 	if err != nil {
 		log.Printf("[-] Delete user %s failed: %s\n", d.UserName, err.Error())
 		return
