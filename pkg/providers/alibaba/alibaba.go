@@ -75,30 +75,11 @@ func New(options schema.Options) (*Provider, error) {
 	}
 	log.Printf(msg)
 
-	rmClient, err := resourcemanager.NewClientWithOptions("cn-hangzhou", sdk.NewConfig(), cred)
-	if err != nil {
-		return nil, err
-	}
-	req_rm := resourcemanager.CreateListResourceGroupsRequest()
-	req_rm.Scheme = "https"
-	resp_rm, err := rmClient.ListResourceGroups(req_rm)
-	if err != nil {
-		return nil, err
-	}
-	var resourceGroups []string
-	for _, group := range resp_rm.ResourceGroups.ResourceGroup {
-		resourceGroups = append(resourceGroups, group.Id)
-	}
-	log.Printf("[*] Found %d ResourceGroups", len(resourceGroups))
-	if len(resourceGroups) == 0 {
-		return nil, fmt.Errorf("ResourceGroup not found.")
-	}
 	return &Provider{
-		vendor:         "alibaba",
-		cred:           cred,
-		region:         region,
-		resourceGroups: resourceGroups,
-	}, err
+		vendor: "alibaba",
+		cred:   cred,
+		region: region,
+	}, nil
 }
 
 // Name returns the name of the provider
@@ -110,6 +91,12 @@ func (p *Provider) Name() string {
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
+	getResourceGroups(p)
+	if len(p.resourceGroups) == 0 {
+		return list, fmt.Errorf("ResourceGroup not found.")
+	} else {
+		log.Printf("[*] Found %d ResourceGroups", len(p.resourceGroups))
+	}
 	var err error
 	ecsprovider := &_ecs.Driver{Cred: p.cred, Region: p.region, ResourceGroups: p.resourceGroups}
 	list.Hosts, err = ecsprovider.GetResource(ctx)
@@ -130,6 +117,22 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list.Sms, err = smsprovider.GetResource(ctx)
 
 	return list, err
+}
+
+func getResourceGroups(p *Provider) {
+	rmClient, err := resourcemanager.NewClientWithOptions("cn-hangzhou", sdk.NewConfig(), p.cred)
+	if err != nil {
+		return
+	}
+	req_rm := resourcemanager.CreateListResourceGroupsRequest()
+	req_rm.Scheme = "https"
+	resp_rm, err := rmClient.ListResourceGroups(req_rm)
+	if err != nil {
+		return
+	}
+	for _, group := range resp_rm.ResourceGroups.ResourceGroup {
+		p.resourceGroups = append(p.resourceGroups, group.Id)
+	}
 }
 
 func (p *Provider) UserManagement(action, args_1, args_2 string) {
