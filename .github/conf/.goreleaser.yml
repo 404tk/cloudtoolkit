@@ -14,7 +14,6 @@ builds:
       - amd64
       - arm64
       - arm
-      - 386
     goarm:
       - 6
       - 7
@@ -54,7 +53,6 @@ archives:
     files:
       - none*
     replacements:
-      386: i386
       amd64: x86_64
 checksum:
   name_template: 'checksums.txt'
