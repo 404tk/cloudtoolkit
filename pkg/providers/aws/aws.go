@@ -131,3 +131,5 @@ func (p *Provider) BucketDump(action, bucketname string) {
 		log.Println("[-] Only the `list` operation is supported.")
 	}
 }
+
+func (p *Provider) EventDump(sourceIp string) {}

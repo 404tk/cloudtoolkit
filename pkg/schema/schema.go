@@ -16,6 +16,7 @@ type Provider interface {
 	Resources(ctx context.Context) (Resources, error)
 	UserManagement(action, uname, pwd string)
 	BucketDump(action, bucketname string)
+	EventDump(sourceIp string)
 }
 
 // NewResources creates a new resources structure
@@ -97,6 +98,16 @@ type SmsTemplate struct {
 	Name    string `table:"Name"`
 	Status  string `table:"Status"`
 	Content string `table:"Content"`
+}
+
+type Event struct {
+	Name      string
+	Affected  string
+	API       string
+	Status    string
+	SourceIp  string `table:"Source IP"`
+	AccessKey string
+	Time      string
 }
 
 // ErrNoSuchKey means no such key exists in metadata.

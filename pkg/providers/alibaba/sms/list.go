@@ -58,11 +58,10 @@ func listSmsSign(client *dysmsapi.Client) ([]schema.SmsSign, error) {
 		return signs, err
 	}
 	for _, sign := range response.SmsSignList {
-		s, _ := status[sign.AuditStatus]
 		signs = append(signs, schema.SmsSign{
 			Name:   sign.SignName,
 			Type:   sign.BusinessType,
-			Status: s,
+			Status: status[sign.AuditStatus],
 		})
 	}
 	return signs, nil

@@ -15,10 +15,12 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
+	"github.com/404tk/cloudtoolkit/utils/table"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/bssopenapi"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/resourcemanager"
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/sas"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
 )
 
@@ -95,7 +97,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	if len(p.resourceGroups) == 0 {
 		return list, fmt.Errorf("ResourceGroup not found.")
 	} else {
-		log.Printf("[*] Found %d ResourceGroups", len(p.resourceGroups))
+		log.Printf("[*] Found %d ResourceGroups\n", len(p.resourceGroups))
 	}
 	var err error
 	ecsprovider := &_ecs.Driver{Cred: p.cred, Region: p.region, ResourceGroups: p.resourceGroups}
@@ -159,4 +161,63 @@ func (p *Provider) UserManagement(action, args_1, args_2 string) {
 
 func (p *Provider) BucketDump(action, bucketname string) {
 	log.Println("[*] Recommended use https://github.com/aliyun/oss-browser")
+}
+
+var eventStatus = map[int]string{
+	1:  "待处理",
+	2:  "已忽略",
+	4:  "已确认",
+	8:  "已标记误报",
+	16: "处理中",
+	32: "处理完毕",
+	64: "已经过期",
+}
+
+func (p *Provider) EventDump(sourceIp string) {
+	client, err := sas.NewClientWithOptions("cn-hangzhou", sdk.NewConfig(), p.cred)
+	if err != nil {
+		return
+	}
+	request := sas.CreateDescribeSuspEventsRequest()
+	request.Scheme = "https"
+	/*
+		// The filtering result of the specified source IP address is invalid
+		switch sourceIp {
+		case "all":
+		case "self":
+			ip, err := utils.HttpGet(utils.IpInfo)
+			if err != nil {
+				log.Println(err)
+				return
+			}
+			log.Println("[*] Current export IP:", string(ip))
+			request.SourceIp = string(ip)
+		default:
+			request.SourceIp = sourceIp
+		}
+	*/
+
+	response, err := client.DescribeSuspEvents(request)
+	var events []schema.Event
+	for _, event := range response.SuspEvents {
+		_event := schema.Event{
+			Name:     event.AlarmEventNameDisplay,
+			Affected: event.InstanceName,
+			Status:   eventStatus[event.EventStatus],
+			Time:     event.LastTime,
+		}
+		for _, detail := range event.Details {
+			switch detail.NameDisplay {
+			case "调用的API":
+				_event.API = detail.ValueDisplay
+			case "调用IP", "登录源IP":
+				_event.SourceIp = detail.ValueDisplay
+			case "AK":
+				_event.AccessKey = detail.ValueDisplay
+			default:
+			}
+		}
+		events = append(events, _event)
+	}
+	table.Output(events)
 }

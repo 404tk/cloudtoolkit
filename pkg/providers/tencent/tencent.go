@@ -133,3 +133,5 @@ func (p *Provider) UserManagement(action, args_1, args_2 string) {
 func (p *Provider) BucketDump(action, bucketname string) {
 	log.Println("[*] Recommended use https://cosbrowser.cloud.tencent.com/web")
 }
+
+func (p *Provider) EventDump(sourceIp string) {}

@@ -104,6 +104,8 @@ func set(args []string) {
 			config[utils.Metadata] = utils.BackdoorUser
 		case "bucket-dump":
 			config[utils.Metadata] = utils.BucketDump
+		case "event-dump":
+			config[utils.Metadata] = utils.EventDump
 		}
 	}
 }
