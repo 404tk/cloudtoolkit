@@ -98,7 +98,7 @@ func set(args []string) {
 			fmt.Printf("%s => %s\n", args[0], args[1])
 		}
 	}
-	if args[0] == "payload" {
+	if args[0] == utils.Payload {
 		switch args[1] {
 		case "backdoor-user":
 			config[utils.Metadata] = utils.BackdoorUser
@@ -106,6 +106,14 @@ func set(args []string) {
 			config[utils.Metadata] = utils.BucketDump
 		case "event-dump":
 			config[utils.Metadata] = utils.EventDump
+		}
+	}
+	if args[0] == utils.Save {
+		if args[1] == "true" {
+			utils.DoSave = true
+			utils.CheckLogDir()
+		} else {
+			utils.DoSave = false
 		}
 	}
 }

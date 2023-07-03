@@ -8,6 +8,7 @@ const (
 	SecurityToken = "token"
 	Region        = "region"
 	Version       = "version"
+	Save          = "save"
 )
 
 const (
@@ -28,6 +29,8 @@ const (
 	EventDump    = "dump all"
 )
 
-const (
+var (
+	DoSave bool
+	LogDir = "logs"
 	IpInfo = "https://ipinfo.io/ip"
 )

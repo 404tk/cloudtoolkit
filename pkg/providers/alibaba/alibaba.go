@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	_dns "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/dns"
 	_ecs "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/ecs"
@@ -220,4 +221,10 @@ func (p *Provider) EventDump(sourceIp string) {
 		events = append(events, _event)
 	}
 	table.Output(events)
+	if utils.DoSave {
+		filename := time.Now().Format("20060102150405.log")
+		path := fmt.Sprintf("%s/%s_eventdump_%s", utils.LogDir, p.Name(), filename)
+		table.FileOutput(path, events)
+		log.Printf("[+] Output written to [%s]\n", path)
+	}
 }

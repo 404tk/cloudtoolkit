@@ -16,6 +16,12 @@ func Use(args []string) {
 	for _, m := range modules {
 		if m.Text == args[0] {
 			loadModule(args[0])
+			if config["save"] == "true" {
+				utils.DoSave = true
+				utils.CheckLogDir()
+			} else {
+				utils.DoSave = false
+			}
 			return
 		}
 	}
@@ -34,6 +40,7 @@ func loadModule(m string) {
 
 	config[utils.Provider] = m
 	config[utils.Payload] = "cloudlist" // Default use cloudlist
+	config[utils.Save] = "true"         // Default save log file
 
 	p := prompt.New(
 		Executor,

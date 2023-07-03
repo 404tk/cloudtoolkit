@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/404tk/cloudtoolkit/pkg/inventory"
+	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/table"
 )
 
@@ -27,10 +29,15 @@ func (p CloudList) Run(ctx context.Context, config map[string]string) {
 	case <-ctx.Done():
 		return
 	default:
+		filename := time.Now().Format("20060102150405.log")
+		path := fmt.Sprintf("%s/%s_cloudlist_%s", utils.LogDir, i.Providers.Name(), filename)
 		pprint := func(len int, tag string, res interface{}) {
 			if len > 0 {
 				fmt.Println(tag, "results:")
 				table.Output(res)
+				if utils.DoSave {
+					table.FileOutput(path, res)
+				}
 			}
 		}
 
@@ -46,8 +53,11 @@ func (p CloudList) Run(ctx context.Context, config map[string]string) {
 		if resources.Sms.DailySize > 0 {
 			fmt.Printf("[*] The total number of SMS messages sent today is %v.\n", resources.Sms.DailySize)
 		}
-
-		log.Println("[+] Done.")
+		if utils.DoSave {
+			log.Printf("[+] Output written to [%s]\n", path)
+		} else {
+			log.Println("[+] Done.")
+		}
 	}
 }
 

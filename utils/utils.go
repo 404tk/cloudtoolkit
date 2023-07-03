@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -38,4 +40,10 @@ func HttpGet(url string) ([]byte, error) {
 		return nil, err
 	}
 	return body, nil
+}
+
+func CheckLogDir() {
+	if v, _ := filepath.Glob(LogDir); len(v) == 0 {
+		os.Mkdir(LogDir, os.ModePerm)
+	}
 }

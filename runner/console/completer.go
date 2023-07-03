@@ -44,6 +44,7 @@ var optionsDesc = map[string]string{
 	utils.AzureSubscriptionId:   "Subscription ID (Optional)",
 	utils.GCPserviceAccountJSON: "GCP Credential encoded through Base64",
 	utils.Metadata:              "Set the payload with additional arguments (Optional)",
+	utils.Save:                  "Save log file",
 }
 
 var opt = []prompt.Suggest{

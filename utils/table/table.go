@@ -15,9 +15,28 @@ import (
 func Output(slice interface{}) {
 	coln, rows, err := parse(slice)
 	if err != nil {
-		log.Println("[-] ", err)
+		log.Println("[-]", err)
 	}
 	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader(coln)
+
+	for _, v := range rows {
+		table.Append(v)
+	}
+	table.Render()
+}
+
+func FileOutput(filename string, slice interface{}) {
+	coln, rows, err := parse(slice)
+	if err != nil {
+		log.Println("[-]", err)
+	}
+	file, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		log.Println("[-]", err)
+	}
+	defer file.Close()
+	table := tablewriter.NewWriter(file)
 	table.SetHeader(coln)
 
 	for _, v := range rows {
