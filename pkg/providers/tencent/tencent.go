@@ -9,6 +9,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cdb"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cos"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cvm"
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/dns"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/lighthouse"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
@@ -88,6 +89,9 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	light := &lighthouse.Driver{Credential: p.credential, Region: p.region}
 	lights, err := light.GetResource(ctx)
 	list.Hosts = append(list.Hosts, lights...)
+
+	dnsprovider := &dns.Driver{Credential: p.credential}
+	list.Domains, err = dnsprovider.GetDomains(ctx)
 
 	cdbprovider := cdb.Driver{Credential: p.credential, Region: p.region}
 	mysqls, err := cdbprovider.ListMySQL(ctx)
