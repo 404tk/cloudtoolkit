@@ -16,7 +16,7 @@ type Provider interface {
 	Resources(ctx context.Context) (Resources, error)
 	UserManagement(action, uname, pwd string)
 	BucketDump(action, bucketname string)
-	EventDump(sourceIp string)
+	EventDump(action, sourceIp string)
 }
 
 // NewResources creates a new resources structure
@@ -101,6 +101,7 @@ type SmsTemplate struct {
 }
 
 type Event struct {
+	Id        string
 	Name      string
 	Affected  string
 	API       string

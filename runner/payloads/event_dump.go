@@ -17,15 +17,16 @@ func (p EventDump) Run(ctx context.Context, config map[string]string) {
 		return
 	}
 
-	var sourceIp string
+	var action, sourceIp string
 	if metadata, ok := config["metadata"]; ok {
 		data := strings.Split(metadata, " ")
 		if len(data) >= 2 {
+			action = data[0]
 			sourceIp = data[1]
 		}
 	}
-	i.Providers.EventDump(sourceIp)
-	// log.Println("[+] Done.")
+	i.Providers.EventDump(action, sourceIp)
+	log.Println("[+] Done.")
 }
 
 func (p EventDump) Desc() string {

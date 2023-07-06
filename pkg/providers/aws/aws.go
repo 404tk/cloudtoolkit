@@ -132,4 +132,4 @@ func (p *Provider) BucketDump(action, bucketname string) {
 	}
 }
 
-func (p *Provider) EventDump(sourceIp string) {}
+func (p *Provider) EventDump(action, sourceIp string) {}

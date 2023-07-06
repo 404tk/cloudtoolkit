@@ -143,4 +143,4 @@ func (p *Provider) BucketDump(action, bucketname string) {
 	log.Println("[-] Not supported yet.")
 }
 
-func (p *Provider) EventDump(sourceIp string) {}
+func (p *Provider) EventDump(action, sourceIp string) {}

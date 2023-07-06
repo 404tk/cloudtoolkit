@@ -138,4 +138,4 @@ func (p *Provider) BucketDump(action, bucketname string) {
 	log.Println("[*] Recommended use https://cosbrowser.cloud.tencent.com/web")
 }
 
-func (p *Provider) EventDump(sourceIp string) {}
+func (p *Provider) EventDump(action, sourceIp string) {}

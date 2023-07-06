@@ -50,15 +50,17 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 			}
 			pageCount := int(math.Ceil(float64(response.TotalRecordCount) / 100))
 			for _, dbInstance := range response.Items.DBInstance {
-
-				_dbInstance := schema.Database{
+				_db := schema.Database{
 					DBInstanceId:  dbInstance.DBInstanceId,
 					Engine:        dbInstance.Engine,
 					EngineVersion: dbInstance.EngineVersion,
 					Region:        dbInstance.RegionId,
 				}
+				if dbInstance.DBInstanceNetType == "Internet" {
+					_db.Address = dbInstance.ConnectionString
+				}
 
-				list = append(list, _dbInstance)
+				list = append(list, _db)
 			}
 			if page == pageCount || pageCount == 0 {
 				break
