@@ -38,6 +38,7 @@ func (d *Driver) GetDomains(ctx context.Context) ([]schema.Domain, error) {
 		request.ResourceGroupId = resourceGroupId
 		response, err := client.DescribeDomains(request)
 		if err != nil {
+			log.Println("[-] Describe domains failed.")
 			return list, err
 		}
 		for _, domain := range response.Domains.Domain {

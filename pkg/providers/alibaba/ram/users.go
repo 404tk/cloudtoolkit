@@ -48,7 +48,7 @@ func (d *Driver) GetRamUser(ctx context.Context) ([]schema.User, error) {
 		listUsersRequest.Marker = marker
 		response, err := client.ListUsers(listUsersRequest)
 		if err != nil {
-			log.Println("[-] Enumerate RAM failed.")
+			log.Println("[-] List users failed.")
 			return list, err
 		}
 

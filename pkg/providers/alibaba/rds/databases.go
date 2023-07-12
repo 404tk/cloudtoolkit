@@ -45,7 +45,7 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 			describeDBInstancesRequest.PageNumber = requests.NewInteger(page)
 			response, err := client.DescribeDBInstances(describeDBInstancesRequest)
 			if err != nil {
-				log.Println("[-] Enumerate RDS failed.")
+				log.Println("[-] Describe database instances failed.")
 				return list, err
 			}
 			pageCount := int(math.Ceil(float64(response.TotalRecordCount) / 100))

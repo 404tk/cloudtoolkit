@@ -97,7 +97,8 @@ func (d *Driver) HandleEvents(eid string) {
 		v := strings.TrimSpace(id)
 		request.QueryParams[k] = v
 	}
-	request.QueryParams["MarkMissParam"] = "[{\"uuid\":\"ALL\",\"field\":\"tool_name\",\"operate\":\"strEqual\",\"fieldValue\":\"cloudtoolkit\"}]"
+	// MarkMissParam not work, looks like an api bug
+	// request.QueryParams["MarkMissParam"] = "[{\"uuid\":\"ALL\",\"field\":\"tool_name\",\"operate\":\"strEqual\",\"fieldValue\":\"cloudtoolkit\"}]"
 	request.QueryParams["MarkBatch"] = "true"
 	response, err := client.ProcessCommonRequest(request)
 	if err != nil {

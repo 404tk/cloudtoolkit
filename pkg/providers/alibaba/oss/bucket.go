@@ -36,7 +36,7 @@ func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	}
 	response, err := client.ListBuckets(oss.MaxKeys(1000))
 	if err != nil {
-		log.Println("[-] Enumerate OSS failed.")
+		log.Println("[-] List buckets failed.")
 		return list, err
 	}
 

@@ -12,6 +12,7 @@ import (
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ecs"
+	"github.com/aliyun/alibaba-cloud-sdk-go/services/vpc"
 )
 
 type Driver struct {
@@ -33,8 +34,9 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		return list, err
 	}
 	// check permission
-	req_vpc := ecs.CreateDescribeVpcsRequest()
-	_, err = client.DescribeVpcs(req_vpc)
+	vpc_client, _ := vpc.NewClientWithOptions("cn-hangzhou", sdk.NewConfig(), d.Cred)
+	req_vpc := vpc.CreateDescribeVpcsRequest()
+	_, err = vpc_client.DescribeVpcs(req_vpc)
 	if err != nil {
 		log.Println("[-] Describe vpcs failed.")
 		return list, err
