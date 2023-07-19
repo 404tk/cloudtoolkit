@@ -113,7 +113,7 @@ func (p *Provider) UserManagement(action, uname, pwd string) {
 	}
 }
 
-func (p *Provider) BucketDump(action, bucketname string) {
+func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
 	s3provider := &_s3.Driver{Session: p.session}
 	switch action {
 	case "list":
@@ -126,9 +126,20 @@ func (p *Provider) BucketDump(action, bucketname string) {
 		} else {
 			infos[bucketname] = *p.session.Config.Region
 		}
-		s3provider.ListObjects(infos)
+		s3provider.ListObjects(ctx, infos)
+	case "total":
+		var infos = make(map[string]string)
+		if bucketname == "all" {
+			buckets, _ := s3provider.GetBuckets(context.Background())
+			for _, b := range buckets {
+				infos[b.BucketName] = b.Region
+			}
+		} else {
+			infos[bucketname] = *p.session.Config.Region
+		}
+		s3provider.TotalObjects(ctx, infos)
 	default:
-		log.Println("[-] Only the `list` operation is supported.")
+		log.Println("[-] `list all` or `total all`.")
 	}
 }
 

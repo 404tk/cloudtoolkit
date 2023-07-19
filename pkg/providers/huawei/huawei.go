@@ -139,7 +139,7 @@ func (p *Provider) UserManagement(action, uname, pwd string) {
 	}
 }
 
-func (p *Provider) BucketDump(action, bucketname string) {
+func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
 	log.Println("[-] Not supported yet.")
 }
 

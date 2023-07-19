@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"reflect"
+	"strings"
 
 	"github.com/olekukonko/tablewriter"
 )
@@ -79,6 +80,9 @@ func parse(slice interface{}) (
 				continue
 			}
 			cv := fmt.Sprintf("%+v", v.FieldByName(cn).Interface())
+			if len(cv) > 40 {
+				cv = stringWrap(cv, 40)
+			}
 
 			if i == 0 {
 				coln = append(coln, ct)
@@ -103,4 +107,22 @@ func sliceconv(slice interface{}) ([]interface{}, error) {
 		r[i] = v.Index(i).Interface()
 	}
 	return r, nil
+}
+
+func stringWrap(s string, limit int) string {
+	strSlice := strings.Split(s, "")
+	var result string = ""
+
+	for len(strSlice) > 0 {
+		if len(strSlice) >= limit {
+			result = result + strings.Join(strSlice[:limit], "") + "\n"
+			strSlice = strSlice[limit:]
+		} else {
+			length := len(strSlice)
+			result = result + strings.Join(strSlice[:length], "")
+			strSlice = []string{}
+		}
+	}
+
+	return result
 }

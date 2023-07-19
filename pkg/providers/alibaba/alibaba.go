@@ -160,8 +160,34 @@ func (p *Provider) UserManagement(action, args_1, args_2 string) {
 	}
 }
 
-func (p *Provider) BucketDump(action, bucketname string) {
-	log.Println("[*] Recommended use https://github.com/aliyun/oss-browser")
+func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
+	ossdrvier := &_oss.Driver{Cred: p.cred, Region: p.region}
+	switch action {
+	case "list":
+		var infos = make(map[string]string)
+		if bucketname == "all" {
+			buckets, _ := ossdrvier.GetBuckets(context.Background())
+			for _, b := range buckets {
+				infos[b.BucketName] = b.Region
+			}
+		} else {
+			infos[bucketname] = p.region
+		}
+		ossdrvier.ListObjects(ctx, infos)
+	case "total":
+		var infos = make(map[string]string)
+		if bucketname == "all" {
+			buckets, _ := ossdrvier.GetBuckets(context.Background())
+			for _, b := range buckets {
+				infos[b.BucketName] = b.Region
+			}
+		} else {
+			infos[bucketname] = p.region
+		}
+		ossdrvier.TotalObjects(ctx, infos)
+	default:
+		log.Println("[-] `list all` or `total all`.")
+	}
 }
 
 func (p *Provider) EventDump(action, sourceIp string) {

@@ -3,6 +3,7 @@ package oss
 import (
 	"context"
 	"log"
+	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
@@ -14,6 +15,19 @@ type Driver struct {
 	Region string
 }
 
+func (d *Driver) NewClient() *oss.Client {
+	region := d.Region
+	if region == "all" {
+		region = "cn-hangzhou"
+	}
+	client, _ := oss.New(
+		"oss-"+region+".aliyuncs.com",
+		d.Cred.AccessKeyId,
+		d.Cred.AccessKeySecret,
+		oss.SecurityToken(d.Cred.AccessKeyStsToken))
+	return client
+}
+
 func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	list := schema.NewResources().Storages
 	select {
@@ -22,18 +36,7 @@ func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	default:
 		log.Println("[*] Start enumerating OSS ...")
 	}
-	region := d.Region
-	if region == "all" {
-		region = "cn-hangzhou"
-	}
-	client, err := oss.New(
-		"oss-"+region+".aliyuncs.com",
-		d.Cred.AccessKeyId,
-		d.Cred.AccessKeySecret,
-		oss.SecurityToken(d.Cred.AccessKeyStsToken))
-	if err != nil {
-		return list, err
-	}
+	client := d.NewClient()
 	response, err := client.ListBuckets(oss.MaxKeys(1000))
 	if err != nil {
 		log.Println("[-] List buckets failed.")
@@ -48,7 +51,7 @@ func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 		*/
 		_bucket := schema.Storage{
 			BucketName: bucket.Name,
-			Region:     bucket.Location,
+			Region:     strings.TrimPrefix(bucket.Location, "oss-"),
 		}
 		list = append(list, _bucket)
 	}

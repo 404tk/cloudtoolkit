@@ -25,7 +25,7 @@ func (p BucketDump) Run(ctx context.Context, config map[string]string) {
 			bucketname = data[1]
 		}
 	}
-	i.Providers.BucketDump(action, bucketname)
+	i.Providers.BucketDump(ctx, action, bucketname)
 	log.Println("[+] Done.")
 }
 

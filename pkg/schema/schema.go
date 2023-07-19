@@ -15,7 +15,7 @@ type Provider interface {
 	// Resources returns the provider for an resource deployment source.
 	Resources(ctx context.Context) (Resources, error)
 	UserManagement(action, uname, pwd string)
-	BucketDump(action, bucketname string)
+	BucketDump(ctx context.Context, action, bucketname string)
 	EventDump(action, sourceIp string)
 }
 
