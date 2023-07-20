@@ -2,6 +2,7 @@ package iam
 
 import (
 	"log"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/service/iam"
 )
@@ -10,17 +11,21 @@ func (d *Driver) DelUser() {
 	client := iam.New(d.Session)
 	err := deleteLoginProfile(client, d.Username)
 	if err != nil {
-		log.Printf("[-] Delete login profile failed: %s\n", err.Error())
-		return
+		log.Printf("[-] Delete login profile failed: %s\n", err)
+		if !strings.Contains(err.Error(), iam.ErrCodeNoSuchEntityException) {
+			return
+		}
 	}
 	err = detachUserPolicy(client, d.Username)
 	if err != nil {
-		log.Printf("[-] Remove policy from %s failed: %s\n", d.Username, err.Error())
-		return
+		log.Printf("[-] Remove policy from %s failed: %s\n", d.Username, err)
+		if !strings.Contains(err.Error(), iam.ErrCodeNoSuchEntityException) {
+			return
+		}
 	}
 	err = deleteUser(client, d.Username)
 	if err != nil {
-		log.Printf("[-] Delete user failed: %s\n", err.Error())
+		log.Printf("[-] Delete user failed: %s\n", err)
 		return
 	}
 	log.Printf("[+] Delete user %s success!\n", d.Username)

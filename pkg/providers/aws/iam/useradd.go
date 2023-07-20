@@ -12,12 +12,14 @@ func (d *Driver) AddUser() {
 	client := iam.New(d.Session)
 	accountArn, err := createUser(client, d.Username)
 	if err != nil {
-		log.Println("[-] Create user failed:", err.Error())
-		return
+		log.Println("[-] Create user failed:", err)
+		if !strings.Contains(err.Error(), iam.ErrCodeEntityAlreadyExistsException) {
+			return
+		}
 	}
 	err = createLoginProfile(client, d.Username, d.Password)
 	if err != nil {
-		log.Println("[-] Create login password failed:", err.Error())
+		log.Println("[-] Create login password failed:", err)
 		return
 	}
 	err = attachPolicyToUser(client, d.Username)
@@ -33,9 +35,9 @@ func (d *Driver) AddUser() {
 			url = fmt.Sprintf("https://%s.signin.aws.amazon.com/console", u[4])
 		}
 	}
-	fmt.Printf("\n%-10s\t%-10s\t%-60s\n", "Username", "Password", "Login URL")
-	fmt.Printf("%-10s\t%-10s\t%-60s\n", "--------", "--------", "---------")
-	fmt.Printf("%-10s\t%-10s\t%-60s\n\n", d.Username, d.Password, url)
+	fmt.Printf("\n%-10s\t%-20s\t%-60s\n", "Username", "Password", "Login URL")
+	fmt.Printf("%-10s\t%-20s\t%-60s\n", "--------", "--------", "---------")
+	fmt.Printf("%-10s\t%-20s\t%-60s\n\n", d.Username, d.Password, url)
 }
 
 func createUser(client *iam.IAM, userName string) (string, error) {

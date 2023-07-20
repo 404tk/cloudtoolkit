@@ -27,6 +27,13 @@ func RegionPrint(region string, count, prev int, flag bool) (int, bool) {
 	return len(progress), flag
 }
 
+func CountPrint(tag string, count, prev int) int {
+	progress := fmt.Sprintf("[%s] %d found.", tag, count)
+	progress += getBlock(prev, len(progress))
+	fmt.Printf("\r%s", progress)
+	return len(progress)
+}
+
 func getBlock(prev, index int) string {
 	if prev > index {
 		return strings.Repeat(" ", prev-index)

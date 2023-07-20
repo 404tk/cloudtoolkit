@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/404tk/cloudtoolkit/utils"
+	"github.com/404tk/cloudtoolkit/utils/processbar"
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 )
 
@@ -33,7 +35,7 @@ func (d *Driver) ListObjects(ctx context.Context, buckets map[string]string) {
 		fmt.Printf("%-70s\t%-10s\n", "---", "----")
 		for _, object := range resp.Objects {
 			fmt.Printf("%-70s\t%-10s\n",
-				object.Key, fmt.Sprintf("%v bytes", object.Size))
+				object.Key, utils.ParseBytes(object.Size))
 		}
 		fmt.Println()
 		select {
@@ -44,7 +46,15 @@ func (d *Driver) ListObjects(ctx context.Context, buckets map[string]string) {
 	}
 }
 
+/*
+	Recommended：
+		./ossutil64 du oss://examplebucket/dir/ --block-size GB
+	Links:
+		https://help.aliyun.com/document_detail/129732.html
+		https://github.com/aliyun/ossutil
+*/
 func (d *Driver) TotalObjects(ctx context.Context, buckets map[string]string) {
+	prevLength := 0
 	for b, r := range buckets {
 		var token string
 		count := 0
@@ -60,7 +70,7 @@ func (d *Driver) TotalObjects(ctx context.Context, buckets map[string]string) {
 			resp, err := bucket.ListObjectsV2(oss.MaxKeys(1000), oss.ContinuationToken(token))
 			if err != nil {
 				log.Printf("[-] List Objects in %s failed: %s\n", b, err)
-				continue
+				return
 			}
 
 			isTruncated = resp.IsTruncated
@@ -70,8 +80,9 @@ func (d *Driver) TotalObjects(ctx context.Context, buckets map[string]string) {
 			case <-ctx.Done():
 				return
 			default:
+				prevLength = processbar.CountPrint(b, count, prevLength)
 			}
 		}
-		log.Printf("[+] %s has %d objects.\n", b, count)
+		fmt.Printf("\r[+] %s has %d objects.\n", b, count)
 	}
 }

@@ -21,7 +21,7 @@ func (d *Driver) NewClient() *oss.Client {
 		region = "cn-hangzhou"
 	}
 	client, _ := oss.New(
-		"oss-"+region+".aliyuncs.com",
+		"https://oss-"+region+".aliyuncs.com",
 		d.Cred.AccessKeyId,
 		d.Cred.AccessKeySecret,
 		oss.SecurityToken(d.Cred.AccessKeyStsToken))

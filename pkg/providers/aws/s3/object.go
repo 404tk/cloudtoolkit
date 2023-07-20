@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/404tk/cloudtoolkit/utils"
+	"github.com/404tk/cloudtoolkit/utils/processbar"
 	"github.com/aws/aws-sdk-go/service/s3"
 )
 
@@ -30,7 +32,7 @@ func (d *Driver) ListObjects(ctx context.Context, buckets map[string]string) {
 		fmt.Printf("%-70s\t%-10s\n", "---", "----")
 		for _, object := range resp.Contents {
 			fmt.Printf("%-70s\t%-10s\n",
-				*object.Key, fmt.Sprintf("%v bytes", *object.Size))
+				*object.Key, utils.ParseBytes(*object.Size))
 		}
 		fmt.Println()
 		select {
@@ -42,6 +44,7 @@ func (d *Driver) ListObjects(ctx context.Context, buckets map[string]string) {
 }
 
 func (d *Driver) TotalObjects(ctx context.Context, buckets map[string]string) {
+	prevLength := 0
 	for b, r := range buckets {
 		var token *string
 		count := 0
@@ -68,8 +71,9 @@ func (d *Driver) TotalObjects(ctx context.Context, buckets map[string]string) {
 			case <-ctx.Done():
 				return
 			default:
+				prevLength = processbar.CountPrint(b, count, prevLength)
 			}
 		}
-		log.Printf("[+] %s has %d objects.\n", b, count)
+		fmt.Printf("\r[+] %s has %d objects.\n", b, count)
 	}
 }
