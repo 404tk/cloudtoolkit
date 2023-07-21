@@ -11,9 +11,8 @@ import (
 )
 
 type Driver struct {
-	Cred           *credentials.StsTokenCredential
-	Region         string
-	ResourceGroups []string
+	Cred   *credentials.StsTokenCredential
+	Region string
 }
 
 func (d *Driver) GetDomains(ctx context.Context) ([]schema.Domain, error) {
@@ -32,36 +31,33 @@ func (d *Driver) GetDomains(ctx context.Context) ([]schema.Domain, error) {
 	if err != nil {
 		return list, err
 	}
-	for _, resourceGroupId := range d.ResourceGroups {
-		request := alidns.CreateDescribeDomainsRequest()
-		request.Scheme = "https"
-		request.ResourceGroupId = resourceGroupId
-		response, err := client.DescribeDomains(request)
+	request := alidns.CreateDescribeDomainsRequest()
+	request.Scheme = "https"
+	response, err := client.DescribeDomains(request)
+	if err != nil {
+		log.Println("[-] Describe domains failed.")
+		return list, err
+	}
+	for _, domain := range response.Domains.Domain {
+		_domain := schema.Domain{
+			DomainName: domain.DomainName,
+		}
+		req := alidns.CreateDescribeDomainRecordsRequest()
+		req.Scheme = "https"
+		req.DomainName = domain.DomainName
+		resp, err := client.DescribeDomainRecords(req)
 		if err != nil {
-			log.Println("[-] Describe domains failed.")
 			return list, err
 		}
-		for _, domain := range response.Domains.Domain {
-			_domain := schema.Domain{
-				DomainName: domain.DomainName,
-			}
-			req := alidns.CreateDescribeDomainRecordsRequest()
-			req.Scheme = "https"
-			req.DomainName = domain.DomainName
-			resp, err := client.DescribeDomainRecords(req)
-			if err != nil {
-				return list, err
-			}
-			for _, record := range resp.DomainRecords.Record {
-				_domain.Records = append(_domain.Records, schema.Record{
-					RR:     record.RR,
-					Type:   record.Type,
-					Value:  record.Value,
-					Status: record.Status,
-				})
-			}
-			list = append(list, _domain)
+		for _, record := range resp.DomainRecords.Record {
+			_domain.Records = append(_domain.Records, schema.Record{
+				RR:     record.RR,
+				Type:   record.Type,
+				Value:  record.Value,
+				Status: record.Status,
+			})
 		}
+		list = append(list, _domain)
 	}
 
 	return list, nil

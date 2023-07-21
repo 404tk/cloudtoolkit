@@ -2,6 +2,7 @@ package ram
 
 import (
 	"log"
+	"strings"
 
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ram"
 )
@@ -10,12 +11,14 @@ func (d *Driver) DelUser() {
 	client := d.NewClient()
 	err := detachPolicyFromUser(client, d.UserName)
 	if err != nil {
-		log.Printf("[-] Remove policy from %s failed: %s\n", d.UserName, err.Error())
-		return
+		if !strings.Contains(err.Error(), "EntityNotExist") {
+			log.Printf("[-] Remove policy from %s failed: %s\n", d.UserName, err)
+			return
+		}
 	}
 	err = deleteUser(client, d.UserName)
 	if err != nil {
-		log.Printf("[-] Delete user %s failed: %s\n", d.UserName, err.Error())
+		log.Printf("[-] Delete user %s failed: %s\n", d.UserName, err)
 		return
 	}
 	log.Println("[+] Done.")

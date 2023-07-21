@@ -54,6 +54,12 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 						Public:      ip4 != "",
 						Region:      region,
 					}
+					for _, tag := range instance.Tags {
+						if *tag.Key == "aws:cloudformation:stack-name" || *tag.Key == "Name" {
+							host.HostName = *tag.Value
+							break
+						}
+					}
 					list = append(list, host)
 				}
 			}

@@ -21,16 +21,14 @@ import (
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/bssopenapi"
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/resourcemanager"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
 )
 
 // Provider is a data provider for alibaba API
 type Provider struct {
-	vendor         string
-	cred           *credentials.StsTokenCredential
-	region         string
-	resourceGroups []string
+	vendor string
+	cred   *credentials.StsTokenCredential
+	region string
 }
 
 // New creates a new provider client for alibaba API
@@ -94,17 +92,11 @@ func (p *Provider) Name() string {
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
-	getResourceGroups(p)
-	if len(p.resourceGroups) == 0 {
-		return list, fmt.Errorf("ResourceGroup not found.")
-	} else {
-		log.Printf("[*] Found %d ResourceGroups\n", len(p.resourceGroups))
-	}
 	var err error
-	ecsprovider := &_ecs.Driver{Cred: p.cred, Region: p.region, ResourceGroups: p.resourceGroups}
+	ecsprovider := &_ecs.Driver{Cred: p.cred, Region: p.region}
 	list.Hosts, err = ecsprovider.GetResource(ctx)
 
-	dnsprovider := &_dns.Driver{Cred: p.cred, Region: p.region, ResourceGroups: p.resourceGroups}
+	dnsprovider := &_dns.Driver{Cred: p.cred, Region: p.region}
 	list.Domains, err = dnsprovider.GetDomains(ctx)
 
 	ossprovider := &_oss.Driver{Cred: p.cred, Region: p.region}
@@ -113,29 +105,13 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	ramprovider := &_ram.Driver{Cred: p.cred, Region: p.region}
 	list.Users, err = ramprovider.GetRamUser(ctx)
 
-	rdsprovider := &_rds.Driver{Cred: p.cred, Region: p.region, ResourceGroups: p.resourceGroups}
+	rdsprovider := &_rds.Driver{Cred: p.cred, Region: p.region}
 	list.Databases, err = rdsprovider.GetDatabases(ctx)
 
 	smsprovider := &_sms.Driver{Cred: p.cred, Region: p.region}
 	list.Sms, err = smsprovider.GetResource(ctx)
 
 	return list, err
-}
-
-func getResourceGroups(p *Provider) {
-	rmClient, err := resourcemanager.NewClientWithOptions("cn-hangzhou", sdk.NewConfig(), p.cred)
-	if err != nil {
-		return
-	}
-	req_rm := resourcemanager.CreateListResourceGroupsRequest()
-	req_rm.Scheme = "https"
-	resp_rm, err := rmClient.ListResourceGroups(req_rm)
-	if err != nil {
-		return
-	}
-	for _, group := range resp_rm.ResourceGroups.ResourceGroup {
-		p.resourceGroups = append(p.resourceGroups, group.Id)
-	}
 }
 
 func (p *Provider) UserManagement(action, args_1, args_2 string) {

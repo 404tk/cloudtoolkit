@@ -11,15 +11,15 @@ func (d *Driver) DelUser() {
 	client := iam.New(d.Session)
 	err := deleteLoginProfile(client, d.Username)
 	if err != nil {
-		log.Printf("[-] Delete login profile failed: %s\n", err)
 		if !strings.Contains(err.Error(), iam.ErrCodeNoSuchEntityException) {
+			log.Printf("[-] Delete login profile failed: %s\n", err)
 			return
 		}
 	}
 	err = detachUserPolicy(client, d.Username)
 	if err != nil {
-		log.Printf("[-] Remove policy from %s failed: %s\n", d.Username, err)
 		if !strings.Contains(err.Error(), iam.ErrCodeNoSuchEntityException) {
+			log.Printf("[-] Remove policy from %s failed: %s\n", d.Username, err)
 			return
 		}
 	}

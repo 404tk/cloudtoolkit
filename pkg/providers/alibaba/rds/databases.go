@@ -13,9 +13,8 @@ import (
 )
 
 type Driver struct {
-	Cred           *credentials.StsTokenCredential
-	Region         string
-	ResourceGroups []string
+	Cred   *credentials.StsTokenCredential
+	Region string
 }
 
 func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
@@ -34,44 +33,39 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 	if err != nil {
 		return list, err
 	}
-	for _, resourceGroupId := range d.ResourceGroups {
-		page := 1
-		for {
-			describeDBInstancesRequest := rds.CreateDescribeDBInstancesRequest()
-			if resourceGroupId != "" {
-				describeDBInstancesRequest.ResourceGroupId = resourceGroupId
+	page := 1
+	for {
+		describeDBInstancesRequest := rds.CreateDescribeDBInstancesRequest()
+		describeDBInstancesRequest.PageSize = requests.NewInteger(100)
+		describeDBInstancesRequest.PageNumber = requests.NewInteger(page)
+		response, err := client.DescribeDBInstances(describeDBInstancesRequest)
+		if err != nil {
+			log.Println("[-] Describe database instances failed.")
+			return list, err
+		}
+		pageCount := int(math.Ceil(float64(response.TotalRecordCount) / 100))
+		for _, dbInstance := range response.Items.DBInstance {
+			_db := schema.Database{
+				DBInstanceId:  dbInstance.DBInstanceId,
+				Engine:        dbInstance.Engine,
+				EngineVersion: dbInstance.EngineVersion,
+				Region:        dbInstance.RegionId,
 			}
-			describeDBInstancesRequest.PageSize = requests.NewInteger(100)
-			describeDBInstancesRequest.PageNumber = requests.NewInteger(page)
-			response, err := client.DescribeDBInstances(describeDBInstancesRequest)
-			if err != nil {
-				log.Println("[-] Describe database instances failed.")
-				return list, err
+			if dbInstance.DBInstanceNetType == "Internet" {
+				_db.Address = dbInstance.ConnectionString
 			}
-			pageCount := int(math.Ceil(float64(response.TotalRecordCount) / 100))
-			for _, dbInstance := range response.Items.DBInstance {
-				_db := schema.Database{
-					DBInstanceId:  dbInstance.DBInstanceId,
-					Engine:        dbInstance.Engine,
-					EngineVersion: dbInstance.EngineVersion,
-					Region:        dbInstance.RegionId,
-				}
-				if dbInstance.DBInstanceNetType == "Internet" {
-					_db.Address = dbInstance.ConnectionString
-				}
 
-				list = append(list, _db)
-			}
-			if page == pageCount || pageCount == 0 {
-				break
-			}
-			page++
-			select {
-			case <-ctx.Done():
-				return list, nil
-			default:
-				continue
-			}
+			list = append(list, _db)
+		}
+		if page == pageCount || pageCount == 0 {
+			break
+		}
+		page++
+		select {
+		case <-ctx.Done():
+			return list, nil
+		default:
+			continue
 		}
 	}
 	return list, nil
