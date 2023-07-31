@@ -58,6 +58,7 @@ func (r *DefaultHttpRequest) ListZones(project string) ([]string, error) {
 	return zones, err
 }
 
+// https://cloud.google.com/compute/docs/reference/rest/v1/instances/list
 func (r *DefaultHttpRequest) ListInstances(project, zone string) ([]gjson.Result, error) {
 	r.Path = fmt.Sprintf("/compute/v1/projects/%s/zones/%s/instances", project, zone)
 

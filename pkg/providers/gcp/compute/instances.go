@@ -34,11 +34,14 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 				return list, err
 			}
 			for _, i := range instances {
-				_host := schema.Host{Region: i.Get("zone").String()}
+				_host := schema.Host{
+					HostName: i.Get("hostname").String(),
+					Region:   i.Get("zone").String(),
+				}
 				network := i.Get("networkInterfaces").Array()
 				for _, n := range network {
 					_host.PrivateIpv4 = n.Get("networkIP").String()
-					conf := n.Get("networkInterfaces").Array()
+					conf := n.Get("accessConfigs").Array()
 					for _, acc := range conf {
 						natIP := acc.Get("natIP").String()
 						if natIP != "" {

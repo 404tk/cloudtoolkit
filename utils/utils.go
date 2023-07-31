@@ -64,3 +64,16 @@ func ParseBytes(size int64) string {
 		return fmt.Sprintf("%.2f PB", float64(size)/float64(1024*1024*1024*1024*1024))
 	}
 }
+
+func WriteLog(filename string, msg string) {
+	var text = []byte(msg + "\n")
+	f, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		return
+	}
+	_, err = f.Write(text)
+	if err != nil {
+		return
+	}
+	f.Close()
+}

@@ -43,9 +43,9 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 			continue
 		}
 
-		for _, instances := range *response.Servers {
+		for _, instance := range *response.Servers {
 			var ipv4, privateIPv4 string
-			for _, instance := range instances.Addresses {
+			for _, instance := range instance.Addresses {
 				for _, addr := range instance {
 					if *addr.OSEXTIPStype == model.GetServerAddressOSEXTIPStypeEnum().FIXED {
 						privateIPv4 = addr.Addr
@@ -56,6 +56,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 				}
 			}
 			host := schema.Host{
+				HostName:    instance.Name,
 				PublicIPv4:  ipv4,
 				PrivateIpv4: privateIPv4,
 				Public:      ipv4 != "",

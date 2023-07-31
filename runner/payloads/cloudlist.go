@@ -36,6 +36,7 @@ func (p CloudList) Run(ctx context.Context, config map[string]string) {
 				fmt.Println(tag, "results:")
 				table.Output(res)
 				if utils.DoSave {
+					utils.WriteLog(path, tag+" results:")
 					table.FileOutput(path, res)
 				}
 			}

@@ -31,10 +31,12 @@ func FileOutput(filename string, slice interface{}) {
 	coln, rows, err := parse(slice)
 	if err != nil {
 		log.Println("[-]", err)
+		return
 	}
 	file, err := os.OpenFile(filename, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
 	if err != nil {
 		log.Println("[-]", err)
+		return
 	}
 	defer file.Close()
 	table := tablewriter.NewWriter(file)
@@ -51,11 +53,12 @@ func parse(slice interface{}) (
 	rows [][]string, // rows of content
 	err error,
 ) {
-
+	check := make(map[string]int)
 	s, err := sliceconv(slice)
 	if err != nil {
 		return
 	}
+	var _rows []map[int]string
 	for i, u := range s {
 		v := reflect.ValueOf(u)
 		t := reflect.TypeOf(u)
@@ -67,7 +70,8 @@ func parse(slice interface{}) (
 			err = errors.New("warning: table: items of slice should be on struct value")
 			return
 		}
-		var row []string
+		row := make(map[int]string)
+		index := 0
 		for n := 0; n < v.NumField(); n++ {
 			if t.Field(n).PkgPath != "" {
 				continue
@@ -80,15 +84,26 @@ func parse(slice interface{}) (
 				continue
 			}
 			cv := fmt.Sprintf("%+v", v.FieldByName(cn).Interface())
+			if len(cv) > 0 {
+				if i == 0 {
+					coln = append(coln, ct)
+				}
+				check[ct] = index
+			}
 			if len(cv) > 40 {
 				cv = stringWrap(cv, 40)
 			}
 
-			if i == 0 {
-				coln = append(coln, ct)
-			}
-
-			row = append(row, cv)
+			row[index] = cv
+			index += 1
+		}
+		_rows = append(_rows, row)
+	}
+	for _, r := range _rows {
+		var row []string
+		for _, name := range coln {
+			index := check[name]
+			row = append(row, r[index])
 		}
 		rows = append(rows, row)
 	}

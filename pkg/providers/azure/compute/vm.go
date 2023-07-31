@@ -38,7 +38,10 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 			}
 
 			for _, vm := range vmList {
-				_host := schema.Host{Region: *vm.Location}
+				_host := schema.Host{
+					HostName: *vm.Name,
+					Region:   *vm.Location,
+				}
 				nics := *vm.NetworkProfile.NetworkInterfaces
 				for _, nic := range nics {
 					res, err := azure.ParseResourceID(*nic.ID)
