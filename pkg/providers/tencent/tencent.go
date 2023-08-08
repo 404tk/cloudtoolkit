@@ -2,9 +2,9 @@ package tencent
 
 import (
 	"context"
-	"fmt"
 	"log"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/billing"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cam"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cdb"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cos"
@@ -14,7 +14,6 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
-	billing "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/billing/v20180709"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	sts "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sts/v20180813"
@@ -53,15 +52,6 @@ func New(options schema.Options) (*Provider, error) {
 	msg := "[+] Current account type: " + *response.Response.Type
 	// accountId, _ := strconv.Atoi(*response.Response.UserId)
 	cache.Cfg.CredInsert(*response.Response.Type, options)
-
-	// cpf.HttpProfile.Endpoint = "billing.tencentcloudapi.com"
-	client, _ := billing.NewClient(credential, "ap-guangzhou", cpf)
-	req_billing := billing.NewDescribeAccountBalanceRequest()
-	resp_billing, err := client.DescribeAccountBalance(req_billing)
-	if err == nil {
-		cash := *resp_billing.Response.RealBalance / 100
-		msg += fmt.Sprintf(", available cash amount: %v", cash)
-	}
 	log.Println(msg)
 
 	return &Provider{
@@ -81,33 +71,42 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
 	var err error
-
-	cvmprovider := &cvm.Driver{Credential: p.credential, Region: p.region}
-	cvms, err := cvmprovider.GetResource(ctx)
-	list.Hosts = append(list.Hosts, cvms...)
-
-	light := &lighthouse.Driver{Credential: p.credential, Region: p.region}
-	lights, err := light.GetResource(ctx)
-	list.Hosts = append(list.Hosts, lights...)
-
-	dnsprovider := &dns.Driver{Credential: p.credential}
-	list.Domains, err = dnsprovider.GetDomains(ctx)
-
-	cdbprovider := cdb.Driver{Credential: p.credential, Region: p.region}
-	mysqls, err := cdbprovider.ListMySQL(ctx)
-	list.Databases = append(list.Databases, mysqls...)
-	mariadbs, err := cdbprovider.ListMariaDB(ctx)
-	list.Databases = append(list.Databases, mariadbs...)
-	postgres, err := cdbprovider.ListPostgreSQL(ctx)
-	list.Databases = append(list.Databases, postgres...)
-	mssqls, err := cdbprovider.ListSQLServer(ctx)
-	list.Databases = append(list.Databases, mssqls...)
-
-	cosprovider := &cos.Driver{Credential: p.credential}
-	list.Storages, err = cosprovider.GetBuckets(ctx)
-
-	camprovider := &cam.Driver{Credential: p.credential}
-	list.Users, err = camprovider.GetCamUser(ctx)
+	for _, product := range utils.Cloudlist {
+		switch product {
+		case "balance":
+			d := &billing.Driver{Cred: p.credential, Region: p.region}
+			d.QueryAccountBalance(ctx)
+		case "host":
+			var cvms, lights []schema.Host
+			cvmprovider := &cvm.Driver{Credential: p.credential, Region: p.region}
+			cvms, err = cvmprovider.GetResource(ctx)
+			list.Hosts = append(list.Hosts, cvms...)
+			light := &lighthouse.Driver{Credential: p.credential, Region: p.region}
+			lights, err = light.GetResource(ctx)
+			list.Hosts = append(list.Hosts, lights...)
+		case "domain":
+			dnsprovider := &dns.Driver{Credential: p.credential}
+			list.Domains, err = dnsprovider.GetDomains(ctx)
+		case "account":
+			camprovider := &cam.Driver{Credential: p.credential}
+			list.Users, err = camprovider.GetCamUser(ctx)
+		case "database":
+			var mysqls, mariadbs, postgres, mssqls []schema.Database
+			cdbprovider := cdb.Driver{Credential: p.credential, Region: p.region}
+			mysqls, err = cdbprovider.ListMySQL(ctx)
+			list.Databases = append(list.Databases, mysqls...)
+			mariadbs, err = cdbprovider.ListMariaDB(ctx)
+			list.Databases = append(list.Databases, mariadbs...)
+			postgres, err = cdbprovider.ListPostgreSQL(ctx)
+			list.Databases = append(list.Databases, postgres...)
+			mssqls, err = cdbprovider.ListSQLServer(ctx)
+			list.Databases = append(list.Databases, mssqls...)
+		case "bucket":
+			cosprovider := &cos.Driver{Credential: p.credential}
+			list.Storages, err = cosprovider.GetBuckets(ctx)
+		default:
+		}
+	}
 
 	return list, err
 }

@@ -69,15 +69,20 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
 	var err error
-	cloudDNSProvider := &_dns.Driver{Projects: p.projects, Token: p.token}
-	list.Hosts, err = cloudDNSProvider.GetResource(ctx)
-
-	InstanceProvider := &_compute.Driver{Projects: p.projects, Token: p.token}
-	computes, _ := InstanceProvider.GetResource(ctx)
-	list.Hosts = append(list.Hosts, computes...)
-
-	saProvider := &_iam.Driver{Projects: p.projects, Token: p.token}
-	list.Users, err = saProvider.GetServiceAccounts(ctx)
+	for _, product := range utils.Cloudlist {
+		switch product {
+		case "host":
+			cloudDNSProvider := &_dns.Driver{Projects: p.projects, Token: p.token}
+			list.Hosts, err = cloudDNSProvider.GetResource(ctx)
+			InstanceProvider := &_compute.Driver{Projects: p.projects, Token: p.token}
+			computes, _ := InstanceProvider.GetResource(ctx)
+			list.Hosts = append(list.Hosts, computes...)
+		case "account":
+			saProvider := &_iam.Driver{Projects: p.projects, Token: p.token}
+			list.Users, err = saProvider.GetServiceAccounts(ctx)
+		default:
+		}
+	}
 
 	return list, err
 }

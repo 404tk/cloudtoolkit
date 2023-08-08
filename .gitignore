@@ -3,3 +3,4 @@
 go.sum
 temp/
 logs/
+config.yaml

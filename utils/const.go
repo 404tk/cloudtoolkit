@@ -8,7 +8,6 @@ const (
 	SecurityToken = "token"
 	Region        = "region"
 	Version       = "version"
-	Save          = "save"
 )
 
 const (
@@ -23,14 +22,14 @@ const (
 )
 
 const (
-	Metadata     = "metadata"
-	BackdoorUser = "add ctkguest 1QAZ2wsx@Asdlkj"
-	BucketDump   = "list all"
-	EventDump    = "dump all"
+	Metadata   = "metadata"
+	BucketDump = "list all"
+	EventDump  = "dump all"
 )
 
 var (
-	DoSave bool
-	LogDir = "logs"
-	IpInfo = "https://ipinfo.io/ip"
+	DoSave       bool
+	LogDir       string
+	Cloudlist    []string
+	BackdoorUser string
 )

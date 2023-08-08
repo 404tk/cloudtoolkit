@@ -13,10 +13,6 @@ builds:
     goarch:
       - amd64
       - arm64
-      - arm
-    goarm:
-      - 6
-      - 7
     flags:
       - -trimpath
       - -buildmode
@@ -52,8 +48,6 @@ archives:
     format: binary
     files:
       - none*
-    replacements:
-      amd64: x86_64
 checksum:
   name_template: 'checksums.txt'
 snapshot:

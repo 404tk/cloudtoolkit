@@ -2,7 +2,6 @@ package huawei
 
 import (
 	"context"
-	"fmt"
 	"log"
 
 	_bss "github.com/404tk/cloudtoolkit/pkg/providers/huawei/bss"
@@ -53,17 +52,12 @@ func New(options schema.Options) (*Provider, error) {
 	}
 	msg := "[+] Current user: " + userName
 	cache.Cfg.CredInsert(userName, options)
+	log.Println(msg)
 
 	auth := basic.NewCredentialsBuilder().
 		WithAk(accessKey).
 		WithSk(secretKey).
 		Build()
-
-	amount, err := _bss.QueryBalance(auth)
-	if err == nil {
-		msg += fmt.Sprintf(", available cash amount: %v", amount)
-	}
-	log.Println(msg)
 
 	defer func() {
 		if err := recover(); err != nil {
@@ -111,17 +105,26 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
 	var err error
-	ecsprovider := &ecs.Driver{Auth: p.auth, Regions: p.regions}
-	list.Hosts, err = ecsprovider.GetResource(ctx)
-
-	obsprovider := &_obs.Driver{Auth: p.auth, Regions: p.regions}
-	list.Storages, err = obsprovider.GetBuckets(ctx)
-
-	iamprovider := &_iam.Driver{Auth: p.auth, Regions: p.regions}
-	list.Users, err = iamprovider.GetIAMUser(ctx)
-
-	rdsprovider := &_rds.Driver{Auth: p.auth, Regions: p.regions}
-	list.Databases, err = rdsprovider.GetDatabases(ctx)
+	for _, product := range utils.Cloudlist {
+		switch product {
+		case "balance":
+			d := &_bss.Driver{Cred: p.auth, Region: p.regions[0]}
+			d.QueryAccountBalance(ctx)
+		case "host":
+			ecsprovider := &ecs.Driver{Auth: p.auth, Regions: p.regions}
+			list.Hosts, err = ecsprovider.GetResource(ctx)
+		case "account":
+			iamprovider := &_iam.Driver{Auth: p.auth, Regions: p.regions}
+			list.Users, err = iamprovider.GetIAMUser(ctx)
+		case "database":
+			rdsprovider := &_rds.Driver{Auth: p.auth, Regions: p.regions}
+			list.Databases, err = rdsprovider.GetDatabases(ctx)
+		case "bucket":
+			obsprovider := &_obs.Driver{Auth: p.auth, Regions: p.regions}
+			list.Storages, err = obsprovider.GetBuckets(ctx)
+		default:
+		}
+	}
 
 	return list, err
 }

@@ -88,14 +88,20 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
 	var err error
-	ec2provider := &_ec2.Driver{Session: p.session, Region: p.region}
-	list.Hosts, err = ec2provider.GetResource(ctx)
-
-	s3provider := &_s3.Driver{Session: p.session}
-	list.Storages, err = s3provider.GetBuckets(ctx)
-
-	iamprovider := &_iam.Driver{Session: p.session}
-	list.Users, err = iamprovider.GetIAMUser(ctx)
+	for _, product := range utils.Cloudlist {
+		switch product {
+		case "host":
+			ec2provider := &_ec2.Driver{Session: p.session, Region: p.region}
+			list.Hosts, err = ec2provider.GetResource(ctx)
+		case "account":
+			iamprovider := &_iam.Driver{Session: p.session}
+			list.Users, err = iamprovider.GetIAMUser(ctx)
+		case "bucket":
+			s3provider := &_s3.Driver{Session: p.session}
+			list.Storages, err = s3provider.GetBuckets(ctx)
+		default:
+		}
+	}
 
 	return list, err
 }

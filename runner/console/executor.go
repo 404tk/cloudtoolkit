@@ -108,14 +108,6 @@ func set(args []string) {
 			config[utils.Metadata] = utils.EventDump
 		}
 	}
-	if args[0] == utils.Save {
-		if args[1] == "true" {
-			utils.DoSave = true
-			utils.CheckLogDir()
-		} else {
-			utils.DoSave = false
-		}
-	}
 }
 
 func run(ctx context.Context) {

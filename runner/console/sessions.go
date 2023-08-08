@@ -79,16 +79,6 @@ func internation(uuid string) {
 	}
 	if provider, ok := m[utils.Provider]; ok {
 		config = m
-		if v, ok := config["save"]; ok {
-			if v == "true" {
-				utils.DoSave = true
-				utils.CheckLogDir()
-			} else {
-				utils.DoSave = false
-			}
-		} else {
-			set([]string{"save", "true"})
-		}
 		p := prompt.New(
 			Executor,
 			actionCompleter,

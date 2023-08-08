@@ -83,12 +83,18 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
 	var err error
-	vmProvider := &compute.Driver{SubscriptionIDs: p.SubscriptionIDs, Authorizer: p.Authorizer}
-	list.Hosts, err = vmProvider.GetResource(ctx)
-
-	storageProvider := &storage.Driver{
-		SubscriptionIDs: p.SubscriptionIDs, Authorizer: p.Authorizer}
-	list.Storages, err = storageProvider.GetStorages(ctx)
+	for _, product := range utils.Cloudlist {
+		switch product {
+		case "host":
+			vmProvider := &compute.Driver{SubscriptionIDs: p.SubscriptionIDs, Authorizer: p.Authorizer}
+			list.Hosts, err = vmProvider.GetResource(ctx)
+		case "bucket":
+			storageProvider := &storage.Driver{
+				SubscriptionIDs: p.SubscriptionIDs, Authorizer: p.Authorizer}
+			list.Storages, err = storageProvider.GetStorages(ctx)
+		default:
+		}
+	}
 
 	// adProvider := activeDirectory.ADProvider{Config: p.CredentialsConfig}
 	// list.Users, err = adProvider.GetActiveDirectory(ctx)

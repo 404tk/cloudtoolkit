@@ -9,6 +9,7 @@ import (
 
 func main() {
 	runner.ShowBanner()
+	runner.InitConfig()
 	p := prompt.New(
 		console.Executor,
 		console.Complete,

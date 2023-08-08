@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	_bss "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/bss"
 	_dns "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/dns"
 	_ecs "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/ecs"
 	_oss "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/oss"
@@ -20,7 +21,6 @@ import (
 	"github.com/404tk/cloudtoolkit/utils/table"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/bssopenapi"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
 )
 
@@ -64,16 +64,6 @@ func New(options schema.Options) (*Provider, error) {
 	}
 	msg := "[+] Current user: " + userName
 	cache.Cfg.CredInsert(userName, options)
-
-	bssclient, _ := bssopenapi.NewClientWithOptions("cn-hangzhou", sdk.NewConfig(), cred)
-	req_bss := bssopenapi.CreateQueryAccountBalanceRequest()
-	req_bss.Scheme = "https"
-	resp, err := bssclient.QueryAccountBalance(req_bss)
-	if err == nil {
-		if resp.Data.AvailableCashAmount != "" {
-			msg += ", available cash amount: " + resp.Data.AvailableCashAmount
-		}
-	}
 	log.Printf(msg)
 
 	return &Provider{
@@ -93,23 +83,32 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.vendor
 	var err error
-	ecsprovider := &_ecs.Driver{Cred: p.cred, Region: p.region}
-	list.Hosts, err = ecsprovider.GetResource(ctx)
-
-	dnsprovider := &_dns.Driver{Cred: p.cred, Region: p.region}
-	list.Domains, err = dnsprovider.GetDomains(ctx)
-
-	ossprovider := &_oss.Driver{Cred: p.cred, Region: p.region}
-	list.Storages, err = ossprovider.GetBuckets(ctx)
-
-	ramprovider := &_ram.Driver{Cred: p.cred, Region: p.region}
-	list.Users, err = ramprovider.GetRamUser(ctx)
-
-	rdsprovider := &_rds.Driver{Cred: p.cred, Region: p.region}
-	list.Databases, err = rdsprovider.GetDatabases(ctx)
-
-	smsprovider := &_sms.Driver{Cred: p.cred, Region: p.region}
-	list.Sms, err = smsprovider.GetResource(ctx)
+	for _, product := range utils.Cloudlist {
+		switch product {
+		case "balance":
+			d := &_bss.Driver{Cred: p.cred, Region: p.region}
+			d.QueryAccountBalance(ctx)
+		case "host":
+			ecsprovider := &_ecs.Driver{Cred: p.cred, Region: p.region}
+			list.Hosts, err = ecsprovider.GetResource(ctx)
+		case "domain":
+			dnsprovider := &_dns.Driver{Cred: p.cred, Region: p.region}
+			list.Domains, err = dnsprovider.GetDomains(ctx)
+		case "account":
+			ramprovider := &_ram.Driver{Cred: p.cred, Region: p.region}
+			list.Users, err = ramprovider.GetRamUser(ctx)
+		case "database":
+			rdsprovider := &_rds.Driver{Cred: p.cred, Region: p.region}
+			list.Databases, err = rdsprovider.GetDatabases(ctx)
+		case "bucket":
+			ossprovider := &_oss.Driver{Cred: p.cred, Region: p.region}
+			list.Storages, err = ossprovider.GetBuckets(ctx)
+		case "sms":
+			smsprovider := &_sms.Driver{Cred: p.cred, Region: p.region}
+			list.Sms, err = smsprovider.GetResource(ctx)
+		default:
+		}
+	}
 
 	return list, err
 }
