@@ -2,10 +2,10 @@ package sas
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
@@ -43,10 +43,10 @@ func (d *Driver) DumpEvents() ([]schema.Event, error) {
 		case "self":
 			ip, err := utils.HttpGet(utils.IpInfo)
 			if err != nil {
-				log.Println(err)
+				logger.Error(err)
 				return
 			}
-			log.Println("[*] Current export IP:", string(ip))
+			logger.Info("Current export IP:", string(ip))
 			request.SourceIp = string(ip)
 		default:
 			request.SourceIp = sourceIp
@@ -102,7 +102,7 @@ func (d *Driver) HandleEvents(eid string) {
 	request.QueryParams["MarkBatch"] = "true"
 	response, err := client.ProcessCommonRequest(request)
 	if err != nil {
-		log.Println("[-]", err)
+		logger.Error(err)
 		return
 	}
 	fmt.Println(response.GetHttpContentString())

@@ -2,10 +2,10 @@ package rds
 
 import (
 	"context"
-	"log"
 	"math"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
@@ -23,7 +23,7 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		log.Println("[*] Start enumerating RDS ...")
+		logger.Info("Start enumerating RDS ...")
 	}
 	region := d.Region
 	if region == "all" {
@@ -40,7 +40,7 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 		describeDBInstancesRequest.PageNumber = requests.NewInteger(page)
 		response, err := client.DescribeDBInstances(describeDBInstancesRequest)
 		if err != nil {
-			log.Println("[-] Describe database instances failed.")
+			logger.Error("Describe database instances failed.")
 			return list, err
 		}
 		pageCount := int(math.Ceil(float64(response.TotalRecordCount) / 100))

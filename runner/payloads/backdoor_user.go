@@ -2,10 +2,10 @@ package payloads
 
 import (
 	"context"
-	"log"
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/inventory"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
 type BackdoorUser struct{}
@@ -13,7 +13,7 @@ type BackdoorUser struct{}
 func (p BackdoorUser) Run(ctx context.Context, config map[string]string) {
 	i, err := inventory.New(config)
 	if err != nil {
-		log.Println(err)
+		logger.Error(err)
 		return
 	}
 	var action, args_1, args_2 string
@@ -29,7 +29,7 @@ func (p BackdoorUser) Run(ctx context.Context, config map[string]string) {
 	}
 
 	i.Providers.UserManagement(action, args_1, args_2)
-	// log.Println("[+] Done.")
+	// logger.Warning("Done.")
 }
 
 func (p BackdoorUser) Desc() string {

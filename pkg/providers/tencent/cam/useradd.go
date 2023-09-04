@@ -2,8 +2,8 @@ package cam
 
 import (
 	"fmt"
-	"log"
 
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	cam "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cam/v20190116"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
@@ -14,7 +14,7 @@ func (d *Driver) AddUser() {
 	client, _ := cam.NewClient(d.Credential, "", cpf)
 	err := createUser(client, d.UserName, d.Password)
 	if err != nil {
-		log.Println("[-] Create user failed:", err.Error())
+		logger.Error("Create user failed:", err.Error())
 		return
 	}
 	err = attachPolicyToUser(client, d.UserName)
@@ -58,7 +58,7 @@ func getOwnerUin(client *cam.Client) string {
 	request := cam.NewGetUserAppIdRequest()
 	response, err := client.GetUserAppId(request)
 	if err != nil {
-		log.Println("[-] Get user appid failed.")
+		logger.Error("Get user appid failed.")
 		return ""
 	}
 	return *response.Response.OwnerUin

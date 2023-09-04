@@ -2,9 +2,9 @@ package dns
 
 import (
 	"context"
-	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	dnspod "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/dnspod/v20210323"
@@ -20,7 +20,7 @@ func (d *Driver) GetDomains(ctx context.Context) ([]schema.Domain, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		log.Println("[*] Start enumerating DNS ...")
+		logger.Info("Start enumerating DNS ...")
 	}
 	cpf := profile.NewClientProfile()
 	//cpf.HttpProfile.Endpoint = "dnspod.tencentcloudapi.com"
@@ -28,7 +28,7 @@ func (d *Driver) GetDomains(ctx context.Context) ([]schema.Domain, error) {
 	request := dnspod.NewDescribeDomainListRequest()
 	response, err := client.DescribeDomainList(request)
 	if err != nil {
-		log.Println("[-] Enumerate CAM failed.")
+		logger.Error("Enumerate CAM failed.")
 		return list, err
 	}
 	for _, domain := range response.Response.DomainList {

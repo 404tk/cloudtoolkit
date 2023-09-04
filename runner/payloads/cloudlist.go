@@ -3,12 +3,12 @@ package payloads
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/404tk/cloudtoolkit/pkg/inventory"
 	"github.com/404tk/cloudtoolkit/utils"
-	"github.com/404tk/cloudtoolkit/utils/table"
+	"github.com/404tk/cloudtoolkit/utils/logger"
+	"github.com/404tk/table"
 )
 
 type CloudList struct{}
@@ -16,13 +16,13 @@ type CloudList struct{}
 func (p CloudList) Run(ctx context.Context, config map[string]string) {
 	i, err := inventory.New(config)
 	if err != nil {
-		log.Println(err)
+		logger.Error(err)
 		return
 	}
 
 	resources, err := i.Providers.Resources(ctx)
 	if err != nil {
-		log.Println("[Failed]", err.Error())
+		logger.Error(err)
 		// return
 	}
 	select {
@@ -52,12 +52,13 @@ func (p CloudList) Run(ctx context.Context, config map[string]string) {
 		pprint(len(resources.Sms.Signs), "SMS Signs", resources.Sms.Signs)
 		pprint(len(resources.Sms.Templates), "SMS Templates", resources.Sms.Templates)
 		if resources.Sms.DailySize > 0 {
-			fmt.Printf("[*] The total number of SMS messages sent today is %v.\n", resources.Sms.DailySize)
+			msg := fmt.Sprintf("The total number of SMS messages sent today is %v.\n", resources.Sms.DailySize)
+			logger.Info(msg)
 		}
 		if utils.DoSave {
-			log.Printf("[+] Output written to [%s]\n", path)
+			logger.Info(fmt.Sprintf("Output written to [%s]\n", path))
 		} else {
-			log.Println("[+] Done.")
+			logger.Warning("Done.")
 		}
 	}
 }

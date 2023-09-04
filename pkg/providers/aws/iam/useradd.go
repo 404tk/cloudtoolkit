@@ -2,9 +2,9 @@ package iam
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/aws/aws-sdk-go/service/iam"
 )
 
@@ -12,19 +12,19 @@ func (d *Driver) AddUser() {
 	client := iam.New(d.Session)
 	accountArn, err := createUser(client, d.Username)
 	if err != nil {
-		log.Println("[-] Create user failed:", err)
+		logger.Error("Create user failed:", err)
 		if !strings.Contains(err.Error(), iam.ErrCodeEntityAlreadyExistsException) {
 			return
 		}
 	}
 	err = createLoginProfile(client, d.Username, d.Password)
 	if err != nil {
-		log.Println("[-] Create login password failed:", err)
+		logger.Error("Create login password failed:", err)
 		return
 	}
 	err = attachPolicyToUser(client, d.Username)
 	if err != nil {
-		log.Println("[-] Grant AdministratorAccess policy failed.")
+		logger.Error("Grant AdministratorAccess policy failed.")
 		return
 	}
 	var url string

@@ -2,9 +2,9 @@ package sms
 
 import (
 	"fmt"
-	"log"
 	"time"
 
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/dysmsapi"
 )
@@ -34,7 +34,7 @@ func querySendDetails(client *dysmsapi.Client, phone string) {
 	request.PhoneNumber = phone
 	response, err := client.QuerySendDetails(request)
 	if err != nil {
-		log.Println(err)
+		logger.Error(err)
 		return
 	}
 	fmt.Printf("\n%-10s\t%-90s\n", "SendDate", "Content")

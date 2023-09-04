@@ -2,10 +2,10 @@ package cam
 
 import (
 	"context"
-	"log"
 	"strconv"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	cam "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cam/v20190116"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
@@ -25,7 +25,7 @@ func (d *Driver) GetCamUser(ctx context.Context) ([]schema.User, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		log.Println("[*] Start enumerating CAM ...")
+		logger.Info("Start enumerating CAM ...")
 	}
 	cpf := profile.NewClientProfile()
 	// cpf.HttpProfile.Endpoint = "cam.tencentcloudapi.com"
@@ -33,7 +33,7 @@ func (d *Driver) GetCamUser(ctx context.Context) ([]schema.User, error) {
 	listUsersRequest := cam.NewListUsersRequest()
 	listUsersResponse, err := client.ListUsers(listUsersRequest)
 	if err != nil {
-		log.Println("[-] Enumerate CAM failed.")
+		logger.Error("Enumerate CAM failed.")
 		return list, err
 	}
 	for _, user := range listUsersResponse.Response.Data {

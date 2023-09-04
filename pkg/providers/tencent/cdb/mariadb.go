@@ -3,9 +3,9 @@ package cdb
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	mariadb "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/mariadb/v20170312"
@@ -17,7 +17,7 @@ func (d *Driver) ListMariaDB(ctx context.Context) ([]schema.Database, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		log.Println("[*] Start enumerating MariaDB ...")
+		logger.Info("Start enumerating MariaDB ...")
 	}
 	cpf := profile.NewClientProfile()
 	var regions []string
@@ -26,7 +26,7 @@ func (d *Driver) ListMariaDB(ctx context.Context) ([]schema.Database, error) {
 		req := mariadb.NewDescribeSaleInfoRequest()
 		resp, err := client.DescribeSaleInfo(req)
 		if err != nil {
-			log.Println("[-] Enumerate MariaDB failed.")
+			logger.Error("Enumerate MariaDB failed.")
 			return list, err
 		}
 		for _, r := range resp.Response.RegionList {
@@ -43,7 +43,7 @@ func (d *Driver) ListMariaDB(ctx context.Context) ([]schema.Database, error) {
 		request := mariadb.NewDescribeDBInstancesRequest()
 		response, err := client.DescribeDBInstances(request)
 		if err != nil {
-			log.Println("[-] Enumerate MariaDB failed.")
+			logger.Error("Enumerate MariaDB failed.")
 			return list, err
 		}
 

@@ -3,9 +3,9 @@ package cvm
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
@@ -20,7 +20,7 @@ type Driver struct {
 // GetResource returns all the resources in the store for a provider.
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := schema.NewResources().Hosts
-	log.Println("[*] Start enumerating CVM ...")
+	logger.Info("Start enumerating CVM ...")
 	cpf := profile.NewClientProfile()
 	var regions []string
 	if d.Region == "all" {
@@ -28,7 +28,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		req := cvm.NewDescribeRegionsRequest()
 		resp, err := client.DescribeRegions(req)
 		if err != nil {
-			log.Println("[-] Enumerate CVM failed.")
+			logger.Error("Enumerate CVM failed.")
 			return list, err
 		}
 		for _, r := range resp.Response.RegionSet {
@@ -44,7 +44,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		request := cvm.NewDescribeInstancesRequest()
 		response, err := client.DescribeInstances(request)
 		if err != nil {
-			log.Println("[-] Enumerate CVM failed.")
+			logger.Error("Enumerate CVM failed.")
 			return list, err
 		}
 

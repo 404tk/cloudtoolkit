@@ -2,7 +2,8 @@ package payloads
 
 import (
 	"context"
-	"log"
+
+	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
 type Payload interface {
@@ -14,7 +15,7 @@ var Payloads = make(map[string]Payload)
 
 func registerPayload(pName string, p Payload) {
 	if _, ok := Payloads[pName]; ok {
-		log.Println("Payloads multiple registration:", pName)
+		logger.Error("Payloads multiple registration:", pName)
 	}
 	Payloads[pName] = p
 }

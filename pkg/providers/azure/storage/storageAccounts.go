@@ -2,9 +2,9 @@ package storage
 
 import (
 	"context"
-	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/Azure/azure-sdk-for-go/profiles/latest/storage/mgmt/storage"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure"
@@ -17,19 +17,19 @@ type Driver struct {
 
 func (d *Driver) GetStorages(ctx context.Context) ([]schema.Storage, error) {
 	list := schema.NewResources().Storages
-	log.Println("[*] Start enumerating Storage Accounts ...")
+	logger.Info("Start enumerating Storage Accounts ...")
 	for _, subscription := range d.SubscriptionIDs {
 		accountsClient := storage.NewAccountsClient(subscription)
 		accountsClient.Authorizer = d.Authorizer
 		accounts, err := accountsClient.List(ctx)
 		if err != nil {
-			log.Println("[-] List accounts failed.")
+			logger.Error("List accounts failed.")
 			return list, err
 		}
 		for _, account := range accounts.Values() {
 			accountId, err := azure.ParseResourceID(*account.ID)
 			if err != nil {
-				log.Println("[-] Parse resource ID failed.")
+				logger.Error("Parse resource ID failed.")
 				return list, err
 			}
 

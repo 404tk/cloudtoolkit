@@ -2,10 +2,10 @@ package cos
 
 import (
 	"context"
-	"log"
 	"net/http"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentyun/cos-go-sdk-v5"
 )
@@ -20,7 +20,7 @@ func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		log.Println("[*] Start enumerating COS ...")
+		logger.Info("Start enumerating COS ...")
 	}
 	client := cos.NewClient(nil, &http.Client{
 		Transport: &cos.AuthorizationTransport{
@@ -30,7 +30,7 @@ func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	})
 	buckets, _, err := client.Service.Get(ctx)
 	if err != nil {
-		log.Println("[-] Enumerate COS failed.")
+		logger.Error("Enumerate COS failed.")
 		return nil, err
 	}
 

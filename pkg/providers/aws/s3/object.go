@@ -3,9 +3,9 @@ package s3
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/404tk/cloudtoolkit/utils"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
 	"github.com/aws/aws-sdk-go/service/s3"
 )
@@ -18,15 +18,15 @@ func (d *Driver) ListObjects(ctx context.Context, buckets map[string]string) {
 		input := &s3.ListObjectsV2Input{Bucket: &b, MaxKeys: &limit}
 		resp, err := client.ListObjectsV2(input)
 		if err != nil {
-			log.Printf("[-] List Objects in %s failed: %s\n", b, err.Error())
+			logger.Error(fmt.Sprintf("List Objects in %s failed: %s\n", b, err.Error()))
 			continue
 		}
 
 		if len(resp.Contents) == 0 {
-			log.Printf("[-] No Objects found in %s.\n", b)
+			logger.Error(fmt.Sprintf("No Objects found in %s.\n", b))
 			continue
 		}
-		log.Printf("[+] %d objects found in %s.\n", len(resp.Contents), b)
+		logger.Warning(fmt.Sprintf("%d objects found in %s.\n", len(resp.Contents), b))
 
 		fmt.Printf("\n%-70s\t%-10s\n", "Key", "Size")
 		fmt.Printf("%-70s\t%-10s\n", "---", "----")
@@ -60,7 +60,7 @@ func (d *Driver) TotalObjects(ctx context.Context, buckets map[string]string) {
 			}
 			resp, err := client.ListObjectsV2(input)
 			if err != nil {
-				log.Printf("[-] List Objects in %s failed: %s\n", b, err)
+				logger.Error(fmt.Sprintf("List Objects in %s failed: %s\n", b, err))
 				return
 			}
 
@@ -74,6 +74,7 @@ func (d *Driver) TotalObjects(ctx context.Context, buckets map[string]string) {
 				prevLength = processbar.CountPrint(b, count, prevLength)
 			}
 		}
-		fmt.Printf("\r[+] %s has %d objects.\n", b, count)
+		fmt.Printf("\r")
+		logger.Warning(fmt.Sprintf("%s has %d objects.\n", b, count))
 	}
 }

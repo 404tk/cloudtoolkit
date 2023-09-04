@@ -2,9 +2,9 @@ package dns
 
 import (
 	"context"
-	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/alidns"
@@ -21,7 +21,7 @@ func (d *Driver) GetDomains(ctx context.Context) ([]schema.Domain, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		log.Println("[*] Start enumerating DNS ...")
+		logger.Info("Start enumerating DNS ...")
 	}
 	region := d.Region
 	if region == "all" {
@@ -35,7 +35,7 @@ func (d *Driver) GetDomains(ctx context.Context) ([]schema.Domain, error) {
 	request.Scheme = "https"
 	response, err := client.DescribeDomains(request)
 	if err != nil {
-		log.Println("[-] Describe domains failed.")
+		logger.Error("Describe domains failed.")
 		return list, err
 	}
 	for _, domain := range response.Domains.Domain {

@@ -2,9 +2,9 @@ package compute
 
 import (
 	"context"
-	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/Azure/azure-sdk-for-go/profiles/latest/compute/mgmt/compute"
 	"github.com/Azure/azure-sdk-for-go/profiles/latest/network/mgmt/network"
 
@@ -21,11 +21,11 @@ type Driver struct {
 // GetResource returns all the resources in the store for a provider.
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := schema.NewResources().Hosts
-	log.Println("[*] Start enumerating VM ...")
+	logger.Info("Start enumerating VM ...")
 
 	groups_map, err := fetchResouceGroups(ctx, d)
 	if err != nil {
-		log.Println("[-] Fetch resouce groups failed.")
+		logger.Error("Fetch resouce groups failed.")
 		return list, err
 	}
 
@@ -33,7 +33,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		for _, group := range groups {
 			vmList, err := fetchVMList(ctx, group, subscription, d.Authorizer)
 			if err != nil {
-				log.Println("[-] Fetch VM list failed.")
+				logger.Error("Fetch VM list failed.")
 				return nil, err
 			}
 
@@ -46,13 +46,13 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 				for _, nic := range nics {
 					res, err := azure.ParseResourceID(*nic.ID)
 					if err != nil {
-						log.Println("[-] Parse resource ID failed.")
+						logger.Error("Parse resource ID failed.")
 						return list, err
 					}
 
 					nicRes, err := fetchInterfacesList(ctx, group, res.ResourceName, subscription, d.Authorizer)
 					if err != nil {
-						log.Println("[-] Fetch interfaces list failed.")
+						logger.Error("Fetch interfaces list failed.")
 						return list, err
 					}
 					ipConfigs := *nicRes.IPConfigurations

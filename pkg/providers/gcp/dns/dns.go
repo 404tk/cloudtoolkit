@@ -2,10 +2,11 @@ package dns
 
 import (
 	"context"
-	"log"
+	"fmt"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/gcp/request"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/tidwall/gjson"
 )
 
@@ -16,7 +17,7 @@ type Driver struct {
 
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := schema.NewResources().Hosts
-	log.Println("[*] Start enumerating DNS ...")
+	logger.Info("Start enumerating DNS ...")
 	r := &request.DefaultHttpRequest{
 		Endpoint: "dns.googleapis.com",
 		Method:   "GET",
@@ -26,13 +27,13 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	for _, project := range d.Projects {
 		zones, err := r.ListManagedZones(project)
 		if err != nil {
-			log.Printf("[-] List %s zones failed: %s.\n", project, err.Error())
+			logger.Error(fmt.Sprintf("List %s zones failed: %s.\n", project, err.Error()))
 			return list, err
 		}
 		for _, z := range zones {
 			resources, err := r.ListRRSets(project, z)
 			if err != nil {
-				log.Printf("[-] List projects/%s/managedZones/%s/rrsets failed: %s\n", project, z, err.Error())
+				logger.Error(fmt.Sprintf("List projects/%s/managedZones/%s/rrsets failed: %s\n", project, z, err.Error()))
 				return list, err
 			}
 			items := d.parseRecordsForResourceSet(resources, z)

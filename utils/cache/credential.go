@@ -3,9 +3,9 @@ package cache
 import (
 	"encoding/base64"
 	"encoding/json"
-	"log"
 
 	"github.com/404tk/cloudtoolkit/utils"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
 type Credential struct {
@@ -30,7 +30,7 @@ func (cfg *InitCfg) CredInsert(user string, data map[string]string) {
 
 	b, err := json.Marshal(data)
 	if err != nil {
-		log.Println("[-] Map to json failed:", err.Error())
+		logger.Error("Map to json failed:", err.Error())
 		return
 	}
 

@@ -1,9 +1,8 @@
 package plugins
 
 import (
-	"log"
-
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
 type Provider interface {
@@ -15,7 +14,7 @@ var Providers = make(map[string]Provider)
 
 func registerProvider(pName string, p Provider) {
 	if _, ok := Providers[pName]; ok {
-		log.Println("Provider multiple registration:", pName)
+		logger.Error("Provider multiple registration:", pName)
 	}
 	Providers[pName] = p
 }

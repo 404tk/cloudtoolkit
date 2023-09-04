@@ -2,7 +2,6 @@ package huawei
 
 import (
 	"context"
-	"log"
 
 	_bss "github.com/404tk/cloudtoolkit/pkg/providers/huawei/bss"
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/ecs"
@@ -12,6 +11,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
 	iam "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3/model"
@@ -50,9 +50,9 @@ func New(options schema.Options) (*Provider, error) {
 	if err != nil {
 		return nil, err
 	}
-	msg := "[+] Current user: " + userName
+	msg := "Current user: " + userName
 	cache.Cfg.CredInsert(userName, options)
-	log.Println(msg)
+	logger.Warning(msg)
 
 	auth := basic.NewCredentialsBuilder().
 		WithAk(accessKey).
@@ -61,7 +61,7 @@ func New(options schema.Options) (*Provider, error) {
 
 	defer func() {
 		if err := recover(); err != nil {
-			log.Println(err)
+			logger.Error(err)
 		}
 	}()
 
@@ -76,7 +76,7 @@ func New(options schema.Options) (*Provider, error) {
 		req := &model.KeystoneListRegionsRequest{}
 		resp, err := client.KeystoneListRegions(req)
 		if err != nil {
-			log.Println("[-] List regions failed.")
+			logger.Error("List regions failed.")
 			return nil, err
 		}
 		for _, r := range *resp.Regions {
@@ -138,12 +138,12 @@ func (p *Provider) UserManagement(action, uname, pwd string) {
 	case "del":
 		r.DelUser()
 	default:
-		log.Println("[-] Please set metadata like \"add username password\" or \"del username\"")
+		logger.Error("Please set metadata like \"add username password\" or \"del username\"")
 	}
 }
 
 func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
-	log.Println("[-] Not supported yet.")
+	logger.Error("Not supported yet.")
 }
 
 func (p *Provider) EventDump(action, sourceIp string) {}

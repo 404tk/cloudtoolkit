@@ -2,10 +2,11 @@ package compute
 
 import (
 	"context"
-	"log"
+	"fmt"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/gcp/request"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
 type Driver struct {
@@ -15,7 +16,7 @@ type Driver struct {
 
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := schema.NewResources().Hosts
-	log.Println("[*] Start enumerating Compute ...")
+	logger.Info("Start enumerating Compute ...")
 	r := &request.DefaultHttpRequest{
 		Endpoint: "compute.googleapis.com",
 		Method:   "GET",
@@ -24,13 +25,13 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	for _, project := range d.Projects {
 		zones, err := r.ListZones(project)
 		if err != nil {
-			log.Printf("[-] List %s zones failed: %s.\n", project, err.Error())
+			logger.Error(fmt.Sprintf("List %s zones failed: %s.\n", project, err.Error()))
 			return list, err
 		}
 		for _, z := range zones {
 			instances, err := r.ListInstances(project, z)
 			if err != nil {
-				log.Printf("[-] List projects/%s/zones/%s/instances failed: %s\n", project, z, err.Error())
+				logger.Error(fmt.Sprintf("List projects/%s/zones/%s/instances failed: %s\n", project, z, err.Error()))
 				return list, err
 			}
 			for _, i := range instances {

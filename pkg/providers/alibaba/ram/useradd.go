@@ -2,8 +2,8 @@ package ram
 
 import (
 	"fmt"
-	"log"
 
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ram"
 )
 
@@ -11,17 +11,17 @@ func (d *Driver) AddUser() {
 	client := d.NewClient()
 	err := createUser(client, d.UserName)
 	if err != nil {
-		log.Println("[-] Create user failed:", err.Error())
+		logger.Error("Create user failed:", err.Error())
 		return
 	}
 	err = createLoginProfile(client, d.UserName, d.PassWord)
 	if err != nil {
-		log.Println("[-] Create login password failed:", err.Error())
+		logger.Error("Create login password failed:", err.Error())
 		return
 	}
 	err = attachPolicyToUser(client, d.UserName)
 	if err != nil {
-		log.Println("[-] Grant AdministratorAccess policy failed.")
+		logger.Error("Grant AdministratorAccess policy failed.")
 		return
 	}
 	accountAlias := getAccountAlias(client)
@@ -64,7 +64,7 @@ func getAccountAlias(client *ram.Client) string {
 	request.Scheme = "https"
 	response, err := client.GetAccountAlias(request)
 	if err != nil {
-		log.Println("[-] Get account alias failed.")
+		logger.Error("Get account alias failed.")
 		return ""
 	}
 	return response.AccountAlias

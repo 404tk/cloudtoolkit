@@ -2,9 +2,9 @@ package obs
 
 import (
 	"context"
-	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
 )
@@ -20,18 +20,18 @@ func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		log.Println("[*] Start enumerating OBS ...")
+		logger.Info("Start enumerating OBS ...")
 	}
 	endPoint := "obs." + d.Regions[0] + ".myhuaweicloud.com"
 	client, err := obs.New(d.Auth.AK, d.Auth.SK, endPoint)
 	if err != nil {
-		log.Println("[-] Enumerate OBS failed.")
+		logger.Error("Enumerate OBS failed.")
 		return nil, err
 	}
 
 	response, err := client.ListBuckets(nil)
 	if err != nil {
-		log.Println("[-] Enumerate OBS failed.")
+		logger.Error("Enumerate OBS failed.")
 		return list, err
 	}
 

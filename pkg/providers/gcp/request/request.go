@@ -1,7 +1,7 @@
 package request
 
 import (
-	"io/ioutil"
+	"io"
 	"net/http"
 	"time"
 )
@@ -28,6 +28,6 @@ func (req *DefaultHttpRequest) DoGetRequest() ([]byte, error) {
 	}
 	defer res.Body.Close()
 
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	return body, err
 }

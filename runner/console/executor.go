@@ -3,7 +3,6 @@ package console
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/signal"
 	"sort"
@@ -11,6 +10,7 @@ import (
 	"github.com/404tk/cloudtoolkit/runner/payloads"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
 func Executor(s string) {
@@ -114,6 +114,6 @@ func run(ctx context.Context) {
 	if v, ok := payloads.Payloads[config[utils.Payload]]; ok {
 		v.Run(ctx, config)
 	} else {
-		log.Println("[-] Please type `show payloads` to confirm the required payload.")
+		logger.Error("Please type `show payloads` to confirm the required payload.")
 	}
 }

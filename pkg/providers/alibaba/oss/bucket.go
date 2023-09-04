@@ -2,10 +2,10 @@ package oss
 
 import (
 	"context"
-	"log"
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 )
@@ -34,12 +34,12 @@ func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		log.Println("[*] Start enumerating OSS ...")
+		logger.Info("Start enumerating OSS ...")
 	}
 	client := d.NewClient()
 	response, err := client.ListBuckets(oss.MaxKeys(1000))
 	if err != nil {
-		log.Println("[-] List buckets failed.")
+		logger.Error("List buckets failed.")
 		return list, err
 	}
 

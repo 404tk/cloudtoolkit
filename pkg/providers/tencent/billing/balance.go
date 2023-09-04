@@ -2,8 +2,9 @@ package billing
 
 import (
 	"context"
-	"log"
+	"fmt"
 
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	billing "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/billing/v20180709"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
@@ -31,6 +32,6 @@ func (d *Driver) QueryAccountBalance(ctx context.Context) {
 	resp_billing, err := client.DescribeAccountBalance(req_billing)
 	if err == nil {
 		cash := *resp_billing.Response.RealBalance / 100
-		log.Printf("[+] Available cash amount: %v\n", cash)
+		logger.Warning(fmt.Sprintf("Available cash amount: %v\n", cash))
 	}
 }

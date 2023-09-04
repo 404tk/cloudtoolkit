@@ -2,8 +2,8 @@ package ram
 
 import (
 	"fmt"
-	"log"
 
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ram"
 )
 
@@ -11,12 +11,12 @@ func (d *Driver) AddRole() {
 	client := d.NewClient()
 	err := createRole(client, d.RoleName, d.AccountId)
 	if err != nil {
-		log.Println("[-] Create role failed:", err.Error())
+		logger.Error("Create role failed:", err.Error())
 		return
 	}
 	err = attachPolicyToRole(client, d.RoleName)
 	if err != nil {
-		log.Println("[-] Grant AdministratorAccess policy failed.")
+		logger.Error("Grant AdministratorAccess policy failed.")
 		return
 	}
 	accountAlias := getAccountAlias(client)

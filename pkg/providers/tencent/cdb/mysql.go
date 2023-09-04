@@ -3,9 +3,9 @@ package cdb
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
 	cdb "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cdb/v20170320"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
@@ -23,7 +23,7 @@ func (d *Driver) ListMySQL(ctx context.Context) ([]schema.Database, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		log.Println("[*] Start enumerating MySQL ...")
+		logger.Info("Start enumerating MySQL ...")
 	}
 	cpf := profile.NewClientProfile()
 	var regions []string
@@ -32,7 +32,7 @@ func (d *Driver) ListMySQL(ctx context.Context) ([]schema.Database, error) {
 		req := cdb.NewDescribeCdbZoneConfigRequest()
 		resp, err := client.DescribeCdbZoneConfig(req)
 		if err != nil {
-			log.Println("[-] Enumerate MySQL failed.")
+			logger.Error("Enumerate MySQL failed.")
 			return list, err
 		}
 		for _, r := range resp.Response.DataResult.Regions {
@@ -49,7 +49,7 @@ func (d *Driver) ListMySQL(ctx context.Context) ([]schema.Database, error) {
 		request := cdb.NewDescribeDBInstancesRequest()
 		response, err := client.DescribeDBInstances(request)
 		if err != nil {
-			log.Println("[-] Enumerate MySQL failed.")
+			logger.Error("Enumerate MySQL failed.")
 			return list, err
 		}
 

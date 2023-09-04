@@ -2,8 +2,8 @@ package cam
 
 import (
 	"fmt"
-	"log"
 
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	cam "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cam/v20190116"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
@@ -14,12 +14,14 @@ func (d *Driver) AddRole() {
 	client, _ := cam.NewClient(d.Credential, "", cpf)
 	err := createRole(client, d.RoleName, d.Uin)
 	if err != nil {
-		log.Println("[-] Create role failed:", err.Error())
+		logger.Error("Create role failed:", err.Error())
 		return
 	}
 	err = attachPolicyToRole(client, d.RoleName)
 	OwnerID := getOwnerUin(client)
-	log.Printf("[+] Switch URL: https://cloud.tencent.com/cam/switchrole?ownerUin=%s&roleName=%s\n", OwnerID, d.RoleName)
+	logger.Warning(fmt.Sprintf(
+		"Switch URL: https://cloud.tencent.com/cam/switchrole?ownerUin=%s&roleName=%s\n",
+		OwnerID, d.RoleName))
 }
 
 func createRole(client *cam.Client, roleName, uin string) error {

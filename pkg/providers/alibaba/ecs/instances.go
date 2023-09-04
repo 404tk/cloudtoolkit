@@ -3,10 +3,10 @@ package ecs
 import (
 	"context"
 	"fmt"
-	"log"
 	"math"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
@@ -23,7 +23,7 @@ type Driver struct {
 // GetResource returns all the resources in the store for a provider.
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := schema.NewResources().Hosts
-	log.Println("[*] Start enumerating ECS ...")
+	logger.Info("Start enumerating ECS ...")
 	region := d.Region
 	if region == "all" {
 		region = "cn-hangzhou"
@@ -37,7 +37,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	req_vpc := vpc.CreateDescribeVpcsRequest()
 	_, err = vpc_client.DescribeVpcs(req_vpc)
 	if err != nil {
-		log.Println("[-] Describe vpcs failed.")
+		logger.Error("Describe vpcs failed.")
 		return list, err
 	}
 	var regions []string
@@ -45,7 +45,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		req := ecs.CreateDescribeRegionsRequest()
 		resp, err := client.DescribeRegions(req)
 		if err != nil {
-			log.Println("[-] Describe regions failed.")
+			logger.Error("Describe regions failed.")
 			return list, err
 		}
 		for _, r := range resp.Regions.Region {

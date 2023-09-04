@@ -2,9 +2,9 @@ package iam
 
 import (
 	"context"
-	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/global"
 	iam "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3"
@@ -25,7 +25,7 @@ func (d *Driver) GetIAMUser(ctx context.Context) ([]schema.User, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		log.Println("[*] Start enumerating IAM user ...")
+		logger.Info("Start enumerating IAM user ...")
 	}
 	auth := global.NewCredentialsBuilder().
 		WithAk(d.Auth.AK).
@@ -38,7 +38,7 @@ func (d *Driver) GetIAMUser(ctx context.Context) ([]schema.User, error) {
 	keystoneListUsersRequest := &model.KeystoneListUsersRequest{}
 	keystoneListUsersResponse, err := client.KeystoneListUsers(keystoneListUsersRequest)
 	if err != nil {
-		log.Println("[-] Enumerate IAM failed.")
+		logger.Error("Enumerate IAM failed.")
 		return list, err
 	}
 

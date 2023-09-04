@@ -2,7 +2,6 @@ package tencent
 
 import (
 	"context"
-	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/billing"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cam"
@@ -14,6 +13,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	sts "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sts/v20180813"
@@ -49,10 +49,10 @@ func New(options schema.Options) (*Provider, error) {
 	if err != nil {
 		return nil, err
 	}
-	msg := "[+] Current account type: " + *response.Response.Type
+	msg := "Current account type: " + *response.Response.Type
 	// accountId, _ := strconv.Atoi(*response.Response.UserId)
 	cache.Cfg.CredInsert(*response.Response.Type, options)
-	log.Println(msg)
+	logger.Warning(msg)
 
 	return &Provider{
 		vendor:     "tencent",
@@ -129,12 +129,12 @@ func (p *Provider) UserManagement(action, args_1, args_2 string) {
 		c.RoleName = args_1
 		c.DelRole()
 	default:
-		log.Println("[-] Please set metadata like \"add username password\" or \"del username\"")
+		logger.Error("Please set metadata like \"add username password\" or \"del username\"")
 	}
 }
 
 func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
-	log.Println("[*] Recommended use https://cosbrowser.cloud.tencent.com/web")
+	logger.Info("Recommended use https://cosbrowser.cloud.tencent.com/web")
 }
 
 func (p *Provider) EventDump(action, sourceIp string) {}

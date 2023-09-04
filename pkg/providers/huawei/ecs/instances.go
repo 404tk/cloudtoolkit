@@ -3,9 +3,9 @@ package ecs
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
 	_region "github.com/huaweicloud/huaweicloud-sdk-go-v3/core/region"
@@ -22,7 +22,7 @@ type Driver struct {
 // GetResource returns all the resources in the store for a provider.
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := schema.NewResources().Hosts
-	log.Println("[*] Start enumerating ECS ...")
+	logger.Info("Start enumerating ECS ...")
 	flag := false
 	prevLength := 0
 	for _, r := range d.Regions {
@@ -38,7 +38,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		request := &model.ListServersDetailsRequest{}
 		response, err := client.ListServersDetails(request)
 		if err != nil {
-			// log.Println("[-] Enumerate ECS failed.")
+			// logger.Error("Enumerate ECS failed.")
 			// return list, err
 			continue
 		}

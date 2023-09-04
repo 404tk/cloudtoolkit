@@ -2,10 +2,10 @@ package iam
 
 import (
 	"context"
-	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/gcp/request"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
 type Driver struct {
@@ -15,7 +15,7 @@ type Driver struct {
 
 func (d *Driver) GetServiceAccounts(ctx context.Context) ([]schema.User, error) {
 	list := schema.NewResources().Users
-	log.Println("[*] Start enumerating IAM ...")
+	logger.Info("Start enumerating IAM ...")
 	r := &request.DefaultHttpRequest{
 		Endpoint: "iam.googleapis.com",
 		Method:   "GET",
@@ -25,7 +25,7 @@ func (d *Driver) GetServiceAccounts(ctx context.Context) ([]schema.User, error) 
 		// https://console.cloud.google.com/apis/api/iam.googleapis.com/metrics
 		accounts, err := r.ListServiceAccounts(project)
 		if err != nil {
-			log.Println("[-] List Service Accounts failed.")
+			logger.Error("List Service Accounts failed.")
 			return list, err
 		}
 

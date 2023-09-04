@@ -3,7 +3,6 @@ package alibaba
 import (
 	"context"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
@@ -18,7 +17,8 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
-	"github.com/404tk/cloudtoolkit/utils/table"
+	"github.com/404tk/cloudtoolkit/utils/logger"
+	"github.com/404tk/table"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
@@ -62,9 +62,9 @@ func New(options schema.Options) (*Provider, error) {
 			userName = u[1]
 		}
 	}
-	msg := "[+] Current user: " + userName
+	msg := "Current user: " + userName
 	cache.Cfg.CredInsert(userName, options)
-	log.Printf(msg)
+	logger.Warning(msg)
 
 	return &Provider{
 		vendor: "alibaba",
@@ -131,7 +131,7 @@ func (p *Provider) UserManagement(action, args_1, args_2 string) {
 		r.RoleName = args_1
 		r.DelRole()
 	default:
-		log.Println("[-] Please set metadata like \"add username password\" or \"del username\"")
+		logger.Error("Please set metadata like \"add username password\" or \"del username\"")
 	}
 }
 
@@ -161,7 +161,7 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
 		}
 		ossdrvier.TotalObjects(ctx, infos)
 	default:
-		log.Println("[-] `list all` or `total all`.")
+		logger.Error("`list all` or `total all`.")
 	}
 }
 
@@ -171,7 +171,7 @@ func (p *Provider) EventDump(action, sourceIp string) {
 	case "dump":
 		events, err := d.DumpEvents()
 		if err != nil {
-			log.Println("[-]", err)
+			logger.Error(err)
 			return
 		}
 		if len(events) == 0 {
@@ -182,11 +182,12 @@ func (p *Provider) EventDump(action, sourceIp string) {
 			filename := time.Now().Format("20060102150405.log")
 			path := fmt.Sprintf("%s/%s_eventdump_%s", utils.LogDir, p.Name(), filename)
 			table.FileOutput(path, events)
-			log.Printf("[+] Output written to [%s]\n", path)
+			msg := fmt.Sprintf("Output written to [%s]\n", path)
+			logger.Info(msg)
 		}
 	case "whitelist":
 		d.HandleEvents(sourceIp) // sourceIp here means SecurityEventIds
 	default:
-		log.Println("[-] Please set metadata like \"dump all\"")
+		logger.Error("Please set metadata like \"dump all\"")
 	}
 }

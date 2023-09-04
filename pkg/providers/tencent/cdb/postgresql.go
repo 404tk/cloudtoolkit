@@ -3,9 +3,9 @@ package cdb
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	postgres "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/postgres/v20170312"
@@ -17,7 +17,7 @@ func (d *Driver) ListPostgreSQL(ctx context.Context) ([]schema.Database, error) 
 	case <-ctx.Done():
 		return list, nil
 	default:
-		log.Println("[*] Start enumerating PostgreSQL ...")
+		logger.Info("Start enumerating PostgreSQL ...")
 	}
 	cpf := profile.NewClientProfile()
 	var regions []string
@@ -26,7 +26,7 @@ func (d *Driver) ListPostgreSQL(ctx context.Context) ([]schema.Database, error) 
 		req := postgres.NewDescribeRegionsRequest()
 		resp, err := client.DescribeRegions(req)
 		if err != nil {
-			log.Println("[-] Enumerate PostgreSQL failed:", err)
+			logger.Error("Enumerate PostgreSQL failed:", err)
 			return list, err
 		}
 		for _, r := range resp.Response.RegionSet {
@@ -45,7 +45,8 @@ func (d *Driver) ListPostgreSQL(ctx context.Context) ([]schema.Database, error) 
 		request := postgres.NewDescribeDBInstancesRequest()
 		response, err := client.DescribeDBInstances(request)
 		if err != nil {
-			log.Println("\n[-] Enumerate PostgreSQL failed:", err)
+			fmt.Println()
+			logger.Error("Enumerate PostgreSQL failed:", err)
 			return list, err
 		}
 

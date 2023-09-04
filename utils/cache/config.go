@@ -2,11 +2,11 @@ package cache
 
 import (
 	"encoding/json"
-	"io/ioutil"
-	"log"
 	"os"
 	"os/user"
 	"path/filepath"
+
+	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
 var Cfg *InitCfg
@@ -26,7 +26,7 @@ func NewConfig() *InitCfg {
 	if v, _ := filepath.Glob(path); len(v) == 0 {
 		err := os.MkdirAll(filepath.Dir(path), os.ModePerm)
 		if err != nil {
-			log.Println("[-] Could not mkdir:", err.Error())
+			logger.Error("Could not mkdir:", err.Error())
 			return cfg
 		}
 	}
@@ -38,14 +38,13 @@ func NewConfig() *InitCfg {
 func getCreds(path string) (creds []Credential) {
 	file, err := os.Open(path)
 	if err != nil {
-		// log.Println("[-] Get cache file failed:", err.Error())
 		return
 	}
 	defer file.Close()
 
 	err = json.NewDecoder(file).Decode(&creds)
 	if err != nil {
-		log.Println("[-] Get credential info failed:", err.Error())
+		logger.Error("Get credential info failed:", err.Error())
 		return
 	}
 
@@ -54,9 +53,9 @@ func getCreds(path string) (creds []Credential) {
 
 func SaveFile() {
 	data, err := json.Marshal(Cfg.Creds)
-	err = ioutil.WriteFile(Cfg.Path, data, 0644)
+	err = os.WriteFile(Cfg.Path, data, 0644)
 	if err != nil {
-		log.Println("[-] Failed to write the config file:", err.Error())
+		logger.Error("Failed to write the config file:", err.Error())
 	}
 
 }
@@ -64,7 +63,7 @@ func SaveFile() {
 func userHomeDir() string {
 	usr, err := user.Current()
 	if err != nil {
-		log.Println("[-] Could not get user home directory:", err)
+		logger.Error("Could not get user home directory:", err)
 		return ""
 	}
 	return usr.HomeDir

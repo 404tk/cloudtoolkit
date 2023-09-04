@@ -2,8 +2,8 @@ package storage
 
 import (
 	"context"
-	"log"
 
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/Azure/azure-sdk-for-go/profiles/latest/storage/mgmt/storage"
 )
 
@@ -14,7 +14,7 @@ func (d *Driver) GetBlobContainer(ctx context.Context, subscription, groupName, 
 
 	resp, err := client.List(context.Background(), groupName, accountName, "", "", "")
 	if err != nil {
-		log.Println("[-] List blob containers failed:", err.Error())
+		logger.Error("List blob containers failed:", err.Error())
 		return blobs
 	}
 	for _, blob := range resp.Values() {

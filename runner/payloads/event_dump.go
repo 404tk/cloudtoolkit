@@ -2,10 +2,10 @@ package payloads
 
 import (
 	"context"
-	"log"
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/inventory"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
 type EventDump struct{}
@@ -13,7 +13,7 @@ type EventDump struct{}
 func (p EventDump) Run(ctx context.Context, config map[string]string) {
 	i, err := inventory.New(config)
 	if err != nil {
-		log.Println(err)
+		logger.Error(err)
 		return
 	}
 
@@ -26,7 +26,7 @@ func (p EventDump) Run(ctx context.Context, config map[string]string) {
 		}
 	}
 	i.Providers.EventDump(action, sourceIp)
-	log.Println("[+] Done.")
+	logger.Warning("Done.")
 }
 
 func (p EventDump) Desc() string {

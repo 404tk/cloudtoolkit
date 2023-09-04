@@ -2,8 +2,8 @@ package bss
 
 import (
 	"context"
-	"log"
 
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/bssopenapi"
@@ -30,7 +30,7 @@ func (d *Driver) QueryAccountBalance(ctx context.Context) {
 	resp, err := bssclient.QueryAccountBalance(req_bss)
 	if err == nil {
 		if resp.Data.AvailableCashAmount != "" {
-			log.Println("[+] Available cash amount:", resp.Data.AvailableCashAmount)
+			logger.Warning("Available cash amount:", resp.Data.AvailableCashAmount)
 		}
 	}
 }

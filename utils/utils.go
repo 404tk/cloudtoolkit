@@ -3,7 +3,7 @@ package utils
 import (
 	"crypto/md5"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -35,7 +35,7 @@ func HttpGet(url string) ([]byte, error) {
 	defer func() {
 		_ = resp.Body.Close()
 	}()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}

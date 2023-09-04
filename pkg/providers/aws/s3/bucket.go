@@ -2,9 +2,9 @@ package s3
 
 import (
 	"context"
-	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 )
@@ -19,12 +19,12 @@ func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		log.Println("[*] Start enumerating S3 ...")
+		logger.Info("Start enumerating S3 ...")
 	}
 	client := s3.New(d.Session)
 	buckets, err := client.ListBuckets(&s3.ListBucketsInput{})
 	if err != nil {
-		log.Println("[-] Enumerate S3 failed.")
+		logger.Error("Enumerate S3 failed.")
 		return list, err
 	}
 	for _, bucket := range buckets.Buckets {
@@ -33,7 +33,7 @@ func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 		locationInput := &s3.GetBucketLocationInput{Bucket: bucket.Name}
 		bucketLocation, err := client.GetBucketLocation(locationInput)
 		if err != nil {
-			log.Println("[-] Get bucket info failed.")
+			logger.Error("Get bucket info failed.")
 			return list, err
 		}
 		if bucketLocation.LocationConstraint != nil {

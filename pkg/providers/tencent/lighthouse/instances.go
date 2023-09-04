@@ -3,9 +3,9 @@ package lighthouse
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
@@ -24,7 +24,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		log.Println("[*] Start enumerating Lighthouse ...")
+		logger.Info("Start enumerating Lighthouse ...")
 	}
 	cpf := profile.NewClientProfile()
 	var regions []string
@@ -33,7 +33,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		req := lighthouse.NewDescribeRegionsRequest()
 		resp, err := client.DescribeRegions(req)
 		if err != nil {
-			log.Println("[-] Enumerate Lighthouse failed.")
+			logger.Error("Enumerate Lighthouse failed.")
 			return list, err
 		}
 		for _, r := range resp.Response.RegionSet {
@@ -50,7 +50,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		request := lighthouse.NewDescribeInstancesRequest()
 		response, err := client.DescribeInstances(request)
 		if err != nil {
-			log.Println("[-] Enumerate Lighthouse failed.")
+			logger.Error("Enumerate Lighthouse failed.")
 			return list, err
 		}
 

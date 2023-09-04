@@ -2,10 +2,10 @@ package ram
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/errors"
@@ -37,7 +37,7 @@ func (d *Driver) GetRamUser(ctx context.Context) ([]schema.User, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		log.Println("[*] Start enumerating RAM ...")
+		logger.Info("Start enumerating RAM ...")
 	}
 	client := d.NewClient()
 	marker := ""
@@ -48,7 +48,7 @@ func (d *Driver) GetRamUser(ctx context.Context) ([]schema.User, error) {
 		listUsersRequest.Marker = marker
 		response, err := client.ListUsers(listUsersRequest)
 		if err != nil {
-			log.Println("[-] List users failed.")
+			logger.Error("List users failed.")
 			return list, err
 		}
 

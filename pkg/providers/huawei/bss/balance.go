@@ -2,8 +2,9 @@ package bss
 
 import (
 	"context"
-	"log"
+	"fmt"
 
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/global"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/as/v1/region"
@@ -43,7 +44,7 @@ func (d *Driver) QueryAccountBalance(ctx context.Context) {
 	}
 	for _, account := range *response.AccountBalances {
 		if account.AccountType == 1 {
-			log.Printf("[+] Available cash amount: %v\n", account.Amount)
+			logger.Warning(fmt.Sprintf("Available cash amount: %v\n", account.Amount))
 			return
 		}
 	}

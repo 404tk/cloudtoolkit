@@ -1,8 +1,9 @@
 package ram
 
 import (
-	"log"
+	"fmt"
 
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ram"
 )
 
@@ -10,15 +11,15 @@ func (d *Driver) DelRole() {
 	client := d.NewClient()
 	err := detachPolicyFromRole(client, d.RoleName)
 	if err != nil {
-		log.Printf("[-] Remove policy from %s failed: %s\n", d.RoleName, err.Error())
+		logger.Error(fmt.Sprintf("Remove policy from %s failed: %s\n", d.RoleName, err.Error()))
 		return
 	}
 	err = deleteRole(client, d.RoleName)
 	if err != nil {
-		log.Printf("[-] Delete role %s failed: %s\n", d.RoleName, err.Error())
+		logger.Error(fmt.Sprintf("Delete role %s failed: %s\n", d.RoleName, err.Error()))
 		return
 	}
-	log.Println("[+] Done.")
+	logger.Warning("Done.")
 }
 
 func detachPolicyFromRole(client *ram.Client, roleName string) error {

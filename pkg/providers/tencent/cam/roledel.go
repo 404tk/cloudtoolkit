@@ -1,8 +1,9 @@
 package cam
 
 import (
-	"log"
+	"fmt"
 
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	cam "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cam/v20190116"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
@@ -13,15 +14,15 @@ func (d *Driver) DelRole() {
 	client, _ := cam.NewClient(d.Credential, "", cpf)
 	err := detachPolicyFromRole(client, d.RoleName)
 	if err != nil {
-		log.Printf("[-] Remove policy from %s failed: %s\n", d.RoleName, err.Error())
+		logger.Error(fmt.Sprintf("Remove policy from %s failed: %s\n", d.RoleName, err.Error()))
 		return
 	}
 	err = deleteRole(client, d.RoleName)
 	if err != nil {
-		log.Printf("[-] Delete role %s failed: %s\n", d.RoleName, err.Error())
+		logger.Error(fmt.Sprintf("Delete role %s failed: %s\n", d.RoleName, err.Error()))
 		return
 	}
-	log.Println("[+] Done.")
+	logger.Warning("Done.")
 }
 
 func detachPolicyFromRole(client *cam.Client, roleName string) error {

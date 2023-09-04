@@ -2,10 +2,10 @@ package iam
 
 import (
 	"context"
-	"log"
 	"time"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/iam"
 )
@@ -22,12 +22,12 @@ func (d *Driver) GetIAMUser(ctx context.Context) ([]schema.User, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		log.Println("[*] Start enumerating IAM ...")
+		logger.Info("Start enumerating IAM ...")
 	}
 	client := iam.New(d.Session)
 	users, err := client.ListUsers(&iam.ListUsersInput{})
 	if err != nil {
-		log.Println("[-] List users failed.")
+		logger.Error("List users failed.")
 		return list, err
 	}
 	for _, user := range users.Users {

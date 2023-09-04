@@ -3,9 +3,9 @@ package ec2
 import (
 	"context"
 	"fmt"
-	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -20,13 +20,13 @@ type Driver struct {
 // GetResource returns all the resources in the store for a provider.
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := schema.NewResources().Hosts
-	log.Println("[*] Start enumerating EC2 ...")
+	logger.Info("Start enumerating EC2 ...")
 	flag := false
 	prevLength := 0
 	count := 0
 	regions, err := d.GetEC2Regions()
 	if err != nil {
-		log.Println("[-] Enumerate EC2 failed.")
+		logger.Error("Enumerate EC2 failed.")
 		return list, err
 	}
 	for _, region := range regions {
@@ -41,7 +41,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		for {
 			resp, err := ec2Client.DescribeInstances(req)
 			if err != nil {
-				log.Println("[-] Enumerate EC2 failed.")
+				logger.Error("Enumerate EC2 failed.")
 				return list, err
 			}
 			for _, reservation := range resp.Reservations {

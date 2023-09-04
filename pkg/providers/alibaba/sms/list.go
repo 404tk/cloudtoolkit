@@ -2,9 +2,9 @@ package sms
 
 import (
 	"context"
-	"log"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/dysmsapi"
@@ -21,7 +21,7 @@ func (d *Driver) GetResource(ctx context.Context) (schema.Sms, error) {
 	case <-ctx.Done():
 		return res, nil
 	default:
-		log.Println("[*] List SMS resource ...")
+		logger.Info("List SMS resource ...")
 	}
 	region := d.Region
 	if region == "all" {
@@ -33,7 +33,7 @@ func (d *Driver) GetResource(ctx context.Context) (schema.Sms, error) {
 	}
 	res.Signs, err = listSmsSign(client)
 	if err != nil {
-		log.Println("[-] List SMS failed.")
+		logger.Error("List SMS failed.")
 		return res, err
 	}
 	res.Templates, err = listSmsTemplate(client)

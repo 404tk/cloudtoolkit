@@ -1,8 +1,9 @@
 package cam
 
 import (
-	"log"
+	"fmt"
 
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	cam "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cam/v20190116"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
@@ -13,15 +14,15 @@ func (d *Driver) DelUser() {
 	client, _ := cam.NewClient(d.Credential, "", cpf)
 	err := detachPolicyFromUser(client, d.UserName)
 	if err != nil {
-		log.Printf("[-] Remove policy from %s failed: %s\n", d.UserName, err.Error())
+		logger.Error(fmt.Sprintf("Remove policy from %s failed: %s\n", d.UserName, err.Error()))
 		return
 	}
 	err = deleteUser(client, d.UserName)
 	if err != nil {
-		log.Printf("[-] Delete user %s failed: %s\n", d.UserName, err.Error())
+		logger.Error(fmt.Sprintf("Delete user %s failed: %s\n", d.UserName, err.Error()))
 		return
 	}
-	log.Println("[+] Done.")
+	logger.Warning("Done.")
 }
 
 func detachPolicyFromUser(client *cam.Client, userName string) error {

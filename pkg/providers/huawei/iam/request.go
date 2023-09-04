@@ -3,7 +3,7 @@ package iam
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"reflect"
 	"strings"
@@ -43,7 +43,7 @@ func (httpRequest *DefaultHttpRequest) DoGetRequest(auth, timestamp string) ([]b
 	}
 	defer res.Body.Close()
 
-	body, err := ioutil.ReadAll(res.Body)
+	body, err := io.ReadAll(res.Body)
 	return body, err
 }
 

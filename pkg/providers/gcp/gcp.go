@@ -3,7 +3,6 @@ package gcp
 import (
 	"context"
 	"encoding/base64"
-	"log"
 	"time"
 
 	_compute "github.com/404tk/cloudtoolkit/pkg/providers/gcp/compute"
@@ -12,6 +11,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"golang.org/x/oauth2/google"
 )
 
@@ -47,7 +47,7 @@ func New(options schema.Options) (*Provider, error) {
 		if err != nil {
 			return nil, err
 		}
-		log.Println("[+] Current project:", projects[0])
+		logger.Warning("Current project:", projects[0])
 		token = access.AccessToken
 		cache.Cfg.CredInsert(projects[0], options)
 	}
@@ -88,11 +88,11 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 }
 
 func (p *Provider) UserManagement(action, uname, pwd string) {
-	log.Println("[-] Not supported yet.")
+	logger.Error("Not supported yet.")
 }
 
 func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
-	log.Println("[-] Not supported yet.")
+	logger.Error("Not supported yet.")
 }
 
 func (p *Provider) EventDump(action, sourceIp string) {}

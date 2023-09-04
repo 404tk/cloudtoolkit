@@ -2,11 +2,10 @@ package runner
 
 import (
 	"fmt"
-	"io/ioutil"
-	"log"
 	"os"
 
 	"github.com/404tk/cloudtoolkit/utils"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/spf13/viper"
 )
 
@@ -15,13 +14,13 @@ var filename = "config.yaml"
 func InitConfig() {
 	_, err := os.Stat(filename)
 	if os.IsNotExist(err) || err != nil {
-		err = ioutil.WriteFile(filename, []byte(defaultConfigFile), os.ModePerm)
+		err = os.WriteFile(filename, []byte(defaultConfigFile), os.ModePerm)
 	}
 	viper.AddConfigPath(".")
 	viper.SetConfigFile(filename)
 	err = viper.ReadInConfig()
 	if err != nil {
-		log.Fatalf("[-] Read config failed: %v", err)
+		logger.Fatalf("Read config failed: %v", err)
 	}
 
 	utils.DoSave = viper.GetBool("common.log_enable")

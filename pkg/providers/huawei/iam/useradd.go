@@ -2,8 +2,8 @@ package iam
 
 import (
 	"fmt"
-	"log"
 
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/global"
 	iam "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3/model"
@@ -21,12 +21,12 @@ func (d *Driver) AddUser() {
 		Build())
 	uid, domainid, err := createUser(client, d.Username, d.Password)
 	if err != nil {
-		log.Println("[-] Create user failed:", err.Error())
+		logger.Error("Create user failed:", err.Error())
 		return
 	}
 	err = addUserToAdminGroup(client, uid)
 	if err != nil {
-		log.Println("[-] Grant AdministratorAccess policy failed.")
+		logger.Error("Grant AdministratorAccess policy failed.")
 		return
 	}
 	name := getDomainName(client, domainid)
@@ -86,7 +86,7 @@ func addUserToAdminGroup(client *iam.IamClient, uid string) error {
 func getDomainName(client *iam.IamClient, domainid string) string {
 	resp, err := client.KeystoneListAuthDomains(&model.KeystoneListAuthDomainsRequest{})
 	if err != nil {
-		log.Println("[-] List domains failed:", err.Error())
+		logger.Error("List domains failed:", err.Error())
 		return ""
 	}
 	for _, v := range *resp.Domains {

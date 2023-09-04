@@ -3,13 +3,13 @@ package console
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"strconv"
 
 	"github.com/404tk/cloudtoolkit/pkg/plugins"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
-	"github.com/404tk/cloudtoolkit/utils/table"
+	"github.com/404tk/cloudtoolkit/utils/logger"
+	"github.com/404tk/table"
 	"github.com/c-bata/go-prompt"
 )
 
@@ -75,7 +75,7 @@ func internation(uuid string) {
 	m := make(map[string]string)
 	err := json.Unmarshal([]byte(data), &m)
 	if err != nil {
-		log.Println("[-] Unmarshal failed:", err.Error())
+		logger.Error("Unmarshal failed:", err.Error())
 	}
 	if provider, ok := m[utils.Provider]; ok {
 		config = m
@@ -97,13 +97,13 @@ func checkCred(uuid string) {
 		m := make(map[string]string)
 		err := json.Unmarshal([]byte(cred.JsonData), &m)
 		if err != nil {
-			log.Println("[-] Unmarshal failed:", err.Error())
+			logger.Error("Unmarshal failed:", err.Error())
 		}
 		if value, ok := m[utils.Provider]; ok {
 			if v, ok := plugins.Providers[value]; ok {
 				_, err = v.Check(m)
 				if err != nil {
-					log.Printf("[-] %s(%s) check failed.\n", cred.User, cred.AccessKey)
+					logger.Error(fmt.Sprintf("%s(%s) check failed.\n", cred.User, cred.AccessKey))
 				}
 			}
 		}

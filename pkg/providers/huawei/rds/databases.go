@@ -3,11 +3,11 @@ package rds
 import (
 	"context"
 	"fmt"
-	"log"
 	"reflect"
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
 	rds "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/rds/v3"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/rds/v3/model"
@@ -25,7 +25,7 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		log.Println("[*] Start enumerating RDS ...")
+		logger.Info("Start enumerating RDS ...")
 	}
 	client := rds.NewRdsClient(rds.RdsClientBuilder().
 		WithRegion(region.ValueOf(d.Regions[0])). // Maybe need traverse region
@@ -34,7 +34,7 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 	request := &model.ListInstancesRequest{}
 	response, err := client.ListInstances(request)
 	if err != nil {
-		log.Println("[-] Enumerate RDS failed.")
+		logger.Error("Enumerate RDS failed.")
 		return list, err
 	}
 	for _, instance := range *response.Instances {

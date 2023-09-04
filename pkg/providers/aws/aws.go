@@ -2,7 +2,7 @@ package aws
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"strings"
 
 	_ec2 "github.com/404tk/cloudtoolkit/pkg/providers/aws/ec2"
@@ -11,6 +11,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/credentials"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -68,7 +69,7 @@ func New(options schema.Options) (*Provider, error) {
 			userName = u[1]
 		}
 	}
-	log.Printf("[+] Current user: %s\n", userName)
+	logger.Warning(fmt.Sprintf("Current user: %s\n", userName))
 	cache.Cfg.CredInsert(userName, options)
 
 	return &Provider{
@@ -115,7 +116,7 @@ func (p *Provider) UserManagement(action, uname, pwd string) {
 	case "del":
 		ramprovider.DelUser()
 	default:
-		log.Println("[-] Please set metadata like \"add username password\" or \"del username\"")
+		logger.Error("Please set metadata like \"add username password\" or \"del username\"")
 	}
 }
 
@@ -145,7 +146,7 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
 		}
 		s3provider.TotalObjects(ctx, infos)
 	default:
-		log.Println("[-] `list all` or `total all`.")
+		logger.Error("`list all` or `total all`.")
 	}
 }
 

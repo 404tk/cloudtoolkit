@@ -3,13 +3,14 @@ package azure
 import (
 	"context"
 	"errors"
-	"log"
+	"fmt"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/azure/compute"
 	"github.com/404tk/cloudtoolkit/pkg/providers/azure/storage"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/Azure/azure-sdk-for-go/profiles/latest/resources/mgmt/subscriptions"
 	"github.com/Azure/go-autorest/autorest"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
@@ -54,7 +55,7 @@ func New(options schema.Options) (*Provider, error) {
 			return nil, err
 		}
 		for _, v := range resp.Values() {
-			log.Printf("[+] Found Subscription: %s(%s)\n", *v.DisplayName, *v.SubscriptionID)
+			logger.Warning(fmt.Sprintf("Found Subscription: %s(%s)\n", *v.DisplayName, *v.SubscriptionID))
 			cache.Cfg.CredInsert(*v.DisplayName, options)
 			subscription_ids = append(subscription_ids, *v.SubscriptionID)
 		}
@@ -62,7 +63,7 @@ func New(options schema.Options) (*Provider, error) {
 		subscription_ids = append(subscription_ids, subscriptionID)
 	}
 	if len(subscription_ids) == 0 || subscription_ids[0] == "" {
-		return nil, errors.New("[-] No Subscription found.")
+		return nil, errors.New("No Subscription found.")
 	}
 
 	return &Provider{
@@ -103,11 +104,11 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 }
 
 func (p *Provider) UserManagement(action, uname, pwd string) {
-	log.Println("[-] Not supported yet.")
+	logger.Error("Not supported yet.")
 }
 
 func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
-	log.Println("[-] Not supported yet.")
+	logger.Error("Not supported yet.")
 }
 
 func (p *Provider) EventDump(action, sourceIp string) {}
