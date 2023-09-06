@@ -58,6 +58,7 @@ type Storage struct {
 type User struct {
 	UserName    string `table:"User"`
 	UserId      string `table:"ID"`
+	Policies    string `table:"Policies"`
 	EnableLogin bool   `table:"Enable Login"`
 	LastLogin   string `table:"Last Login"`
 	CreateTime  string `table:"Creat Time"`

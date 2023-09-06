@@ -46,6 +46,7 @@ func (d *Driver) GetIAMUser(ctx context.Context) ([]schema.User, error) {
 				_user.EnableLogin = true
 			}
 		}
+		_user.Policies = listAttachedUserPolicies(client, _user.UserName)
 		list = append(list, _user)
 	}
 

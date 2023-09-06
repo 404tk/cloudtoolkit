@@ -2,7 +2,7 @@ package cam
 
 import (
 	"context"
-	"strconv"
+	"fmt"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -36,15 +36,17 @@ func (d *Driver) GetCamUser(ctx context.Context) ([]schema.User, error) {
 		logger.Error("Enumerate CAM failed.")
 		return list, err
 	}
+	policy_infos = make(map[string]string)
 	for _, user := range listUsersResponse.Response.Data {
 		_user := schema.User{
-			UserName: *user.Name,
-			UserId:   strconv.FormatUint(*user.Uid, 10),
+			UserName:   *user.Name,
+			UserId:     fmt.Sprintf("%v", *user.Uin),
+			CreateTime: *user.CreateTime,
 		}
 		if *user.ConsoleLogin == 1 {
 			_user.EnableLogin = true
-			_user.CreateTime = *user.CreateTime
 		}
+		_user.Policies = listAttachedUserAllPolicies(client, user.Uin)
 
 		list = append(list, _user)
 	}

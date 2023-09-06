@@ -41,6 +41,7 @@ func (d *Driver) GetRamUser(ctx context.Context) ([]schema.User, error) {
 	}
 	client := d.NewClient()
 	marker := ""
+	policy_infos = make(map[string]string)
 	for {
 		listUsersRequest := ram.CreateListUsersRequest()
 		listUsersRequest.Scheme = "https"
@@ -72,7 +73,13 @@ func (d *Driver) GetRamUser(ctx context.Context) ([]schema.User, error) {
 					lastLoginDate, _ := time.Parse(time.RFC3339, getUserResponse.User.LastLoginDate)
 					_user.LastLogin = lastLoginDate.String()
 				}
+				if err == nil && getUserResponse.User.CreateDate != "" {
+					date, _ := time.Parse(time.RFC3339, getUserResponse.User.CreateDate)
+					_user.CreateTime = date.String()
+				}
 			}
+
+			_user.Policies = listPoliciesForUser(client, _user.UserName)
 
 			list = append(list, _user)
 			select {

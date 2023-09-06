@@ -69,7 +69,7 @@ func New(options schema.Options) (*Provider, error) {
 			userName = u[1]
 		}
 	}
-	logger.Warning(fmt.Sprintf("Current user: %s\n", userName))
+	logger.Warning(fmt.Sprintf("Current user: %s", userName))
 	cache.Cfg.CredInsert(userName, options)
 
 	return &Provider{

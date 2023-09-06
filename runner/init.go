@@ -20,7 +20,7 @@ func InitConfig() {
 	viper.SetConfigFile(filename)
 	err = viper.ReadInConfig()
 	if err != nil {
-		logger.Fatalf("Read config failed: %v", err)
+		logger.Fatalf("Read config failed: %v\n", err)
 	}
 
 	utils.DoSave = viper.GetBool("common.log_enable")
