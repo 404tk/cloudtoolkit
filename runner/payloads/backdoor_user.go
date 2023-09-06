@@ -29,7 +29,7 @@ func (p BackdoorUser) Run(ctx context.Context, config map[string]string) {
 	}
 
 	i.Providers.UserManagement(action, args_1, args_2)
-	// logger.Warning("Done.")
+	// logger.Info("Done.")
 }
 
 func (p BackdoorUser) Desc() string {

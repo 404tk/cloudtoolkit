@@ -32,13 +32,15 @@ func Executor(s string) {
 	cmd, args := utils.ParseCmd(s)
 	switch cmd {
 	case "use":
-		Use(args)
+		use(args)
 	case "show":
 		show(args)
 	case "set":
 		set(args)
 	case "run":
 		go func() { defer cancel(); run(ctx) }()
+	case "shell":
+		shell(args)
 	case "sessions":
 		sessions(args)
 	case "help":
@@ -49,7 +51,7 @@ func Executor(s string) {
 		cache.SaveFile()
 		os.Exit(0)
 	default:
-		fmt.Println("[Error] Unsupported command:", cmd)
+		logger.Error("Unsupported command:", cmd)
 	}
 
 	if cmd != "run" {

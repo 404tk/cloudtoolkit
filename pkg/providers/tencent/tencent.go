@@ -42,17 +42,20 @@ func New(options schema.Options) (*Provider, error) {
 	credential := common.NewTokenCredential(accessKey, secretKey, token)
 	cpf := profile.NewClientProfile()
 
-	request := sts.NewGetCallerIdentityRequest()
-	// cpf.HttpProfile.Endpoint = "sts.tencentcloudapi.com"
-	stsclient, _ := sts.NewClient(credential, "ap-guangzhou", cpf)
-	response, err := stsclient.GetCallerIdentity(request)
-	if err != nil {
-		return nil, err
+	payload, _ := options.GetMetadata(utils.Payload)
+	if payload == "cloudlist" || payload == "sessions" {
+		request := sts.NewGetCallerIdentityRequest()
+		// cpf.HttpProfile.Endpoint = "sts.tencentcloudapi.com"
+		stsclient, _ := sts.NewClient(credential, "ap-guangzhou", cpf)
+		response, err := stsclient.GetCallerIdentity(request)
+		if err != nil {
+			return nil, err
+		}
+		msg := "Current account type: " + *response.Response.Type
+		// accountId, _ := strconv.Atoi(*response.Response.UserId)
+		cache.Cfg.CredInsert(*response.Response.Type, options)
+		logger.Warning(msg)
 	}
-	msg := "Current account type: " + *response.Response.Type
-	// accountId, _ := strconv.Atoi(*response.Response.UserId)
-	cache.Cfg.CredInsert(*response.Response.Type, options)
-	logger.Warning(msg)
 
 	return &Provider{
 		vendor:     "tencent",
@@ -138,3 +141,5 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
 }
 
 func (p *Provider) EventDump(action, sourceIp string) {}
+
+func (p *Provider) ExecuteCloudVMCommand(instanceId, cmd string) {}

@@ -20,15 +20,20 @@ type Driver struct {
 	Region string
 }
 
+func (d *Driver) NewClient() (*ecs.Client, error) {
+	region := d.Region
+	if region == "all" || region == "" {
+		region = "cn-hangzhou"
+	}
+	return ecs.NewClientWithOptions(region, sdk.NewConfig(), d.Cred)
+}
+
 // GetResource returns all the resources in the store for a provider.
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := schema.NewResources().Hosts
 	logger.Info("Start enumerating ECS ...")
-	region := d.Region
-	if region == "all" {
-		region = "cn-hangzhou"
-	}
-	client, err := ecs.NewClientWithOptions(region, sdk.NewConfig(), d.Cred)
+	defer func() { CacheHostList = list }()
+	client, err := d.NewClient()
 	if err != nil {
 		return list, err
 	}
@@ -94,8 +99,10 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 
 				_host := schema.Host{
 					HostName:    instance.HostName,
+					ID:          instance.InstanceId,
 					PublicIPv4:  ipv4,
 					PrivateIpv4: privateIPv4,
+					OSType:      instance.OSType, // windows or linux
 					Public:      ipv4 != "",
 					Region:      r,
 				}

@@ -55,8 +55,11 @@ func New(options schema.Options) (*Provider, error) {
 			return nil, err
 		}
 		for _, v := range resp.Values() {
-			logger.Warning(fmt.Sprintf("Found Subscription: %s(%s)", *v.DisplayName, *v.SubscriptionID))
-			cache.Cfg.CredInsert(*v.DisplayName, options)
+			payload, _ := options.GetMetadata(utils.Payload)
+			if payload == "cloudlist" || payload == "sessions" {
+				logger.Warning(fmt.Sprintf("Found Subscription: %s(%s)", *v.DisplayName, *v.SubscriptionID))
+				cache.Cfg.CredInsert(*v.DisplayName, options)
+			}
 			subscription_ids = append(subscription_ids, *v.SubscriptionID)
 		}
 	} else {
@@ -112,3 +115,5 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
 }
 
 func (p *Provider) EventDump(action, sourceIp string) {}
+
+func (p *Provider) ExecuteCloudVMCommand(instanceId, cmd string) {}

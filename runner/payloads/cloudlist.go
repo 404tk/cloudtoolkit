@@ -58,7 +58,7 @@ func (p CloudList) Run(ctx context.Context, config map[string]string) {
 		if utils.DoSave {
 			logger.Info(fmt.Sprintf("Output written to [%s]", path))
 		} else {
-			logger.Warning("Done.")
+			logger.Info("Done.")
 		}
 	}
 }

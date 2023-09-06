@@ -45,26 +45,29 @@ func New(options schema.Options) (*Provider, error) {
 	token, _ := options.GetMetadata(utils.SecurityToken)
 	cred := credentials.NewStsTokenCredential(accessKey, secretKey, token)
 
-	// Get current username
-	stsclient, err := sts.NewClientWithOptions("cn-hangzhou", sdk.NewConfig(), cred)
-	request := sts.CreateGetCallerIdentityRequest()
-	request.Scheme = "https"
-	response, err := stsclient.GetCallerIdentity(request)
-	if err != nil {
-		return nil, err
-	}
-	accountArn := response.Arn
-	var userName string
-	if len(accountArn) >= 4 && accountArn[len(accountArn)-4:] == "root" {
-		userName = "root"
-	} else {
-		if u := strings.Split(accountArn, "/"); len(u) > 1 {
-			userName = u[1]
+	payload, _ := options.GetMetadata(utils.Payload)
+	if payload == "cloudlist" || payload == "sessions" {
+		// Get current username
+		stsclient, err := sts.NewClientWithOptions("cn-hangzhou", sdk.NewConfig(), cred)
+		request := sts.CreateGetCallerIdentityRequest()
+		request.Scheme = "https"
+		response, err := stsclient.GetCallerIdentity(request)
+		if err != nil {
+			return nil, err
 		}
+		accountArn := response.Arn
+		var userName string
+		if len(accountArn) >= 4 && accountArn[len(accountArn)-4:] == "root" {
+			userName = "root"
+		} else {
+			if u := strings.Split(accountArn, "/"); len(u) > 1 {
+				userName = u[1]
+			}
+		}
+		msg := "Current user: " + userName
+		cache.Cfg.CredInsert(userName, options)
+		logger.Warning(msg)
 	}
-	msg := "Current user: " + userName
-	cache.Cfg.CredInsert(userName, options)
-	logger.Warning(msg)
 
 	return &Provider{
 		vendor: "alibaba",
@@ -189,5 +192,30 @@ func (p *Provider) EventDump(action, sourceIp string) {
 		d.HandleEvents(sourceIp) // sourceIp here means SecurityEventIds
 	default:
 		logger.Error("Please set metadata like \"dump all\"")
+	}
+}
+
+func (p *Provider) ExecuteCloudVMCommand(instanceId, cmd string) {
+	var region, ostype string
+	for _, host := range _ecs.CacheHostList {
+		if host.ID == instanceId {
+			region = host.Region
+			ostype = host.OSType
+			break
+		}
+	}
+	if region == "" {
+		logger.Error("Run cloudlist first")
+		return
+	}
+	d := _ecs.Driver{Cred: p.cred, Region: region}
+	client, err := d.NewClient()
+	if err != nil {
+		logger.Error(err)
+		return
+	}
+	output := _ecs.RunCommand(client, instanceId, region, ostype, cmd)
+	if output != "" {
+		fmt.Println(output)
 	}
 }

@@ -22,7 +22,7 @@ func (d *Driver) DelUser() {
 		logger.Error(fmt.Sprintf("Delete user %s failed: %s", d.UserName, err.Error()))
 		return
 	}
-	logger.Warning("Done.")
+	logger.Info("Done.")
 }
 
 func detachPolicyFromUser(client *cam.Client, userName string) error {

@@ -21,6 +21,7 @@ var action = []prompt.Suggest{
 	{Text: "show", Description: "show options"},
 	{Text: "set", Description: "set option"},
 	{Text: "run", Description: "run job"},
+	{Text: "shell", Description: "run commands"},
 }
 
 var modules = func() (m []prompt.Suggest) {

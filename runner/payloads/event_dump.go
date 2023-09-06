@@ -26,7 +26,7 @@ func (p EventDump) Run(ctx context.Context, config map[string]string) {
 		}
 	}
 	i.Providers.EventDump(action, sourceIp)
-	logger.Warning("Done.")
+	logger.Info("Done.")
 }
 
 func (p EventDump) Desc() string {

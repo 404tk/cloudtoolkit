@@ -54,23 +54,26 @@ func New(options schema.Options) (*Provider, error) {
 		return nil, err
 	}
 
-	// Get current username
-	stsclient := sts.New(session)
-	resp, err := stsclient.GetCallerIdentity(&sts.GetCallerIdentityInput{})
-	if err != nil {
-		return nil, err
-	}
-	accountArn := *resp.Arn
-	var userName string
-	if len(accountArn) >= 4 && accountArn[len(accountArn)-4:] == "root" {
-		userName = "root"
-	} else {
-		if u := strings.Split(accountArn, "/"); len(u) > 1 {
-			userName = u[1]
+	payload, _ := options.GetMetadata(utils.Payload)
+	if payload == "cloudlist" || payload == "sessions" {
+		// Get current username
+		stsclient := sts.New(session)
+		resp, err := stsclient.GetCallerIdentity(&sts.GetCallerIdentityInput{})
+		if err != nil {
+			return nil, err
 		}
+		accountArn := *resp.Arn
+		var userName string
+		if len(accountArn) >= 4 && accountArn[len(accountArn)-4:] == "root" {
+			userName = "root"
+		} else {
+			if u := strings.Split(accountArn, "/"); len(u) > 1 {
+				userName = u[1]
+			}
+		}
+		logger.Warning(fmt.Sprintf("Current user: %s", userName))
+		cache.Cfg.CredInsert(userName, options)
 	}
-	logger.Warning(fmt.Sprintf("Current user: %s", userName))
-	cache.Cfg.CredInsert(userName, options)
 
 	return &Provider{
 		vendor:  "aws",
@@ -151,3 +154,5 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
 }
 
 func (p *Provider) EventDump(action, sourceIp string) {}
+
+func (p *Provider) ExecuteCloudVMCommand(instanceId, cmd string) {}

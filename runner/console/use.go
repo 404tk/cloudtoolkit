@@ -1,35 +1,36 @@
 package console
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/404tk/cloudtoolkit/utils"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/c-bata/go-prompt"
 )
 
 var config map[string]string
 
-func Use(args []string) {
+func use(args []string) {
 	if len(args) < 1 {
+		logger.Error("Example: use alibaba")
 		return
 	}
-	for _, m := range modules {
-		if m.Text == args[0] {
-			loadModule(args[0])
-			return
-		}
+	if err := loadModule(args[0]); err != nil {
+		logger.Error(err)
 	}
-	fmt.Println("[Error] Unsupported module:", args[0])
 }
 
-func loadModule(m string) {
+func loadModule(m string) error {
 	switch m {
+	case "alibaba", "tencent", "huawei", "aws":
+		config = loadConfig1()
 	case "azure":
 		config = loadConfig2()
 	case "gcp":
 		config = loadConfig3()
 	default:
-		config = loadConfig1()
+		return errors.New("Unsupported module: " + m)
 	}
 
 	config[utils.Provider] = m
@@ -41,7 +42,9 @@ func loadModule(m string) {
 		prompt.OptionPrefix(fmt.Sprintf("ctk > %s > ", m)),
 		prompt.OptionInputTextColor(prompt.White),
 	)
+	currentConsole = p
 	p.Run()
+	return nil
 }
 
 func loadConfig1() map[string]string {

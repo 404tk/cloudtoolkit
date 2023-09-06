@@ -85,6 +85,7 @@ func internation(uuid string) {
 			prompt.OptionPrefix(fmt.Sprintf("ctk > %s > ", provider)),
 			prompt.OptionInputTextColor(prompt.White),
 		)
+		currentConsole = p
 		p.Run()
 	}
 }
@@ -101,6 +102,7 @@ func checkCred(uuid string) {
 		}
 		if value, ok := m[utils.Provider]; ok {
 			if v, ok := plugins.Providers[value]; ok {
+				m[utils.Payload] = "sessions"
 				_, err = v.Check(m)
 				if err != nil {
 					logger.Error(fmt.Sprintf("%s(%s) check failed.", cred.User, cred.AccessKey))

@@ -46,13 +46,16 @@ func New(options schema.Options) (*Provider, error) {
 		r = _iam.NewGetRequest(regionId)
 	}
 
-	userName, err := r.GetUserName(accessKey, secretKey)
-	if err != nil {
-		return nil, err
+	payload, _ := options.GetMetadata(utils.Payload)
+	if payload == "cloudlist" || payload == "sessions" {
+		userName, err := r.GetUserName(accessKey, secretKey)
+		if err != nil {
+			return nil, err
+		}
+		msg := "Current user: " + userName
+		cache.Cfg.CredInsert(userName, options)
+		logger.Warning(msg)
 	}
-	msg := "Current user: " + userName
-	cache.Cfg.CredInsert(userName, options)
-	logger.Warning(msg)
 
 	auth := basic.NewCredentialsBuilder().
 		WithAk(accessKey).
@@ -65,7 +68,6 @@ func New(options schema.Options) (*Provider, error) {
 		}
 	}()
 
-	payload, _ := options.GetMetadata(utils.Payload)
 	var regions []string
 	if regionId == "all" && payload == "cloudlist" {
 		client := iam.NewIamClient(
@@ -147,3 +149,5 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
 }
 
 func (p *Provider) EventDump(action, sourceIp string) {}
+
+func (p *Provider) ExecuteCloudVMCommand(instanceId, cmd string) {}

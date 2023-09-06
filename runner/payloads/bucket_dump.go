@@ -26,7 +26,7 @@ func (p BucketDump) Run(ctx context.Context, config map[string]string) {
 		}
 	}
 	i.Providers.BucketDump(ctx, action, bucketname)
-	logger.Warning("Done.")
+	logger.Info("Done.")
 }
 
 func (p BucketDump) Desc() string {

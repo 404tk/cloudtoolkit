@@ -17,6 +17,7 @@ type Provider interface {
 	UserManagement(action, uname, pwd string)
 	BucketDump(ctx context.Context, action, bucketname string)
 	EventDump(action, sourceIp string)
+	ExecuteCloudVMCommand(instanceId, cmd string)
 }
 
 // NewResources creates a new resources structure
@@ -42,8 +43,10 @@ type Resources struct {
 
 type Host struct {
 	HostName    string `table:"HostName"`
+	ID          string `table:"Instance ID"`
 	PublicIPv4  string `table:"Public IP"`
 	PrivateIpv4 string `table:"Private IP"`
+	OSType      string `table:"OS Type"`
 	DNSName     string `table:"DNS Name"`
 	Public      bool   `table:"Public"`
 	Region      string `table:"Region"`
