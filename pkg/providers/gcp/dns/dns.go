@@ -27,13 +27,13 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	for _, project := range d.Projects {
 		zones, err := r.ListManagedZones(project)
 		if err != nil {
-			logger.Error(fmt.Sprintf("List %s zones failed: %s.\n", project, err.Error()))
+			logger.Error(fmt.Sprintf("List %s zones failed: %s.", project, err.Error()))
 			return list, err
 		}
 		for _, z := range zones {
 			resources, err := r.ListRRSets(project, z)
 			if err != nil {
-				logger.Error(fmt.Sprintf("List projects/%s/managedZones/%s/rrsets failed: %s\n", project, z, err.Error()))
+				logger.Error(fmt.Sprintf("List projects/%s/managedZones/%s/rrsets failed: %s", project, z, err.Error()))
 				return list, err
 			}
 			items := d.parseRecordsForResourceSet(resources, z)

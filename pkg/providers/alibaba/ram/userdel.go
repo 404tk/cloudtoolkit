@@ -13,13 +13,13 @@ func (d *Driver) DelUser() {
 	err := detachPolicyFromUser(client, d.UserName)
 	if err != nil {
 		if !strings.Contains(err.Error(), "EntityNotExist") {
-			logger.Error(fmt.Sprintf("Remove policy from %s failed: %s\n", d.UserName, err))
+			logger.Error(fmt.Sprintf("Remove policy from %s failed: %s", d.UserName, err))
 			return
 		}
 	}
 	err = deleteUser(client, d.UserName)
 	if err != nil {
-		logger.Error(fmt.Sprintf("Delete user %s failed: %s\n", d.UserName, err))
+		logger.Error(fmt.Sprintf("Delete user %s failed: %s", d.UserName, err))
 		return
 	}
 	logger.Warning("Done.")

@@ -103,7 +103,7 @@ func checkCred(uuid string) {
 			if v, ok := plugins.Providers[value]; ok {
 				_, err = v.Check(m)
 				if err != nil {
-					logger.Error(fmt.Sprintf("%s(%s) check failed.\n", cred.User, cred.AccessKey))
+					logger.Error(fmt.Sprintf("%s(%s) check failed.", cred.User, cred.AccessKey))
 				}
 			}
 		}

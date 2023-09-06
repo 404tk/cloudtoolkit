@@ -14,12 +14,12 @@ func (d *Driver) DelUser() {
 	client, _ := cam.NewClient(d.Credential, "", cpf)
 	err := detachPolicyFromUser(client, d.UserName)
 	if err != nil {
-		logger.Error(fmt.Sprintf("Remove policy from %s failed: %s\n", d.UserName, err.Error()))
+		logger.Error(fmt.Sprintf("Remove policy from %s failed: %s", d.UserName, err.Error()))
 		return
 	}
 	err = deleteUser(client, d.UserName)
 	if err != nil {
-		logger.Error(fmt.Sprintf("Delete user %s failed: %s\n", d.UserName, err.Error()))
+		logger.Error(fmt.Sprintf("Delete user %s failed: %s", d.UserName, err.Error()))
 		return
 	}
 	logger.Warning("Done.")

@@ -32,6 +32,6 @@ func (d *Driver) QueryAccountBalance(ctx context.Context) {
 	resp_billing, err := client.DescribeAccountBalance(req_billing)
 	if err == nil {
 		cash := *resp_billing.Response.RealBalance / 100
-		logger.Warning(fmt.Sprintf("Available cash amount: %v\n", cash))
+		logger.Warning(fmt.Sprintf("Available cash amount: %v", cash))
 	}
 }

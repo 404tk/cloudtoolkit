@@ -14,12 +14,12 @@ func (d *Driver) DelRole() {
 	client, _ := cam.NewClient(d.Credential, "", cpf)
 	err := detachPolicyFromRole(client, d.RoleName)
 	if err != nil {
-		logger.Error(fmt.Sprintf("Remove policy from %s failed: %s\n", d.RoleName, err.Error()))
+		logger.Error(fmt.Sprintf("Remove policy from %s failed: %s", d.RoleName, err.Error()))
 		return
 	}
 	err = deleteRole(client, d.RoleName)
 	if err != nil {
-		logger.Error(fmt.Sprintf("Delete role %s failed: %s\n", d.RoleName, err.Error()))
+		logger.Error(fmt.Sprintf("Delete role %s failed: %s", d.RoleName, err.Error()))
 		return
 	}
 	logger.Warning("Done.")

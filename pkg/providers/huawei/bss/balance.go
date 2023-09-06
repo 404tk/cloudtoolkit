@@ -44,7 +44,7 @@ func (d *Driver) QueryAccountBalance(ctx context.Context) {
 	}
 	for _, account := range *response.AccountBalances {
 		if account.AccountType == 1 {
-			logger.Warning(fmt.Sprintf("Available cash amount: %v\n", account.Amount))
+			logger.Warning(fmt.Sprintf("Available cash amount: %v", account.Amount))
 			return
 		}
 	}

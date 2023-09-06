@@ -52,11 +52,11 @@ func (p CloudList) Run(ctx context.Context, config map[string]string) {
 		pprint(len(resources.Sms.Signs), "SMS Signs", resources.Sms.Signs)
 		pprint(len(resources.Sms.Templates), "SMS Templates", resources.Sms.Templates)
 		if resources.Sms.DailySize > 0 {
-			msg := fmt.Sprintf("The total number of SMS messages sent today is %v.\n", resources.Sms.DailySize)
+			msg := fmt.Sprintf("The total number of SMS messages sent today is %v.", resources.Sms.DailySize)
 			logger.Info(msg)
 		}
 		if utils.DoSave {
-			logger.Info(fmt.Sprintf("Output written to [%s]\n", path))
+			logger.Info(fmt.Sprintf("Output written to [%s]", path))
 		} else {
 			logger.Warning("Done.")
 		}

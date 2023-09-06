@@ -55,7 +55,7 @@ func New(options schema.Options) (*Provider, error) {
 			return nil, err
 		}
 		for _, v := range resp.Values() {
-			logger.Warning(fmt.Sprintf("Found Subscription: %s(%s)\n", *v.DisplayName, *v.SubscriptionID))
+			logger.Warning(fmt.Sprintf("Found Subscription: %s(%s)", *v.DisplayName, *v.SubscriptionID))
 			cache.Cfg.CredInsert(*v.DisplayName, options)
 			subscription_ids = append(subscription_ids, *v.SubscriptionID)
 		}

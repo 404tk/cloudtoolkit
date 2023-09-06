@@ -24,7 +24,7 @@ func init() {
 		"[-] ", 2)
 
 	fatal = log.New(os.Stdout,
-		"[x] ", 2)
+		"[!] ", 2)
 
 }
 

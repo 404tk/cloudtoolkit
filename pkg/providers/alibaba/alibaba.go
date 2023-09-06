@@ -182,7 +182,7 @@ func (p *Provider) EventDump(action, sourceIp string) {
 			filename := time.Now().Format("20060102150405.log")
 			path := fmt.Sprintf("%s/%s_eventdump_%s", utils.LogDir, p.Name(), filename)
 			table.FileOutput(path, events)
-			msg := fmt.Sprintf("Output written to [%s]\n", path)
+			msg := fmt.Sprintf("Output written to [%s]", path)
 			logger.Info(msg)
 		}
 	case "whitelist":

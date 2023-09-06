@@ -30,14 +30,14 @@ func (d *Driver) DelUser() {
 			logger.Warning("Found UserId:", u.UserId)
 			err := deleteUser(client, u.UserId)
 			if err != nil {
-				logger.Error(fmt.Sprintf("Delete user %s failed: %s\n", d.Username, err.Error()))
+				logger.Error(fmt.Sprintf("Delete user %s failed: %s", d.Username, err.Error()))
 				return
 			}
-			logger.Warning(fmt.Sprintf("Delete user %s success!\n", d.Username))
+			logger.Warning(fmt.Sprintf("Delete user %s success!", d.Username))
 			return
 		}
 	}
-	logger.Error(fmt.Sprintf("User %s not found.\n", d.Username))
+	logger.Error(fmt.Sprintf("User %s not found.", d.Username))
 }
 
 func deleteUser(client *iam.IamClient, uid string) error {

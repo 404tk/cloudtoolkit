@@ -21,17 +21,17 @@ func (d *Driver) ListObjects(ctx context.Context, buckets map[string]string) {
 		}
 		resp, err := bucket.ListObjectsV2(oss.MaxKeys(100))
 		if err != nil {
-			msg := fmt.Sprintf("List Objects in %s failed: %s\n", b, err.Error())
+			msg := fmt.Sprintf("List Objects in %s failed: %s", b, err.Error())
 			logger.Error(msg)
 			continue
 		}
 
 		if len(resp.Objects) == 0 {
-			msg := fmt.Sprintf("No Objects found in %s.\n", b)
+			msg := fmt.Sprintf("No Objects found in %s.", b)
 			logger.Error(msg)
 			continue
 		}
-		logger.Warning(fmt.Sprintf("%d objects found in %s.\n", len(resp.Objects), b))
+		logger.Warning(fmt.Sprintf("%d objects found in %s.", len(resp.Objects), b))
 
 		fmt.Printf("\n%-70s\t%-10s\n", "Key", "Size")
 		fmt.Printf("%-70s\t%-10s\n", "---", "----")
@@ -74,7 +74,7 @@ func (d *Driver) TotalObjects(ctx context.Context, buckets map[string]string) {
 			}
 			resp, err := bucket.ListObjectsV2(oss.MaxKeys(1000), oss.ContinuationToken(token))
 			if err != nil {
-				logger.Error(fmt.Sprintf("List Objects in %s failed: %s\n", b, err))
+				logger.Error(fmt.Sprintf("List Objects in %s failed: %s", b, err))
 				return
 			}
 
@@ -89,6 +89,6 @@ func (d *Driver) TotalObjects(ctx context.Context, buckets map[string]string) {
 			}
 		}
 		fmt.Printf("\r")
-		logger.Warning(fmt.Sprintf("%s has %d objects.\n", b, count))
+		logger.Warning(fmt.Sprintf("%s has %d objects.", b, count))
 	}
 }
