@@ -17,6 +17,15 @@ type Driver struct {
 	Region     string
 }
 
+func (d *Driver) NewClient() (*lighthouse.Client, error) {
+	cpf := profile.NewClientProfile()
+	region := d.Region
+	if region == "all" || region == "" {
+		region = "ap-guangzhou"
+	}
+	return lighthouse.NewClient(d.Credential, region, cpf)
+}
+
 // GetResource returns all the resources in the store for a provider.
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := schema.NewResources().Hosts
@@ -26,10 +35,9 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	default:
 		logger.Info("Start enumerating Lighthouse ...")
 	}
-	cpf := profile.NewClientProfile()
 	var regions []string
 	if d.Region == "all" {
-		client, _ := lighthouse.NewClient(d.Credential, "ap-guangzhou", cpf)
+		client, _ := d.NewClient()
 		req := lighthouse.NewDescribeRegionsRequest()
 		resp, err := client.DescribeRegions(req)
 		if err != nil {
@@ -46,7 +54,8 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	flag := false
 	prevLength := 0
 	for _, r := range regions {
-		client, _ := lighthouse.NewClient(d.Credential, r, cpf)
+		d.Region = r
+		client, _ := d.NewClient()
 		request := lighthouse.NewDescribeInstancesRequest()
 		response, err := client.DescribeInstances(request)
 		if err != nil {
@@ -64,8 +73,10 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 			}
 			_host := schema.Host{
 				HostName:    *instance.InstanceName,
+				ID:          *instance.InstanceId,
 				PublicIPv4:  ipv4,
 				PrivateIpv4: privateIPv4,
+				OSType:      *instance.PlatformType, // LINUX_UNIX or WINDOWS
 				Public:      ipv4 != "",
 				Region:      r,
 			}

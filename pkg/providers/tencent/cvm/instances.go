@@ -3,8 +3,10 @@ package cvm
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
@@ -17,14 +19,24 @@ type Driver struct {
 	Region     string
 }
 
+func (d *Driver) NewClient() (*cvm.Client, error) {
+	cpf := profile.NewClientProfile()
+	region := d.Region
+	if region == "all" || region == "" {
+		region = "ap-guangzhou"
+	}
+	return cvm.NewClient(d.Credential, region, cpf)
+}
+
+var linuxSet = []string{"CentOS", "Ubuntu", "Debian", "OpenSUSE", "SUSE", "CoreOS", "FreeBSD", "Kylin", "UnionTech", "TencentOS", "Other Linux"}
+
 // GetResource returns all the resources in the store for a provider.
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := schema.NewResources().Hosts
 	logger.Info("Start enumerating CVM ...")
-	cpf := profile.NewClientProfile()
 	var regions []string
 	if d.Region == "all" {
-		client, _ := cvm.NewClient(d.Credential, "ap-guangzhou", cpf)
+		client, _ := d.NewClient()
 		req := cvm.NewDescribeRegionsRequest()
 		resp, err := client.DescribeRegions(req)
 		if err != nil {
@@ -40,7 +52,8 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	flag := false
 	prevLength := 0
 	for _, r := range regions {
-		client, _ := cvm.NewClient(d.Credential, r, cpf)
+		d.Region = r
+		client, _ := d.NewClient()
 		request := cvm.NewDescribeInstancesRequest()
 		response, err := client.DescribeInstances(request)
 		if err != nil {
@@ -58,10 +71,17 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 			}
 			host := schema.Host{
 				HostName:    *instance.InstanceName,
+				ID:          *instance.InstanceId,
 				PublicIPv4:  ipv4,
 				PrivateIpv4: privateIPv4,
 				Public:      ipv4 != "",
 				Region:      r,
+			}
+			os_name := strings.Split(*instance.OsName, " ")[0]
+			if utils.IsContain(linuxSet, os_name) {
+				host.OSType = "LINUX_UNIX"
+			} else {
+				host.OSType = "WINDOWS"
 			}
 			list = append(list, host)
 		}

@@ -27,6 +27,15 @@ func Md5Encode(s string) string {
 	return fmt.Sprintf("%x", has)
 }
 
+func IsContain(items []string, item string) bool {
+	for _, eachItem := range items {
+		if eachItem == item {
+			return true
+		}
+	}
+	return false
+}
+
 func HttpGet(url string) ([]byte, error) {
 	resp, err := http.Get(url)
 	if err != nil {

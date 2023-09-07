@@ -2,6 +2,7 @@ package tencent
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/billing"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cam"
@@ -10,6 +11,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cvm"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/dns"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/lighthouse"
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/tat"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
@@ -87,6 +89,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			light := &lighthouse.Driver{Credential: p.credential, Region: p.region}
 			lights, err = light.GetResource(ctx)
 			list.Hosts = append(list.Hosts, lights...)
+			tat.CacheHostList = list.Hosts
 		case "domain":
 			dnsprovider := &dns.Driver{Credential: p.credential}
 			list.Domains, err = dnsprovider.GetDomains(ctx)
@@ -142,4 +145,22 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
 
 func (p *Provider) EventDump(action, sourceIp string) {}
 
-func (p *Provider) ExecuteCloudVMCommand(instanceId, cmd string) {}
+func (p *Provider) ExecuteCloudVMCommand(instanceId, cmd string) {
+	var region, ostype string
+	for _, host := range tat.CacheHostList {
+		if host.ID == instanceId {
+			region = host.Region
+			ostype = host.OSType
+			break
+		}
+	}
+	if region == "" {
+		logger.Error("Run cloudlist first")
+		return
+	}
+	d := tat.Driver{Credential: p.credential, Region: region}
+	output := d.RunCommand(instanceId, ostype, cmd)
+	if output != "" {
+		fmt.Println(output)
+	}
+}
