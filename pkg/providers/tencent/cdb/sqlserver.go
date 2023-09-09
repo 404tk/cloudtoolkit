@@ -51,7 +51,7 @@ func (d *Driver) ListSQLServer(ctx context.Context) ([]schema.Database, error) {
 
 		for _, instance := range response.Response.DBInstances {
 			_db := schema.Database{
-				DBInstanceId:  *instance.InstanceId,
+				InstanceId:    *instance.InstanceId,
 				Engine:        *instance.VersionName,
 				EngineVersion: *instance.Version,
 				Region:        *instance.Region,

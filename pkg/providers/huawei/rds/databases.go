@@ -41,7 +41,7 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 		i := reflect.ValueOf(instance.Datastore.Type)
 		engine := i.FieldByName("value").String()
 		_dbInstance := schema.Database{
-			DBInstanceId:  instance.Id,
+			InstanceId:    instance.Id,
 			Engine:        engine,
 			EngineVersion: instance.Datastore.Version,
 			Region:        instance.Region,

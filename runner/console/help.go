@@ -24,6 +24,7 @@ Module Commands
 	show          Displays options of a given type, or all payloads
 	set           Sets a context-specific variable to a value
 	run           Run the jobs
+	shell         Run commands on the cloud host
 
 
 ### Examples

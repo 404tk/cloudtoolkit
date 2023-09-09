@@ -55,7 +55,7 @@ func (d *Driver) ListMySQL(ctx context.Context) ([]schema.Database, error) {
 
 		for _, instance := range response.Response.Items {
 			_db := schema.Database{
-				DBInstanceId:  *instance.InstanceId,
+				InstanceId:    *instance.InstanceId,
 				Engine:        "MySQL",
 				EngineVersion: *instance.EngineVersion,
 				Region:        *instance.Region,

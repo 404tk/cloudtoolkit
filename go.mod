@@ -3,7 +3,7 @@ module github.com/404tk/cloudtoolkit
 go 1.18
 
 require (
-	github.com/404tk/table v0.0.3
+	github.com/404tk/table v0.0.4
 	github.com/Azure/azure-sdk-for-go v67.1.0+incompatible
 	github.com/Azure/go-autorest/autorest v0.11.28
 	github.com/Azure/go-autorest/autorest/azure/auth v0.5.11

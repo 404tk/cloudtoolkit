@@ -32,4 +32,5 @@ var (
 	LogDir       string
 	Cloudlist    []string
 	BackdoorUser string
+	DBAccount    string
 )

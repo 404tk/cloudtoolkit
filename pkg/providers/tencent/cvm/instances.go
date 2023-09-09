@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
-	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
@@ -27,8 +26,6 @@ func (d *Driver) NewClient() (*cvm.Client, error) {
 	}
 	return cvm.NewClient(d.Credential, region, cpf)
 }
-
-var linuxSet = []string{"CentOS", "Ubuntu", "Debian", "OpenSUSE", "SUSE", "CoreOS", "FreeBSD", "Kylin", "UnionTech", "TencentOS", "Other Linux"}
 
 // GetResource returns all the resources in the store for a provider.
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
@@ -78,10 +75,10 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 				Region:      r,
 			}
 			os_name := strings.Split(*instance.OsName, " ")[0]
-			if utils.IsContain(linuxSet, os_name) {
-				host.OSType = "LINUX_UNIX"
-			} else {
+			if os_name == "Windows" {
 				host.OSType = "WINDOWS"
+			} else {
+				host.OSType = "LINUX_UNIX"
 			}
 			list = append(list, host)
 		}

@@ -45,7 +45,7 @@ func New(options schema.Options) (*Provider, error) {
 	cpf := profile.NewClientProfile()
 
 	payload, _ := options.GetMetadata(utils.Payload)
-	if payload == "cloudlist" || payload == "sessions" {
+	if payload == "cloudlist" {
 		request := sts.NewGetCallerIdentityRequest()
 		// cpf.HttpProfile.Endpoint = "sts.tencentcloudapi.com"
 		stsclient, _ := sts.NewClient(credential, "ap-guangzhou", cpf)
@@ -53,7 +53,7 @@ func New(options schema.Options) (*Provider, error) {
 		if err != nil {
 			return nil, err
 		}
-		msg := "Current account type: " + *response.Response.Type
+		msg := "Current account ARN: " + *response.Response.Arn
 		// accountId, _ := strconv.Atoi(*response.Response.UserId)
 		cache.Cfg.CredInsert(*response.Response.Type, options)
 		logger.Warning(msg)
@@ -164,3 +164,5 @@ func (p *Provider) ExecuteCloudVMCommand(instanceId, cmd string) {
 		fmt.Println(output)
 	}
 }
+
+func (p *Provider) DBManagement(action, args string) {}

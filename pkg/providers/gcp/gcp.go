@@ -49,7 +49,7 @@ func New(options schema.Options) (*Provider, error) {
 		}
 		token = access.AccessToken
 		payload, _ := options.GetMetadata(utils.Payload)
-		if payload == "cloudlist" || payload == "sessions" {
+		if payload == "cloudlist" {
 			logger.Warning("Current project:", projects[0])
 			cache.Cfg.CredInsert(projects[0], options)
 		}
@@ -101,3 +101,5 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
 func (p *Provider) EventDump(action, sourceIp string) {}
 
 func (p *Provider) ExecuteCloudVMCommand(instanceId, cmd string) {}
+
+func (p *Provider) DBManagement(action, args string) {}

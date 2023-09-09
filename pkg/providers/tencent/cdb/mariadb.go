@@ -49,7 +49,7 @@ func (d *Driver) ListMariaDB(ctx context.Context) ([]schema.Database, error) {
 
 		for _, instance := range response.Response.Instances {
 			_db := schema.Database{
-				DBInstanceId:  *instance.InstanceId,
+				InstanceId:    *instance.InstanceId,
 				Engine:        "MariaDB",
 				EngineVersion: *instance.DbVersion,
 				Region:        *instance.Region,

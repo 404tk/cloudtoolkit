@@ -46,7 +46,7 @@ func New(options schema.Options) (*Provider, error) {
 	cred := credentials.NewStsTokenCredential(accessKey, secretKey, token)
 
 	payload, _ := options.GetMetadata(utils.Payload)
-	if payload == "cloudlist" || payload == "sessions" {
+	if payload == "cloudlist" {
 		// Get current username
 		stsclient, err := sts.NewClientWithOptions("cn-hangzhou", sdk.NewConfig(), cred)
 		request := sts.CreateGetCallerIdentityRequest()
@@ -168,7 +168,7 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
 	}
 }
 
-func (p *Provider) EventDump(action, sourceIp string) {
+func (p *Provider) EventDump(action, args string) {
 	d := _sas.Driver{Cred: p.cred}
 	switch action {
 	case "dump":
@@ -189,7 +189,7 @@ func (p *Provider) EventDump(action, sourceIp string) {
 			logger.Info(msg)
 		}
 	case "whitelist":
-		d.HandleEvents(sourceIp) // sourceIp here means SecurityEventIds
+		d.HandleEvents(args) // args here means SecurityEventIds
 	default:
 		logger.Error("Please set metadata like \"dump all\"")
 	}
@@ -217,5 +217,32 @@ func (p *Provider) ExecuteCloudVMCommand(instanceId, cmd string) {
 	output := _ecs.RunCommand(client, instanceId, region, ostype, cmd)
 	if output != "" {
 		fmt.Println(output)
+	}
+}
+
+func (p *Provider) DBManagement(action, args string) {
+	r := &_rds.Driver{Cred: p.cred, Region: p.region}
+	switch action {
+	case "useradd":
+		var region, dbname string
+		//var instance schema.Database
+		for _, db := range _rds.CacheDBList {
+			if db.InstanceId == args {
+				region = db.Region
+				dbname = db.DBNames
+				//instance = db
+				break
+			}
+		}
+		if region == "" {
+			logger.Error("Run cloudlist first")
+			return
+		}
+		r.Region = region
+		r.CreateAccount(args, dbname)
+	case "userdel":
+		r.DeleteAccount(args)
+	default:
+		logger.Error("`instanceId` is missing")
 	}
 }

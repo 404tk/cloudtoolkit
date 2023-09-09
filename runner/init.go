@@ -32,6 +32,11 @@ func InitConfig() {
 		viper.GetString("backdoor-user.username"),
 		viper.GetString("backdoor-user.password"),
 	)
+
+	utils.DBAccount = fmt.Sprintf("%s:%s",
+		viper.GetString("database-account.username"),
+		viper.GetString("database-account.password"),
+	)
 }
 
 const defaultConfigFile = `common:
@@ -49,6 +54,10 @@ cloudlist:
 
 backdoor-user:
   action: add
+  username: ctkguest
+  password: 1QAZ2wsx@Asdlkj
+
+database-account:
   username: ctkguest
   password: 1QAZ2wsx@Asdlkj
 `

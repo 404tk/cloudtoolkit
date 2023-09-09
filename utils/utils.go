@@ -3,8 +3,6 @@ package utils
 import (
 	"crypto/md5"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,30 +23,6 @@ func Md5Encode(s string) string {
 	data := []byte(s)
 	has := md5.Sum(data)
 	return fmt.Sprintf("%x", has)
-}
-
-func IsContain(items []string, item string) bool {
-	for _, eachItem := range items {
-		if eachItem == item {
-			return true
-		}
-	}
-	return false
-}
-
-func HttpGet(url string) ([]byte, error) {
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		_ = resp.Body.Close()
-	}()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	return body, nil
 }
 
 func CheckLogDir() {

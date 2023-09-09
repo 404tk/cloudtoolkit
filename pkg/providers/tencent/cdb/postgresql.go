@@ -52,7 +52,7 @@ func (d *Driver) ListPostgreSQL(ctx context.Context) ([]schema.Database, error) 
 
 		for _, instance := range response.Response.DBInstanceSet {
 			_db := schema.Database{
-				DBInstanceId:  *instance.DBInstanceId,
+				InstanceId:    *instance.DBInstanceId,
 				Engine:        *instance.DBEngine,
 				EngineVersion: *instance.DBInstanceVersion,
 				Region:        *instance.Region,

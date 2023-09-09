@@ -22,7 +22,7 @@ func (d *Driver) DelRole() {
 		logger.Error(fmt.Sprintf("Delete role %s failed: %s", d.RoleName, err.Error()))
 		return
 	}
-	logger.Info("Done.")
+	logger.Warning(d.RoleName + " role delete completed.")
 }
 
 func detachPolicyFromRole(client *cam.Client, roleName string) error {

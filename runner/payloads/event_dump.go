@@ -11,19 +11,20 @@ import (
 type EventDump struct{}
 
 func (p EventDump) Run(ctx context.Context, config map[string]string) {
+	var action, sourceIp string
+	if metadata, ok := config["metadata"]; ok {
+		data := strings.Split(metadata, " ")
+		if len(data) < 2 {
+			logger.Error("Execute `set metadata dump all`")
+			return
+		}
+		action = data[0]
+		sourceIp = data[1]
+	}
 	i, err := inventory.New(config)
 	if err != nil {
 		logger.Error(err)
 		return
-	}
-
-	var action, sourceIp string
-	if metadata, ok := config["metadata"]; ok {
-		data := strings.Split(metadata, " ")
-		if len(data) >= 2 {
-			action = data[0]
-			sourceIp = data[1]
-		}
 	}
 	i.Providers.EventDump(action, sourceIp)
 	logger.Info("Done.")

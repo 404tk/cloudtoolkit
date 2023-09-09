@@ -47,7 +47,7 @@ func New(options schema.Options) (*Provider, error) {
 	}
 
 	payload, _ := options.GetMetadata(utils.Payload)
-	if payload == "cloudlist" || payload == "sessions" {
+	if payload == "cloudlist" {
 		userName, err := r.GetUserName(accessKey, secretKey)
 		if err != nil {
 			return nil, err
@@ -151,3 +151,5 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
 func (p *Provider) EventDump(action, sourceIp string) {}
 
 func (p *Provider) ExecuteCloudVMCommand(instanceId, cmd string) {}
+
+func (p *Provider) DBManagement(action, args string) {}

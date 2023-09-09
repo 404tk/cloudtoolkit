@@ -18,6 +18,7 @@ type Provider interface {
 	BucketDump(ctx context.Context, action, bucketname string)
 	EventDump(action, sourceIp string)
 	ExecuteCloudVMCommand(instanceId, cmd string)
+	DBManagement(action, args string)
 }
 
 // NewResources creates a new resources structure
@@ -68,11 +69,13 @@ type User struct {
 }
 
 type Database struct {
-	DBInstanceId  string `table:"ID"`
+	InstanceId    string `table:"ID"`
 	Engine        string `table:"Engine"`
 	EngineVersion string `table:"Version"`
 	Region        string `table:"Region"`
 	Address       string `table:"Address"`
+	NetworkType   string `table:"NetworkType"`
+	DBNames       string `table:"DBName"`
 }
 
 type Domain struct {

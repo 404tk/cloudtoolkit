@@ -58,6 +58,8 @@ func (d *Driver) GetRamUser(ctx context.Context) ([]schema.User, error) {
 				UserName: user.UserName,
 				UserId:   user.UserId,
 			}
+			date, _ := time.Parse(time.RFC3339, user.CreateDate)
+			_user.CreateTime = date.String()
 
 			request := ram.CreateGetLoginProfileRequest()
 			request.Scheme = "https"
@@ -72,10 +74,6 @@ func (d *Driver) GetRamUser(ctx context.Context) ([]schema.User, error) {
 				if err == nil && getUserResponse.User.LastLoginDate != "" {
 					lastLoginDate, _ := time.Parse(time.RFC3339, getUserResponse.User.LastLoginDate)
 					_user.LastLogin = lastLoginDate.String()
-				}
-				if err == nil && getUserResponse.User.CreateDate != "" {
-					date, _ := time.Parse(time.RFC3339, getUserResponse.User.CreateDate)
-					_user.CreateTime = date.String()
 				}
 			}
 

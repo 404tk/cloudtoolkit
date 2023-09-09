@@ -55,7 +55,7 @@ func New(options schema.Options) (*Provider, error) {
 	}
 
 	payload, _ := options.GetMetadata(utils.Payload)
-	if payload == "cloudlist" || payload == "sessions" {
+	if payload == "cloudlist" {
 		// Get current username
 		stsclient := sts.New(session)
 		resp, err := stsclient.GetCallerIdentity(&sts.GetCallerIdentityInput{})
@@ -156,3 +156,5 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
 func (p *Provider) EventDump(action, sourceIp string) {}
 
 func (p *Provider) ExecuteCloudVMCommand(instanceId, cmd string) {}
+
+func (p *Provider) DBManagement(action, args string) {}

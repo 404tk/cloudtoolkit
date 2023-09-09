@@ -11,19 +11,20 @@ import (
 type BucketDump struct{}
 
 func (p BucketDump) Run(ctx context.Context, config map[string]string) {
+	var action, bucketname string
+	if metadata, ok := config["metadata"]; ok {
+		data := strings.Split(metadata, " ")
+		if len(data) < 2 {
+			logger.Error("Execute `set metadata dump <bucket>`")
+			return
+		}
+		action = data[0]
+		bucketname = data[1]
+	}
 	i, err := inventory.New(config)
 	if err != nil {
 		logger.Error(err)
 		return
-	}
-
-	var action, bucketname string
-	if metadata, ok := config["metadata"]; ok {
-		data := strings.Split(metadata, " ")
-		if len(data) >= 2 {
-			action = data[0]
-			bucketname = data[1]
-		}
 	}
 	i.Providers.BucketDump(ctx, action, bucketname)
 	logger.Info("Done.")

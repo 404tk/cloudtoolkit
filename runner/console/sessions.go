@@ -102,7 +102,7 @@ func checkCred(uuid string) {
 		}
 		if value, ok := m[utils.Provider]; ok {
 			if v, ok := plugins.Providers[value]; ok {
-				m[utils.Payload] = "sessions"
+				m[utils.Payload] = "cloudlist"
 				_, err = v.Check(m)
 				if err != nil {
 					logger.Error(fmt.Sprintf("%s(%s) check failed.", cred.User, cred.AccessKey))
