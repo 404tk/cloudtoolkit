@@ -1,6 +1,9 @@
 # cloudtoolkit
 Cloud Penetration Testing Toolkit
 
+## Usage  
+Reference [Wiki](https://github.com/404tk/cloudtoolkit/wiki)  
+
 ## Capability overview
 
 |          Providers          |                   Payload                   |                          Supported                           |

@@ -26,7 +26,6 @@ func (d *Driver) NewClient() (*lighthouse.Client, error) {
 	return lighthouse.NewClient(d.Credential, region, cpf)
 }
 
-// GetResource returns all the resources in the store for a provider.
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := schema.NewResources().Hosts
 	select {
@@ -53,40 +52,52 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 
 	flag := false
 	prevLength := 0
+	count := 0
 	for _, r := range regions {
 		d.Region = r
 		client, _ := d.NewClient()
 		request := lighthouse.NewDescribeInstancesRequest()
-		response, err := client.DescribeInstances(request)
-		if err != nil {
-			logger.Error("Enumerate Lighthouse failed.")
-			return list, err
-		}
+		request.Limit = common.Int64Ptr(100)
+		var offset int64 = 0
+		for {
+			request.Offset = common.Int64Ptr(offset)
+			response, err := client.DescribeInstances(request)
+			if err != nil {
+				logger.Error("Enumerate Lighthouse failed.")
+				return list, err
+			}
 
-		for _, instance := range response.Response.InstanceSet {
-			var ipv4, privateIPv4 string
-			if len(instance.PublicAddresses) > 0 {
-				ipv4 = *instance.PublicAddresses[0]
+			for _, instance := range response.Response.InstanceSet {
+				var ipv4, privateIPv4 string
+				if len(instance.PublicAddresses) > 0 {
+					ipv4 = *instance.PublicAddresses[0]
+				}
+				if len(instance.PrivateAddresses) > 0 {
+					privateIPv4 = *instance.PrivateAddresses[0]
+				}
+				_host := schema.Host{
+					HostName:    *instance.InstanceName,
+					ID:          *instance.InstanceId,
+					PublicIPv4:  ipv4,
+					PrivateIpv4: privateIPv4,
+					OSType:      *instance.PlatformType, // LINUX_UNIX or WINDOWS
+					Public:      ipv4 != "",
+					Region:      r,
+				}
+				list = append(list, _host)
 			}
-			if len(instance.PrivateAddresses) > 0 {
-				privateIPv4 = *instance.PrivateAddresses[0]
+
+			if len(response.Response.InstanceSet) < 100 {
+				break
 			}
-			_host := schema.Host{
-				HostName:    *instance.InstanceName,
-				ID:          *instance.InstanceId,
-				PublicIPv4:  ipv4,
-				PrivateIpv4: privateIPv4,
-				OSType:      *instance.PlatformType, // LINUX_UNIX or WINDOWS
-				Public:      ipv4 != "",
-				Region:      r,
-			}
-			list = append(list, _host)
+			offset += 100
 		}
 		select {
 		case <-ctx.Done():
 			goto done
 		default:
-			prevLength, flag = processbar.RegionPrint(r, len(response.Response.InstanceSet), prevLength, flag)
+			prevLength, flag = processbar.RegionPrint(r, len(list)-count, prevLength, flag)
+			count = len(list)
 		}
 	}
 done:
