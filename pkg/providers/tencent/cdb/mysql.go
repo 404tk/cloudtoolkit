@@ -18,7 +18,7 @@ type Driver struct {
 }
 
 func (d *Driver) ListMySQL(ctx context.Context) ([]schema.Database, error) {
-	list := schema.NewResources().Databases
+	list := []schema.Database{}
 	select {
 	case <-ctx.Done():
 		return list, nil

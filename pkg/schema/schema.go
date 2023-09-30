@@ -23,13 +23,7 @@ type Provider interface {
 
 // NewResources creates a new resources structure
 func NewResources() Resources {
-	return Resources{
-		Hosts:     make([]Host, 0),
-		Storages:  make([]Storage, 0),
-		Users:     make([]User, 0),
-		Databases: make([]Database, 0),
-		Domains:   make([]Domain, 0),
-	}
+	return Resources{}
 }
 
 type Resources struct {
@@ -40,6 +34,7 @@ type Resources struct {
 	Databases []Database
 	Domains   []Domain
 	Sms       Sms
+	Logs      []Log
 }
 
 type Host struct {
@@ -117,6 +112,13 @@ type Event struct {
 	SourceIp  string `table:"Source IP"`
 	AccessKey string
 	Time      string
+}
+
+type Log struct {
+	ProjectName    string `table:"Project Name"`
+	Region         string
+	Description    string
+	LastModifyTime string
 }
 
 // ErrNoSuchKey means no such key exists in metadata.

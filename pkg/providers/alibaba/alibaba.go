@@ -13,6 +13,7 @@ import (
 	_ram "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/ram"
 	_rds "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/rds"
 	_sas "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/sas"
+	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/sls"
 	_sms "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/sms"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
@@ -64,7 +65,7 @@ func New(options schema.Options) (*Provider, error) {
 				userName = u[1]
 			}
 		}
-		msg := "Current user: " + userName
+		msg := fmt.Sprintf("Current user: %s (%s)", userName, accountArn)
 		cache.Cfg.CredInsert(userName, options)
 		logger.Warning(msg)
 	}
@@ -109,6 +110,9 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 		case "sms":
 			smsprovider := &_sms.Driver{Cred: p.cred, Region: p.region}
 			list.Sms, err = smsprovider.GetResource(ctx)
+		case "log":
+			slsprovider := &sls.Driver{Cred: p.cred, Region: p.region}
+			list.Logs, _ = slsprovider.ListProjects(ctx)
 		default:
 		}
 	}

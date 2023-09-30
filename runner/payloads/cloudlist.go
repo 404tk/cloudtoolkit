@@ -51,6 +51,7 @@ func (p CloudList) Run(ctx context.Context, config map[string]string) {
 		pprint(len(resources.Databases), "Databases", resources.Databases)
 		pprint(len(resources.Sms.Signs), "SMS Signs", resources.Sms.Signs)
 		pprint(len(resources.Sms.Templates), "SMS Templates", resources.Sms.Templates)
+		pprint(len(resources.Logs), "Log Service", resources.Logs)
 		if resources.Sms.DailySize > 0 {
 			msg := fmt.Sprintf("The total number of SMS messages sent today is %v.", resources.Sms.DailySize)
 			logger.Info(msg)

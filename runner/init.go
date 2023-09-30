@@ -51,6 +51,7 @@ cloudlist:
   - database
   - bucket
   - sms
+  - log
 
 backdoor-user:
   action: add

@@ -16,7 +16,7 @@ type Driver struct {
 }
 
 func (d *Driver) GetStorages(ctx context.Context) ([]schema.Storage, error) {
-	list := schema.NewResources().Storages
+	list := []schema.Storage{}
 	logger.Info("Start enumerating Storage Accounts ...")
 	for _, subscription := range d.SubscriptionIDs {
 		accountsClient := storage.NewAccountsClient(subscription)

@@ -16,7 +16,7 @@ type Driver struct {
 }
 
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
-	list := schema.NewResources().Hosts
+	list := []schema.Host{}
 	logger.Info("Start enumerating DNS ...")
 	r := &request.DefaultHttpRequest{
 		Endpoint: "dns.googleapis.com",
@@ -46,7 +46,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 
 // parseRecordsForResourceSet parses and returns the records for a resource set
 func (d *Driver) parseRecordsForResourceSet(r []gjson.Result, zone string) []schema.Host {
-	list := schema.NewResources().Hosts
+	list := []schema.Host{}
 
 	for _, resource := range r {
 		_type := resource.Get("type").String()

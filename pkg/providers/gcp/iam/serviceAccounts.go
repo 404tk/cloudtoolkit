@@ -14,7 +14,7 @@ type Driver struct {
 }
 
 func (d *Driver) GetServiceAccounts(ctx context.Context) ([]schema.User, error) {
-	list := schema.NewResources().Users
+	list := []schema.User{}
 	logger.Info("Start enumerating IAM ...")
 	r := &request.DefaultHttpRequest{
 		Endpoint: "iam.googleapis.com",

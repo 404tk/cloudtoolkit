@@ -15,7 +15,7 @@ type Driver struct {
 }
 
 func (d *Driver) GetActiveDirectory(ctx context.Context) ([]schema.User, error) {
-	list := schema.NewResources().Users
+	list := []schema.User{}
 	logger.Info("Start enumerating Active Directory ...")
 	usersClient := graphrbac.NewUsersClient(d.Config.TenantID)
 	d.Config.Resource = azure.PublicCloud.GraphEndpoint

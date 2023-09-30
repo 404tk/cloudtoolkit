@@ -27,7 +27,7 @@ func (d *Driver) NewClient() (*lighthouse.Client, error) {
 }
 
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
-	list := schema.NewResources().Hosts
+	list := []schema.Host{}
 	select {
 	case <-ctx.Done():
 		return list, nil

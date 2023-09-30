@@ -28,7 +28,7 @@ func (d *Driver) NewClient() (*cvm.Client, error) {
 }
 
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
-	list := schema.NewResources().Hosts
+	list := []schema.Host{}
 	logger.Info("Start enumerating CVM ...")
 	var regions []string
 	if d.Region == "all" {

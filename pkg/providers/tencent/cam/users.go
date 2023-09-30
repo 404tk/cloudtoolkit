@@ -20,7 +20,7 @@ type Driver struct {
 }
 
 func (d *Driver) GetCamUser(ctx context.Context) ([]schema.User, error) {
-	list := schema.NewResources().Users
+	list := []schema.User{}
 	select {
 	case <-ctx.Done():
 		return list, nil

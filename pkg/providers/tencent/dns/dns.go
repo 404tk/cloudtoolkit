@@ -15,7 +15,7 @@ type Driver struct {
 }
 
 func (d *Driver) GetDomains(ctx context.Context) ([]schema.Domain, error) {
-	list := schema.NewResources().Domains
+	list := []schema.Domain{}
 	select {
 	case <-ctx.Done():
 		return list, nil

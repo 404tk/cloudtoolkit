@@ -32,7 +32,7 @@ func (d *Driver) NewClient() *ram.Client {
 }
 
 func (d *Driver) GetRamUser(ctx context.Context) ([]schema.User, error) {
-	list := schema.NewResources().Users
+	list := []schema.User{}
 	select {
 	case <-ctx.Done():
 		return list, nil

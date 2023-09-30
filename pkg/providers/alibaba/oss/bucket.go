@@ -29,7 +29,7 @@ func (d *Driver) NewClient() *oss.Client {
 }
 
 func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
-	list := schema.NewResources().Storages
+	list := []schema.Storage{}
 	select {
 	case <-ctx.Done():
 		return list, nil

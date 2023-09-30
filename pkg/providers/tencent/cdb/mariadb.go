@@ -12,7 +12,7 @@ import (
 )
 
 func (d *Driver) ListMariaDB(ctx context.Context) ([]schema.Database, error) {
-	list := schema.NewResources().Databases
+	list := []schema.Database{}
 	select {
 	case <-ctx.Done():
 		return list, nil

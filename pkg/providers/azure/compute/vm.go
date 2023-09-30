@@ -20,7 +20,7 @@ type Driver struct {
 
 // GetResource returns all the resources in the store for a provider.
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
-	list := schema.NewResources().Hosts
+	list := []schema.Host{}
 	logger.Info("Start enumerating VM ...")
 
 	groups_map, err := fetchResouceGroups(ctx, d)
