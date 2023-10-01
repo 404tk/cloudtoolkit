@@ -6,7 +6,7 @@ import (
 
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/c-bata/go-prompt"
+	"github.com/404tk/go-prompt"
 )
 
 var config map[string]string

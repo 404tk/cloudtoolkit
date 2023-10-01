@@ -4,7 +4,7 @@ import (
 	_ "github.com/404tk/cloudtoolkit/pkg/plugins"
 	"github.com/404tk/cloudtoolkit/runner"
 	"github.com/404tk/cloudtoolkit/runner/console"
-	"github.com/c-bata/go-prompt"
+	"github.com/404tk/go-prompt"
 )
 
 func main() {

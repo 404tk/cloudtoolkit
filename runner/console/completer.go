@@ -6,7 +6,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/plugins"
 	"github.com/404tk/cloudtoolkit/runner/payloads"
 	"github.com/404tk/cloudtoolkit/utils"
-	"github.com/c-bata/go-prompt"
+	"github.com/404tk/go-prompt"
 )
 
 var core = []prompt.Suggest{

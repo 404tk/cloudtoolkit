@@ -7,7 +7,7 @@ import (
 
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/c-bata/go-prompt"
+	"github.com/404tk/go-prompt"
 )
 
 var consoleStack []*prompt.Prompt
