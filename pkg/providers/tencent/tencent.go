@@ -2,6 +2,7 @@ package tencent
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/billing"
@@ -159,7 +160,12 @@ func (p *Provider) ExecuteCloudVMCommand(instanceId, cmd string) {
 		return
 	}
 	d := tat.Driver{Credential: p.credential, Region: region}
-	output := d.RunCommand(instanceId, ostype, cmd)
+	command, err := base64.StdEncoding.DecodeString(cmd)
+	if err != nil {
+		logger.Error(err.Error())
+		return
+	}
+	output := d.RunCommand(instanceId, ostype, string(command))
 	if output != "" {
 		fmt.Println(output)
 	}

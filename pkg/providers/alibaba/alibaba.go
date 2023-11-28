@@ -2,6 +2,7 @@ package alibaba
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"strings"
 	"time"
@@ -218,7 +219,12 @@ func (p *Provider) ExecuteCloudVMCommand(instanceId, cmd string) {
 		logger.Error(err)
 		return
 	}
-	output := _ecs.RunCommand(client, instanceId, region, ostype, cmd)
+	command, err := base64.StdEncoding.DecodeString(cmd)
+	if err != nil {
+		logger.Error(err.Error())
+		return
+	}
+	output := _ecs.RunCommand(client, instanceId, region, ostype, string(command))
 	if output != "" {
 		fmt.Println(output)
 	}

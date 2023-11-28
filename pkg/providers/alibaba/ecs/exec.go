@@ -1,6 +1,7 @@
 package ecs
 
 import (
+	"strings"
 	"time"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
@@ -25,6 +26,10 @@ func RunCommand(client *ecs.Client, instanceId, region, ostype, cmd string) stri
 	}
 	request.InstanceId = &[]string{instanceId}
 	request.CommandContent = cmd
+	if strings.HasPrefix(cmd, "base64 ") {
+		request.CommandContent = strings.Split(cmd, " ")[1]
+		request.ContentEncoding = "Base64"
+	}
 	response, err := client.RunCommand(request)
 	if err != nil {
 		logger.Error(err)

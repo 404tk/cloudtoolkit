@@ -2,6 +2,7 @@ package console
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
 
@@ -51,6 +52,7 @@ func shellExecutor(cmd string) {
 			logger.Error("No previous console")
 		}
 	default:
+		cmd = base64.StdEncoding.EncodeToString([]byte(cmd))
 		config[utils.Metadata] = fmt.Sprintf("%s %s", instanceId, cmd)
 		run(context.TODO())
 	}
