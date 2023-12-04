@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
@@ -77,7 +78,9 @@ func (d *Driver) GetRamUser(ctx context.Context) ([]schema.User, error) {
 				}
 			}
 
-			_user.Policies = listPoliciesForUser(client, _user.UserName)
+			if utils.ListPolicies {
+				_user.Policies = listPoliciesForUser(client, _user.UserName)
+			}
 
 			list = append(list, _user)
 			select {

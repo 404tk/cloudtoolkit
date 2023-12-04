@@ -24,6 +24,7 @@ func InitConfig() {
 	}
 
 	utils.DoSave = viper.GetBool("common.log_enable")
+	utils.ListPolicies = viper.GetBool("common.list_policies")
 	utils.LogDir = viper.GetString("common.log_dir")
 	utils.Cloudlist = viper.GetStringSlice("cloudlist")
 
@@ -40,7 +41,8 @@ func InitConfig() {
 }
 
 const defaultConfigFile = `common:
-  log_enable: true
+  log_enable: false
+  list_policies: false
   log_dir: logs
 
 cloudlist:

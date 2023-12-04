@@ -29,6 +29,7 @@ const (
 
 var (
 	DoSave       bool
+	ListPolicies bool
 	LogDir       string
 	Cloudlist    []string
 	BackdoorUser string

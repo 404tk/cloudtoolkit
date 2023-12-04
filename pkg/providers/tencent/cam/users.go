@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	cam "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cam/v20190116"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
@@ -46,7 +47,9 @@ func (d *Driver) GetCamUser(ctx context.Context) ([]schema.User, error) {
 		if *user.ConsoleLogin == 1 {
 			_user.EnableLogin = true
 		}
-		_user.Policies = listAttachedUserAllPolicies(client, user.Uin)
+		if utils.ListPolicies {
+			_user.Policies = listAttachedUserAllPolicies(client, user.Uin)
+		}
 
 		list = append(list, _user)
 	}
