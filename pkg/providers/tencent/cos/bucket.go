@@ -24,8 +24,9 @@ func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	}
 	client := cos.NewClient(nil, &http.Client{
 		Transport: &cos.AuthorizationTransport{
-			SecretID:  d.Credential.SecretId,
-			SecretKey: d.Credential.SecretKey,
+			SecretID:     d.Credential.SecretId,
+			SecretKey:    d.Credential.SecretKey,
+			SessionToken: d.Credential.Token,
 		},
 	})
 	buckets, _, err := client.Service.Get(ctx)
