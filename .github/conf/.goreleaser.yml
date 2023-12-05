@@ -12,18 +12,16 @@ builds:
       - windows
     goarch:
       - amd64
-      - arm64
+      #- arm64
     flags:
       - -trimpath
       - -buildmode
       - exe
     ldflags:
       - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{ .CommitDate }} -X main.builtBy=goreleaser
-    ignore:
-      - goos: windows
-        goarch: arm64
-      - goos: windows
-        goarch: arm
+    #ignore:
+      #- goos: windows
+        #goarch: arm64
     hooks:
        post: upx --best -f -q "{{ .Path }}"
   
