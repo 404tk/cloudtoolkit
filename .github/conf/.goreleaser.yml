@@ -22,8 +22,8 @@ builds:
     #ignore:
       #- goos: windows
         #goarch: arm64
-    hooks:
-       post: upx --best -f -q "{{ .Path }}"
+    #hooks:
+       #post: upx --best -f -q "{{ .Path }}"
   
   - id: "without-upx"
     main: ./cmd/main.go
