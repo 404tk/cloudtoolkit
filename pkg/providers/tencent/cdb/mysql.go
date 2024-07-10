@@ -3,6 +3,7 @@ package cdb
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -49,6 +50,9 @@ func (d *Driver) ListMySQL(ctx context.Context) ([]schema.Database, error) {
 		request := cdb.NewDescribeDBInstancesRequest()
 		response, err := client.DescribeDBInstances(request)
 		if err != nil {
+			if strings.Contains(err.Error(), "UnsupportedRegion") {
+				continue
+			}
 			logger.Error("Enumerate MySQL failed.")
 			return list, err
 		}
