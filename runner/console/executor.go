@@ -43,6 +43,8 @@ func Executor(s string) {
 		shell(args)
 	case "sessions":
 		sessions(args)
+	case "note":
+		note(args)
 	case "help":
 		help()
 	case "clear":

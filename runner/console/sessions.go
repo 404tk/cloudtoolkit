@@ -18,6 +18,7 @@ type credential struct {
 	User      string `table:"User"`
 	AccessKey string `table:"AccessKey"`
 	Provider  string `table:"Provider"`
+	Note      string `table:"Note"`
 }
 
 var creds []credential
@@ -33,20 +34,19 @@ func sessions(args []string) {
 		table.Output(creds)
 		return
 	} else if len(args) == 2 {
-		if id, err := strconv.Atoi(args[1]); err == nil {
-			if uuid, ok := cred_ids[id]; ok {
-				switch args[0] {
-				case "-i":
-					internation(uuid)
-					return
-				case "-k":
-					cache.Cfg.CredDelete(uuid)
-					loadCred()
-					return
-				case "-c":
-					checkCred(uuid)
-					return
-				}
+		uuid := getUuid(args[1])
+		if len(uuid) > 0 {
+			switch args[0] {
+			case "-i":
+				internation(uuid)
+				return
+			case "-k":
+				cache.Cfg.CredDelete(uuid)
+				loadCred()
+				return
+			case "-c":
+				checkCred(uuid)
+				return
 			}
 		}
 	} else if len(args) == 1 && args[0] == "-c" {
@@ -54,6 +54,27 @@ func sessions(args []string) {
 		return
 	}
 	fmt.Println("Usage of sessions:\n\t-i, internation [id]\n\t-k, kill [id]\n\t-c, check all")
+}
+
+func note(args []string) {
+	if len(args) < 2 {
+		fmt.Println("Example: note 1 Test")
+		return
+	}
+	uuid := getUuid(args[0])
+	if len(uuid) > 0 {
+		cache.Cfg.CredNote(uuid, args[1])
+	}
+}
+
+func getUuid(s string) string {
+	sid, err := strconv.Atoi(s)
+	if err == nil {
+		if uuid, ok := cred_ids[sid]; ok {
+			return uuid
+		}
+	}
+	return ""
 }
 
 func loadCred() {
@@ -65,6 +86,7 @@ func loadCred() {
 			User:      v.User,
 			AccessKey: v.AccessKey,
 			Provider:  v.Provider,
+			Note:      v.Note,
 		})
 		cred_ids[i+1] = v.UUID
 	}

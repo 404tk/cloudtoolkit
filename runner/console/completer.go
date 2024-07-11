@@ -13,6 +13,7 @@ var core = []prompt.Suggest{
 	{Text: "help", Description: "help menu"},
 	{Text: "use", Description: "use module"},
 	{Text: "sessions", Description: "list cache credential"},
+	{Text: "note", Description: "add remarks to the session"},
 	{Text: "clear", Description: "clear screen"},
 	{Text: "exit", Description: "exit console"},
 }

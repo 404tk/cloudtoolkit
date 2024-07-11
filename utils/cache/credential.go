@@ -14,6 +14,7 @@ type Credential struct {
 	AccessKey string
 	Provider  string
 	JsonData  string
+	Note      string
 }
 
 func (cfg *InitCfg) CredInsert(user string, data map[string]string) {
@@ -60,6 +61,15 @@ func (cfg *InitCfg) CredUpdate(uuid, data string) {
 	for k, v := range cfg.Creds {
 		if v.UUID == uuid {
 			cfg.Creds[k].JsonData = data
+			return
+		}
+	}
+}
+
+func (cfg *InitCfg) CredNote(uuid, data string) {
+	for k, v := range cfg.Creds {
+		if v.UUID == uuid {
+			cfg.Creds[k].Note = data
 			return
 		}
 	}
