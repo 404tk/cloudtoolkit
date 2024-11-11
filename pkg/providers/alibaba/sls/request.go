@@ -5,9 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"runtime"
 	"strconv"
@@ -84,33 +82,19 @@ func (client *Client) doRequest(req *request) (*http.Response, error) {
 	}
 
 	hreq, err := http.NewRequest(req.method, req.url(), reader)
+	if err != nil {
+		return nil, err
+	}
 
 	for k, v := range req.headers {
 		if v != "" {
 			hreq.Header.Set(k, v)
 		}
 	}
-
-	if err != nil {
-		return nil, err
-	}
-	if client.debug {
-		reqDump, _ := httputil.DumpRequest(hreq, true)
-		log.Printf("---------------REQUEST---------------\n%s\n\n", string(reqDump))
-	}
-	t0 := time.Now()
 	resp, err := client.httpClient.Do(hreq)
-	t1 := time.Now()
 	if err != nil {
-		fmt.Println(err)
 		return nil, err
 	}
-	if client.debug {
-		resDump, _ := httputil.DumpResponse(resp, true)
-		log.Printf("---------------RESPONSE---------------\n%s\n\n", string(resDump))
-		log.Printf("Invoke %s %s %d (%v)", req.method, req.url(), resp.StatusCode, t1.Sub(t0))
-	}
-
 	if resp.StatusCode != 200 && resp.StatusCode != 204 && resp.StatusCode != 206 {
 		return nil, buildError(resp)
 	}
@@ -119,7 +103,6 @@ func (client *Client) doRequest(req *request) (*http.Response, error) {
 
 func (client *Client) requestWithJsonResponse(req *request, v interface{}) error {
 	resp, err := client.doRequest(req)
-
 	if err != nil {
 		return err
 	}
@@ -130,16 +113,6 @@ func (client *Client) requestWithJsonResponse(req *request, v interface{}) error
 	}
 
 	return json.Unmarshal(data, v)
-}
-
-func (client *Client) requestWithClose(req *request) error {
-	resp, err := client.doRequest(req)
-	if err != nil {
-		return err
-	}
-
-	resp.Body.Close()
-	return nil
 }
 
 type Error struct {

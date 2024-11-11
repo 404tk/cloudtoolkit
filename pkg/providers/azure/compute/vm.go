@@ -39,6 +39,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 
 			for _, vm := range vmList {
 				_host := schema.Host{
+					State:    vm.Status,
 					HostName: *vm.Name,
 					Region:   *vm.Location,
 				}
@@ -98,7 +99,7 @@ func fetchResouceGroups(ctx context.Context, sess *Driver) (map[string][]string,
 		grClient.Authorizer = sess.Authorizer
 		resGrp[subscription] = []string{}
 
-		list, err := grClient.List(context.Background(), "", nil)
+		list, err := grClient.List(ctx, "", nil)
 		if err != nil {
 			return resGrp, err
 		}
@@ -112,7 +113,7 @@ func fetchResouceGroups(ctx context.Context, sess *Driver) (map[string][]string,
 func fetchVMList(ctx context.Context, group, subscription string, auth autorest.Authorizer) ([]compute.VirtualMachine, error) {
 	vmClient := compute.NewVirtualMachinesClient(subscription)
 	vmClient.Authorizer = auth
-	vm, err := vmClient.List(context.Background(), group, "")
+	vm, err := vmClient.List(ctx, group, "")
 	if err != nil {
 		return nil, err
 	}

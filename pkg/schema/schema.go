@@ -40,6 +40,7 @@ type Resources struct {
 type Host struct {
 	HostName    string `table:"HostName"`
 	ID          string `table:"Instance ID"`
+	State       string `table:"State"`
 	PublicIPv4  string `table:"Public IP"`
 	PrivateIpv4 string `table:"Private IP"`
 	OSType      string `table:"OS Type"`

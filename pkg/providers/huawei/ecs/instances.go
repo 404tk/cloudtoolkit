@@ -56,6 +56,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 				}
 			}
 			host := schema.Host{
+				State:       instance.Status,
 				HostName:    instance.Name,
 				PublicIPv4:  ipv4,
 				PrivateIpv4: privateIPv4,

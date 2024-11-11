@@ -48,6 +48,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 				for _, instance := range reservation.Instances {
 					ip4 := aws.StringValue(instance.PublicIpAddress)
 					host := schema.Host{
+						State:       instance.State.String(),
 						PublicIPv4:  ip4,
 						PrivateIpv4: aws.StringValue(instance.PrivateIpAddress),
 						DNSName:     aws.StringValue(instance.PublicDnsName),
