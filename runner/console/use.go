@@ -23,7 +23,7 @@ func use(args []string) {
 
 func loadModule(m string) error {
 	switch m {
-	case "alibaba", "tencent", "huawei", "aws":
+	case "alibaba", "tencent", "huawei", "aws", "volcengine":
 		config = loadConfig1()
 	case "azure":
 		config = loadConfig2()
