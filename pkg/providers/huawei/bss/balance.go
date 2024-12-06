@@ -7,14 +7,13 @@ import (
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/global"
-	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/as/v1/region"
 	bss "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/bss/v2"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/bss/v2/model"
 )
 
 type Driver struct {
-	Cred   basic.Credentials
-	Region string
+	Cred basic.Credentials
+	Intl bool
 }
 
 func (d *Driver) QueryAccountBalance(ctx context.Context) {
@@ -27,13 +26,13 @@ func (d *Driver) QueryAccountBalance(ctx context.Context) {
 		WithAk(d.Cred.AK).
 		WithSk(d.Cred.SK).
 		Build()
-	r := d.Region
-	if r == "all" {
-		r = "cn-north-1"
+	endpoint := "https://bss.myhuaweicloud.com"
+	if d.Intl {
+		endpoint = "https://bss-intl.myhuaweicloud.com"
 	}
 	client := bss.NewBssClient(
 		bss.BssClientBuilder().
-			WithRegion(region.ValueOf(r)).
+			WithEndpoint(endpoint).
 			WithCredential(_auth).
 			Build())
 

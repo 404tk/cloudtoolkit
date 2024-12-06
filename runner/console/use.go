@@ -52,8 +52,8 @@ func loadConfig1() map[string]string {
 		utils.AccessKey:     "",
 		utils.SecretKey:     "",
 		utils.SecurityToken: "",
-		utils.Region:        "all",    // Default enumerate all
-		utils.Version:       "Global", // Default select International Edition
+		utils.Region:        "all", // Default enumerate all
+		utils.Version:       "",
 	}
 }
 

@@ -17,10 +17,10 @@ func (d *Driver) DelUser() {
 		WithSk(d.Auth.SK).
 		Build()
 	client := iam.NewIamClient(iam.IamClientBuilder().
-		WithRegion(region.ValueOf(d.Regions[0])).
+		WithRegion(region.ValueOf("cn-north-1")).
 		WithCredential(auth).
 		Build())
-	users, err := d.GetIAMUser(context.Background())
+	users, err := d.ListUsers(context.Background())
 	if err != nil {
 		logger.Error("List users failed:", err.Error())
 		return

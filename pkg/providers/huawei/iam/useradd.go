@@ -16,7 +16,7 @@ func (d *Driver) AddUser() {
 		WithSk(d.Auth.SK).
 		Build()
 	client := iam.NewIamClient(iam.IamClientBuilder().
-		WithRegion(region.ValueOf(d.Regions[0])).
+		WithRegion(region.ValueOf("cn-north-1")).
 		WithCredential(auth).
 		Build())
 	uid, domainid, err := createUser(client, d.Username, d.Password)

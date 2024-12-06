@@ -104,7 +104,7 @@ func actionCompleter(d prompt.Document) []prompt.Suggest {
 		}
 		if len(args) == 3 && args[1] == utils.Version {
 			var versions = []prompt.Suggest{
-				{Text: "Global", Description: "International Edition"},
+				{Text: "Intl", Description: "International Edition"},
 				{Text: "China", Description: "Chinese Edition"},
 			}
 			return prompt.FilterContains(versions, d.GetWordBeforeCursor(), true)

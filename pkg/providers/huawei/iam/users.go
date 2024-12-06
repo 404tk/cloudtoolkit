@@ -14,12 +14,11 @@ import (
 
 type Driver struct {
 	Auth     basic.Credentials
-	Regions  []string
 	Username string
 	Password string
 }
 
-func (d *Driver) GetIAMUser(ctx context.Context) ([]schema.User, error) {
+func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 	list := []schema.User{}
 	select {
 	case <-ctx.Done():
@@ -32,7 +31,7 @@ func (d *Driver) GetIAMUser(ctx context.Context) ([]schema.User, error) {
 		WithSk(d.Auth.SK).
 		Build()
 	client := iam.NewIamClient(iam.IamClientBuilder().
-		WithRegion(region.ValueOf(d.Regions[0])).
+		WithRegion(region.ValueOf("cn-north-1")).
 		WithCredential(auth).
 		Build())
 	keystoneListUsersRequest := &model.KeystoneListUsersRequest{}

@@ -20,9 +20,9 @@ import (
 
 // Provider is a data provider for huawei API
 type Provider struct {
-	vendor  string
 	auth    basic.Credentials
 	regions []string
+	intl    bool
 }
 
 var default_region = "cn-north-4"
@@ -38,6 +38,11 @@ func New(options schema.Options) (*Provider, error) {
 		return nil, &schema.ErrNoSuchKey{Name: utils.SecretKey}
 	}
 	regionId, _ := options.GetMetadata(utils.Region)
+	v, _ := options.GetMetadata(utils.Version)
+	intl := false
+	if !(v == "" || v == "China") {
+		intl = true
+	}
 
 	var r = &_iam.DefaultHttpRequest{}
 	if regionId == "all" {
@@ -91,33 +96,33 @@ func New(options schema.Options) (*Provider, error) {
 	}
 
 	return &Provider{
-		vendor:  "huawei",
 		auth:    auth,
 		regions: regions,
+		intl:    intl,
 	}, nil
 }
 
 // Name returns the name of the provider
 func (p *Provider) Name() string {
-	return p.vendor
+	return "huawei"
 }
 
 // Resources returns the provider for a resource deployment source.
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
-	list.Provider = p.vendor
+	list.Provider = p.Name()
 	var err error
 	for _, product := range utils.Cloudlist {
 		switch product {
 		case "balance":
-			d := &_bss.Driver{Cred: p.auth, Region: p.regions[0]}
+			d := &_bss.Driver{Cred: p.auth, Intl: p.intl}
 			d.QueryAccountBalance(ctx)
 		case "host":
 			ecsprovider := &ecs.Driver{Auth: p.auth, Regions: p.regions}
 			list.Hosts, err = ecsprovider.GetResource(ctx)
 		case "account":
-			iamprovider := &_iam.Driver{Auth: p.auth, Regions: p.regions}
-			list.Users, err = iamprovider.GetIAMUser(ctx)
+			iamprovider := &_iam.Driver{Auth: p.auth}
+			list.Users, err = iamprovider.ListUsers(ctx)
 		case "database":
 			rdsprovider := &_rds.Driver{Auth: p.auth, Regions: p.regions}
 			list.Databases, err = rdsprovider.GetDatabases(ctx)
@@ -133,7 +138,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 
 func (p *Provider) UserManagement(action, uname, pwd string) {
 	r := &_iam.Driver{
-		Auth: p.auth, Regions: p.regions, Username: uname, Password: pwd}
+		Auth: p.auth, Username: uname, Password: pwd}
 	switch action {
 	case "add":
 		r.AddUser()
