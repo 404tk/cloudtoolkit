@@ -29,14 +29,14 @@ func (d *Driver) NewClient() (*cvm.Client, error) {
 
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := []schema.Host{}
-	logger.Info("Start enumerating CVM ...")
+	logger.Info("List CVM instances ...")
 	var regions []string
 	if d.Region == "all" {
 		client, _ := d.NewClient()
 		req := cvm.NewDescribeRegionsRequest()
 		resp, err := client.DescribeRegions(req)
 		if err != nil {
-			logger.Error("Enumerate CVM failed.")
+			logger.Error("List regions failed.")
 			return list, err
 		}
 		for _, r := range resp.Response.RegionSet {
@@ -58,7 +58,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 			request.Offset = common.Int64Ptr(offset)
 			response, err := client.DescribeInstances(request)
 			if err != nil {
-				logger.Error("Enumerate CVM failed.")
+				logger.Error("DescribeInstances failed.")
 				return list, err
 			}
 

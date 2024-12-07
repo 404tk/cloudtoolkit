@@ -17,7 +17,6 @@ import (
 
 // Provider is a data provider for gcp API
 type Provider struct {
-	vendor   string
 	projects []string
 	token    string
 }
@@ -56,7 +55,6 @@ func New(options schema.Options) (*Provider, error) {
 	}
 
 	return &Provider{
-		vendor:   "gcp",
 		projects: projects,
 		token:    token,
 	}, err
@@ -64,13 +62,13 @@ func New(options schema.Options) (*Provider, error) {
 
 // Name returns the name of the provider
 func (p *Provider) Name() string {
-	return p.vendor
+	return "gcp"
 }
 
 // Resources returns the provider for an resource deployment source.
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
-	list.Provider = p.vendor
+	list.Provider = p.Name()
 	var err error
 	for _, product := range utils.Cloudlist {
 		switch product {

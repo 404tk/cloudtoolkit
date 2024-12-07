@@ -32,7 +32,7 @@ func (d *Driver) ListProjects(ctx context.Context) ([]schema.Log, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		logger.Info("Start enumerating SLS ...")
+		logger.Info("List SLS project ...")
 	}
 	var regions []string
 	if d.Region == "all" {

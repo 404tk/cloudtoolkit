@@ -34,7 +34,7 @@ func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		logger.Info("Start enumerating OSS ...")
+		logger.Info("List OSS buckets ...")
 	}
 	client := d.NewClient()
 	response, err := client.ListBuckets(oss.MaxKeys(1000))

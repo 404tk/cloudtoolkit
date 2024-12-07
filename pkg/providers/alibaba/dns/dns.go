@@ -21,7 +21,7 @@ func (d *Driver) GetDomains(ctx context.Context) ([]schema.Domain, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		logger.Info("Start enumerating DNS ...")
+		logger.Info("List domains ...")
 	}
 	region := d.Region
 	if region == "all" {

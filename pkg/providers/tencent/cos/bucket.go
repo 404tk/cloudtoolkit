@@ -20,7 +20,7 @@ func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		logger.Info("Start enumerating COS ...")
+		logger.Info("List COS buckets ...")
 	}
 	client := cos.NewClient(nil, &http.Client{
 		Transport: &cos.AuthorizationTransport{
@@ -31,7 +31,7 @@ func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	})
 	buckets, _, err := client.Service.Get(ctx)
 	if err != nil {
-		logger.Error("Enumerate COS failed.")
+		logger.Error("List buckets failed.")
 		return nil, err
 	}
 

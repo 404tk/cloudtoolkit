@@ -20,7 +20,6 @@ import (
 
 // Provider is a data provider for aws API
 type Provider struct {
-	vendor  string
 	region  string
 	session *session.Session
 }
@@ -76,7 +75,6 @@ func New(options schema.Options) (*Provider, error) {
 	}
 
 	return &Provider{
-		vendor:  "aws",
 		region:  region,
 		session: session,
 	}, nil
@@ -84,13 +82,13 @@ func New(options schema.Options) (*Provider, error) {
 
 // Name returns the name of the provider
 func (p *Provider) Name() string {
-	return p.vendor
+	return "aws"
 }
 
 // Resources returns the provider for an resource deployment source.
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
-	list.Provider = p.vendor
+	list.Provider = p.Name()
 	var err error
 	for _, product := range utils.Cloudlist {
 		switch product {

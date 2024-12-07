@@ -32,7 +32,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		logger.Info("Start enumerating Lighthouse ...")
+		logger.Info("List Lighthouse instances ...")
 	}
 	var regions []string
 	if d.Region == "all" {
@@ -40,7 +40,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		req := lighthouse.NewDescribeRegionsRequest()
 		resp, err := client.DescribeRegions(req)
 		if err != nil {
-			logger.Error("Enumerate Lighthouse failed.")
+			logger.Error("List regions failed.")
 			return list, err
 		}
 		for _, r := range resp.Response.RegionSet {
@@ -63,7 +63,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 			request.Offset = common.Int64Ptr(offset)
 			response, err := client.DescribeInstances(request)
 			if err != nil {
-				logger.Error("Enumerate Lighthouse failed.")
+				logger.Error("DescribeInstances failed.")
 				return list, err
 			}
 

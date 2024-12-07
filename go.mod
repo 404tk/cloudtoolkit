@@ -11,7 +11,7 @@ require (
 	github.com/aliyun/alibaba-cloud-sdk-go v1.62.568
 	github.com/aliyun/aliyun-oss-go-sdk v2.2.9+incompatible
 	github.com/aws/aws-sdk-go v1.45.19
-	github.com/huaweicloud/huaweicloud-sdk-go-obs v3.23.9+incompatible
+	github.com/huaweicloud/huaweicloud-sdk-go-obs v3.24.9+incompatible
 	github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.0.97
 	github.com/spf13/viper v1.16.0
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/billing v1.0.759
@@ -79,7 +79,7 @@ require (
 	golang.org/x/net v0.15.0 // indirect
 	golang.org/x/sys v0.12.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
-	golang.org/x/time v0.3.0 // indirect
+	golang.org/x/time v0.1.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect

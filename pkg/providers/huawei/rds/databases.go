@@ -25,7 +25,7 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		logger.Info("Start enumerating RDS ...")
+		logger.Info("List RDS instances ...")
 	}
 	for _, r := range d.Regions {
 		client := newClient(r, d.Auth)

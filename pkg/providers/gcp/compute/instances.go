@@ -16,7 +16,7 @@ type Driver struct {
 
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := []schema.Host{}
-	logger.Info("Start enumerating Compute ...")
+	logger.Info("List Compute ...")
 	r := &request.DefaultHttpRequest{
 		Endpoint: "compute.googleapis.com",
 		Method:   "GET",

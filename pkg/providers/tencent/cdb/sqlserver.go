@@ -17,7 +17,7 @@ func (d *Driver) ListSQLServer(ctx context.Context) ([]schema.Database, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		logger.Info("Start enumerating SQLServer ...")
+		logger.Info("List SQLServer ...")
 	}
 	cpf := profile.NewClientProfile()
 	var regions []string
@@ -26,7 +26,7 @@ func (d *Driver) ListSQLServer(ctx context.Context) ([]schema.Database, error) {
 		req := sqlserver.NewDescribeRegionsRequest()
 		resp, err := client.DescribeRegions(req)
 		if err != nil {
-			logger.Error("Enumerate SQLServer failed.")
+			logger.Error("list regions failed.")
 			return list, err
 		}
 		for _, r := range resp.Response.RegionSet {
@@ -45,7 +45,7 @@ func (d *Driver) ListSQLServer(ctx context.Context) ([]schema.Database, error) {
 		request := sqlserver.NewDescribeDBInstancesRequest()
 		response, err := client.DescribeDBInstances(request)
 		if err != nil {
-			logger.Error("Enumerate SQLServer failed.")
+			logger.Error("DescribeDBInstances failed.")
 			return list, err
 		}
 

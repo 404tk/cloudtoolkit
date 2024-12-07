@@ -38,7 +38,7 @@ func (d *Driver) GetRamUser(ctx context.Context) ([]schema.User, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		logger.Info("Start enumerating RAM ...")
+		logger.Info("List RAM users ...")
 	}
 	client := d.NewClient()
 	marker := ""

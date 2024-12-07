@@ -17,7 +17,7 @@ func (d *Driver) ListPostgreSQL(ctx context.Context) ([]schema.Database, error) 
 	case <-ctx.Done():
 		return list, nil
 	default:
-		logger.Info("Start enumerating PostgreSQL ...")
+		logger.Info("List PostgreSQL ...")
 	}
 	cpf := profile.NewClientProfile()
 	var regions []string
@@ -26,7 +26,7 @@ func (d *Driver) ListPostgreSQL(ctx context.Context) ([]schema.Database, error) 
 		req := postgres.NewDescribeRegionsRequest()
 		resp, err := client.DescribeRegions(req)
 		if err != nil {
-			logger.Error("Enumerate PostgreSQL failed:", err)
+			logger.Error("List regions failed:", err)
 			return list, err
 		}
 		for _, r := range resp.Response.RegionSet {
@@ -46,7 +46,7 @@ func (d *Driver) ListPostgreSQL(ctx context.Context) ([]schema.Database, error) 
 		response, err := client.DescribeDBInstances(request)
 		if err != nil {
 			fmt.Println()
-			logger.Error("Enumerate PostgreSQL failed:", err)
+			logger.Error("DescribeDBInstances failed:", err)
 			return list, err
 		}
 

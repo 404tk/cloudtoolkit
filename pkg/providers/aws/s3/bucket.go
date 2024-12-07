@@ -19,12 +19,12 @@ func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		logger.Info("Start enumerating S3 ...")
+		logger.Info("List S3 buckets ...")
 	}
 	client := s3.New(d.Session)
 	buckets, err := client.ListBuckets(&s3.ListBucketsInput{})
 	if err != nil {
-		logger.Error("Enumerate S3 failed.")
+		logger.Error("List buckets failed.")
 		return list, err
 	}
 	for _, bucket := range buckets.Buckets {

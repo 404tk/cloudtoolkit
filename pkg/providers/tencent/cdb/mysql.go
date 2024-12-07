@@ -24,7 +24,7 @@ func (d *Driver) ListMySQL(ctx context.Context) ([]schema.Database, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		logger.Info("Start enumerating MySQL ...")
+		logger.Info("List MySQL ...")
 	}
 	cpf := profile.NewClientProfile()
 	var regions []string
@@ -33,7 +33,7 @@ func (d *Driver) ListMySQL(ctx context.Context) ([]schema.Database, error) {
 		req := cdb.NewDescribeCdbZoneConfigRequest()
 		resp, err := client.DescribeCdbZoneConfig(req)
 		if err != nil {
-			logger.Error("Enumerate MySQL failed.")
+			logger.Error("List regions failed.")
 			return list, err
 		}
 		for _, r := range resp.Response.DataResult.Regions {
@@ -53,7 +53,7 @@ func (d *Driver) ListMySQL(ctx context.Context) ([]schema.Database, error) {
 			if strings.Contains(err.Error(), "UnsupportedRegion") {
 				continue
 			}
-			logger.Error("Enumerate MySQL failed.")
+			logger.Error("DescribeDBInstances failed.")
 			return list, err
 		}
 

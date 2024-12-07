@@ -20,27 +20,30 @@ func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		logger.Info("Start enumerating OBS ...")
+		logger.Info("List OBS buckets...")
 	}
-	endPoint := "obs." + d.Regions[0] + ".myhuaweicloud.com"
-	client, err := obs.New(d.Auth.AK, d.Auth.SK, endPoint)
-	if err != nil {
-		logger.Error("Enumerate OBS failed.")
-		return nil, err
-	}
-
-	response, err := client.ListBuckets(nil)
-	if err != nil {
-		logger.Error("Enumerate OBS failed.")
-		return list, err
-	}
-
-	for _, bucket := range response.Buckets {
-		_bucket := schema.Storage{
-			BucketName: bucket.Name,
-			Region:     bucket.Location,
+	for _, r := range d.Regions {
+		endPoint := "obs." + r + ".myhuaweicloud.com"
+		client, _ := obs.New(d.Auth.AK, d.Auth.SK, endPoint)
+		response, err := client.ListBuckets(nil)
+		if err != nil {
+			logger.Error("List buckets failed with", r)
+			return list, err
 		}
-		list = append(list, _bucket)
+
+		for _, bucket := range response.Buckets {
+			_bucket := schema.Storage{
+				BucketName: bucket.Name,
+				Region:     bucket.Location,
+			}
+			if _bucket.Region == "" {
+				_bucket.Region = r
+			}
+			list = append(list, _bucket)
+		}
+		if len(list) > 0 {
+			break
+		}
 	}
 
 	return list, nil

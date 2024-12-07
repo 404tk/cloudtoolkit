@@ -20,13 +20,13 @@ type Driver struct {
 // GetResource returns all the resources in the store for a provider.
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := []schema.Host{}
-	logger.Info("Start enumerating EC2 ...")
+	logger.Info("List EC2 instances ...")
 	flag := false
 	prevLength := 0
 	count := 0
 	regions, err := d.GetEC2Regions()
 	if err != nil {
-		logger.Error("Enumerate EC2 failed.")
+		logger.Error("GetEC2Regions failed.")
 		return list, err
 	}
 	for _, region := range regions {
@@ -41,7 +41,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		for {
 			resp, err := ec2Client.DescribeInstances(req)
 			if err != nil {
-				logger.Error("Enumerate EC2 failed.")
+				logger.Error("DescribeInstances failed.")
 				return list, err
 			}
 			for _, reservation := range resp.Reservations {

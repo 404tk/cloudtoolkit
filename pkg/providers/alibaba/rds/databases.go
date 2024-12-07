@@ -36,7 +36,7 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		logger.Info("Start enumerating RDS ...")
+		logger.Info("List RDS instances ...")
 	}
 	defer func() { CacheDBList = list }()
 	client, err := d.NewClient()

@@ -26,7 +26,7 @@ func (d *Driver) GetCamUser(ctx context.Context) ([]schema.User, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		logger.Info("Start enumerating CAM ...")
+		logger.Info("List CAM users ...")
 	}
 	cpf := profile.NewClientProfile()
 	// cpf.HttpProfile.Endpoint = "cam.tencentcloudapi.com"
@@ -34,7 +34,7 @@ func (d *Driver) GetCamUser(ctx context.Context) ([]schema.User, error) {
 	listUsersRequest := cam.NewListUsersRequest()
 	listUsersResponse, err := client.ListUsers(listUsersRequest)
 	if err != nil {
-		logger.Error("Enumerate CAM failed.")
+		logger.Error("List users failed.")
 		return list, err
 	}
 	policy_infos = make(map[string]string)

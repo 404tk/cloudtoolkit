@@ -24,7 +24,7 @@ func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		logger.Info("Start enumerating IAM user ...")
+		logger.Info("List IAM users ...")
 	}
 	auth := global.NewCredentialsBuilder().
 		WithAk(d.Auth.AK).
@@ -37,7 +37,7 @@ func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 	keystoneListUsersRequest := &model.KeystoneListUsersRequest{}
 	keystoneListUsersResponse, err := client.KeystoneListUsers(keystoneListUsersRequest)
 	if err != nil {
-		logger.Error("Enumerate IAM failed.")
+		logger.Error("List users failed.")
 		return list, err
 	}
 

@@ -17,7 +17,7 @@ type Driver struct {
 
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := []schema.Host{}
-	logger.Info("Start enumerating DNS ...")
+	logger.Info("List DNS ...")
 	r := &request.DefaultHttpRequest{
 		Endpoint: "dns.googleapis.com",
 		Method:   "GET",

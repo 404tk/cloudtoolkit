@@ -22,7 +22,7 @@ func (d *Driver) GetIAMUser(ctx context.Context) ([]schema.User, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		logger.Info("Start enumerating IAM ...")
+		logger.Info("List IAM users ...")
 	}
 	client := iam.New(d.Session)
 	users, err := client.ListUsers(&iam.ListUsersInput{})

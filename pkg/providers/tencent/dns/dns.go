@@ -20,7 +20,7 @@ func (d *Driver) GetDomains(ctx context.Context) ([]schema.Domain, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		logger.Info("Start enumerating DNS ...")
+		logger.Info("List DNS ...")
 	}
 	cpf := profile.NewClientProfile()
 	//cpf.HttpProfile.Endpoint = "dnspod.tencentcloudapi.com"
@@ -28,7 +28,7 @@ func (d *Driver) GetDomains(ctx context.Context) ([]schema.Domain, error) {
 	request := dnspod.NewDescribeDomainListRequest()
 	response, err := client.DescribeDomainList(request)
 	if err != nil {
-		logger.Error("Enumerate CAM failed.")
+		logger.Error("DescribeDomainList failed.")
 		return list, err
 	}
 	for _, domain := range response.Response.DomainList {

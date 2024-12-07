@@ -27,7 +27,7 @@ func (d *Driver) NewClient(region string) *ecs.ECS {
 
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := []schema.Host{}
-	logger.Info("Start enumerating ECS ...")
+	logger.Info("List ECS instances ...")
 	svc := d.NewClient(d.Region)
 
 	var regions []string
@@ -35,7 +35,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		input := &ecs.DescribeRegionsInput{MaxResults: volcengine.Int32(100)}
 		resp, err := svc.DescribeRegions(input)
 		if err != nil {
-			logger.Error("Describe regions failed.")
+			logger.Error("List regions failed.")
 			return list, err
 		}
 		for _, r := range resp.Regions {

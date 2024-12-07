@@ -28,7 +28,7 @@ func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 	case <-ctx.Done():
 		return list, nil
 	default:
-		logger.Info("Start enumerating IAM ...")
+		logger.Info("List IAM users ...")
 	}
 	svc := d.NewClient()
 	var offset int32 = 0
