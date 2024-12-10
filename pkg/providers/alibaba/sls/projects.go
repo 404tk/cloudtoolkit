@@ -44,6 +44,7 @@ func (d *Driver) ListProjects(ctx context.Context) ([]schema.Log, error) {
 	flag := false
 	prevLength := 0
 	count := 0
+	var err error
 	for _, r := range regions {
 		d.Region = r
 		client := d.NewClient()
@@ -53,9 +54,10 @@ func (d *Driver) ListProjects(ctx context.Context) ([]schema.Log, error) {
 				Offset: offset,
 				Size:   500,
 			}
-			resp, err := client.ListProject(req)
+			var resp *ListProjectResponse
+			resp, err = client.ListProjects(req)
 			if err != nil {
-				logger.Error(err)
+				logger.Error("ListProjects failed.")
 				goto done
 			}
 			for _, project := range resp.Projects {
@@ -85,5 +87,5 @@ done:
 	if !flag {
 		fmt.Printf("\n\033[F\033[K")
 	}
-	return list, nil
+	return list, err
 }

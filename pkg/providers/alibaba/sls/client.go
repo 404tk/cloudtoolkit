@@ -88,7 +88,7 @@ type ListProjectResponse struct {
 	Total    *int64     `json:"total,omitempty" xml:"total,omitempty"`
 }
 
-func (client *Client) ListProject(r ListProjectRequest) (*ListProjectResponse, error) {
+func (client *Client) ListProjects(r ListProjectRequest) (*ListProjectResponse, error) {
 	req := &request{
 		method: "GET",
 		path:   "/",

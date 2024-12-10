@@ -111,7 +111,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			list.Sms, err = smsprovider.GetResource(ctx)
 		case "log":
 			slsprovider := &sls.Driver{Cred: p.cred, Region: p.region}
-			list.Logs, _ = slsprovider.ListProjects(ctx)
+			list.Logs, err = slsprovider.ListProjects(ctx)
 		default:
 		}
 	}

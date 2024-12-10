@@ -122,7 +122,7 @@ type Error struct {
 }
 
 func (err *Error) Error() string {
-	return fmt.Sprintf("Aliyun API Error: Status Code: %d Code: %s Message: %s", err.StatusCode, err.Code, err.Message)
+	return fmt.Sprintf("Status: %d Code: %s Message: %s", err.StatusCode, err.Code, err.Message)
 }
 
 func buildError(resp *http.Response) error {

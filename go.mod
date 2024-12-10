@@ -13,6 +13,7 @@ require (
 	github.com/aws/aws-sdk-go v1.45.19
 	github.com/huaweicloud/huaweicloud-sdk-go-obs v3.24.9+incompatible
 	github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.0.97
+	github.com/jdcloud-api/jdcloud-sdk-go v1.62.0
 	github.com/spf13/viper v1.16.0
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/billing v1.0.759
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cam v1.0.759
@@ -46,6 +47,7 @@ require (
 	github.com/clbanning/mxj v1.8.4 // indirect
 	github.com/dimchansky/utfbom v1.1.1 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
+	github.com/gofrs/uuid v4.4.0+incompatible // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.0 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/google/go-querystring v1.0.0 // indirect

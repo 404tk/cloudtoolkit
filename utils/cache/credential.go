@@ -40,8 +40,8 @@ func (cfg *InitCfg) CredInsert(user string, data map[string]string) {
 	} else {
 		cfg.Creds = append(cfg.Creds, Credential{
 			UUID:      uuid,
-			User:      user,
-			AccessKey: accessKey,
+			User:      truncateString(user, 20),
+			AccessKey: truncateString(accessKey, 35),
 			Provider:  provider,
 			JsonData:  string(b),
 		})
@@ -86,4 +86,11 @@ func (cfg *InitCfg) CredDelete(uuid string) {
 			return
 		}
 	}
+}
+
+func truncateString(s string, n int) string {
+	if len(s) > n {
+		return s[:n] + "..."
+	}
+	return s
 }
