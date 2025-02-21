@@ -17,7 +17,7 @@ func (d *Driver) AddRole() {
 		logger.Error("Create role failed:", err.Error())
 		return
 	}
-	err = attachPolicyToRole(client, d.RoleName)
+	_ = attachPolicyToRole(client, d.RoleName)
 	OwnerID := getOwnerUin(client)
 	logger.Warning(fmt.Sprintf(
 		"Switch URL: https://cloud.tencent.com/cam/switchrole?ownerUin=%s&roleName=%s\n",

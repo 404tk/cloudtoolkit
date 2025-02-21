@@ -36,8 +36,8 @@ func (d *Driver) GetResource(ctx context.Context) (schema.Sms, error) {
 		logger.Error("List SMS failed.")
 		return res, err
 	}
-	res.Templates, err = listSmsTemplate(client)
-	res.DailySize, err = querySendStatistics(client)
+	res.Templates, _ = listSmsTemplate(client)
+	res.DailySize, _ = querySendStatistics(client)
 
 	return res, err
 }
@@ -76,7 +76,10 @@ func listSmsTemplate(client *dysmsapi.Client) ([]schema.SmsTemplate, error) {
 		return temps, err
 	}
 	for _, temp := range response.SmsTemplateList {
-		s, _ := status[temp.AuditStatus]
+		s, ok := status[temp.AuditStatus]
+		if !ok {
+			continue
+		}
 		temps = append(temps, schema.SmsTemplate{
 			Name:    temp.TemplateName,
 			Status:  s,

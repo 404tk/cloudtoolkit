@@ -37,7 +37,7 @@ func New(options schema.Options) (*Provider, error) {
 	if payload == "cloudlist" {
 		d := &iam.Driver{Cred: cred, Token: token}
 		if !d.Validator(accessKey) {
-			return nil, fmt.Errorf("Invalid Accesskey")
+			return nil, fmt.Errorf("invalid accesskey")
 		}
 		cache.Cfg.CredInsert("default", options)
 	}

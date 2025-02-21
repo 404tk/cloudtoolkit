@@ -42,7 +42,7 @@ func (client *Client) signRequest(req *request, payload []byte) {
 func canonicalizeResource(req *request) string {
 	canonicalizedResource := req.path
 	var paramNames []string
-	if req.params != nil && len(req.params) > 0 {
+	if len(req.params) > 0 {
 		for k := range req.params {
 			paramNames = append(paramNames, k)
 		}

@@ -1,10 +1,8 @@
 package sms
 
 import (
-	"fmt"
 	"time"
 
-	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/dysmsapi"
 )
@@ -25,6 +23,7 @@ func querySendStatistics(client *dysmsapi.Client) (int64, error) {
 	return response.Data.TotalSize, nil
 }
 
+/*
 func querySendDetails(client *dysmsapi.Client, phone string) {
 	request := dysmsapi.CreateQuerySendDetailsRequest()
 	request.Scheme = "https"
@@ -43,3 +42,4 @@ func querySendDetails(client *dysmsapi.Client, phone string) {
 		fmt.Printf("%-10s\t%-90s\n\n", detail.SendDate, detail.Content)
 	}
 }
+*/

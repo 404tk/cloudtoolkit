@@ -14,7 +14,7 @@ var filename = "config.yaml"
 func InitConfig() {
 	_, err := os.Stat(filename)
 	if os.IsNotExist(err) || err != nil {
-		err = os.WriteFile(filename, []byte(defaultConfigFile), os.ModePerm)
+		_ = os.WriteFile(filename, []byte(defaultConfigFile), os.ModePerm)
 	}
 	viper.AddConfigPath(".")
 	viper.SetConfigFile(filename)

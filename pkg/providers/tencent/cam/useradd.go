@@ -17,7 +17,7 @@ func (d *Driver) AddUser() {
 		logger.Error("Create user failed:", err.Error())
 		return
 	}
-	err = attachPolicyToUser(client, d.UserName)
+	_ = attachPolicyToUser(client, d.UserName)
 	OwnerID := getOwnerUin(client)
 	fmt.Printf("\n%-10s\t%-10s\t%-60s\n", "Username", "Password", "Login URL")
 	fmt.Printf("%-10s\t%-10s\t%-60s\n", "--------", "--------", "---------")

@@ -18,11 +18,11 @@ type Credential struct {
 }
 
 func (cfg *InitCfg) CredInsert(user string, data map[string]string) {
-	provider, _ := data[utils.Provider]
-	accessKey, _ := data[utils.AccessKey]
+	provider := data[utils.Provider]
+	accessKey := data[utils.AccessKey]
 	switch provider {
 	case "azure":
-		accessKey, _ = data[utils.AzureClientId]
+		accessKey = data[utils.AzureClientId]
 	case "gcp":
 		tojson, _ := base64.StdEncoding.DecodeString(data[utils.GCPserviceAccountJSON])
 		accessKey = utils.Md5Encode(string(tojson))

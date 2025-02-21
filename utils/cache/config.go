@@ -52,8 +52,8 @@ func getCreds(path string) (creds []Credential) {
 }
 
 func SaveFile() {
-	data, err := json.MarshalIndent(Cfg.Creds, "", "\t")
-	err = os.WriteFile(Cfg.Path, data, 0644)
+	data, _ := json.MarshalIndent(Cfg.Creds, "", "\t")
+	err := os.WriteFile(Cfg.Path, data, 0644)
 	if err != nil {
 		logger.Error("Failed to write the config file:", err.Error())
 	}

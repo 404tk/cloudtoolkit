@@ -9,7 +9,7 @@ func RegionPrint(region string, count, prev int, flag bool) (int, bool) {
 	progress := fmt.Sprintf("[%s] %d found.", region, count)
 	if count == 0 {
 		if flag {
-			fmt.Printf(progress)
+			fmt.Print(progress)
 		} else {
 			progress += getBlock(prev, len(progress))
 			fmt.Printf("\r%s", progress)

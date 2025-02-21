@@ -16,5 +16,5 @@ const Version = `0.1.6`
 
 // showBanner is used to show the banner to the user
 func ShowBanner() {
-	fmt.Print(fmt.Sprintf(banner, Version))
+	fmt.Printf(banner, Version)
 }
