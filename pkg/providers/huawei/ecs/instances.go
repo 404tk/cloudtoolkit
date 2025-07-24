@@ -30,39 +30,50 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 			continue
 		}
 
-		request := &model.ListServersDetailsRequest{}
-		response, err := client.ListServersDetails(request)
-		if err != nil {
-			continue
-		}
+		count := 0
+		limitRequest := int32(100)
+		page := int32(1)
+		request := &model.ListServersDetailsRequest{Limit: &limitRequest}
+		for {
+			request.Offset = &page
+			response, err := client.ListServersDetails(request)
+			if err != nil {
+				break
+			}
 
-		for _, instance := range *response.Servers {
-			var ipv4, privateIPv4 string
-			for _, instance := range instance.Addresses {
-				for _, addr := range instance {
-					if *addr.OSEXTIPStype == model.GetServerAddressOSEXTIPStypeEnum().FIXED {
-						privateIPv4 = addr.Addr
-					}
-					if *addr.OSEXTIPStype == model.GetServerAddressOSEXTIPStypeEnum().FLOATING {
-						ipv4 = addr.Addr
+			for _, instance := range *response.Servers {
+				var ipv4, privateIPv4 string
+				for _, instance := range instance.Addresses {
+					for _, addr := range instance {
+						if *addr.OSEXTIPStype == model.GetServerAddressOSEXTIPStypeEnum().FIXED {
+							privateIPv4 = addr.Addr
+						}
+						if *addr.OSEXTIPStype == model.GetServerAddressOSEXTIPStypeEnum().FLOATING {
+							ipv4 = addr.Addr
+						}
 					}
 				}
+				host := schema.Host{
+					State:       instance.Status,
+					HostName:    instance.Name,
+					PublicIPv4:  ipv4,
+					PrivateIpv4: privateIPv4,
+					Public:      ipv4 != "",
+					Region:      r,
+				}
+				list = append(list, host)
 			}
-			host := schema.Host{
-				State:       instance.Status,
-				HostName:    instance.Name,
-				PublicIPv4:  ipv4,
-				PrivateIpv4: privateIPv4,
-				Public:      ipv4 != "",
-				Region:      r,
+			if page*limitRequest >= *response.Count {
+				count = int(*response.Count)
+				break
 			}
-			list = append(list, host)
+			page++
 		}
 		select {
 		case <-ctx.Done():
 			goto done
 		default:
-			prevLength, flag = processbar.RegionPrint(r, len(*response.Servers), prevLength, flag)
+			prevLength, flag = processbar.RegionPrint(r, count, prevLength, flag)
 		}
 	}
 done:
