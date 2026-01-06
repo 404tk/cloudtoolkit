@@ -36,7 +36,10 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	}
 	var regions []string
 	if d.Region == "all" {
-		client, _ := d.NewClient()
+		client, err := d.NewClient()
+		if err != nil {
+			return list, err
+		}
 		req := lighthouse.NewDescribeRegionsRequest()
 		resp, err := client.DescribeRegions(req)
 		if err != nil {
@@ -55,7 +58,10 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	count := 0
 	for _, r := range regions {
 		d.Region = r
-		client, _ := d.NewClient()
+		client, err := d.NewClient()
+		if err != nil {
+			continue
+		}
 		request := lighthouse.NewDescribeInstancesRequest()
 		request.Limit = common.Int64Ptr(100)
 		var offset int64 = 0

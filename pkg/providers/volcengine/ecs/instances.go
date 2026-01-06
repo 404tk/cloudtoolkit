@@ -17,18 +17,24 @@ type Driver struct {
 	Region string
 }
 
-func (d *Driver) NewClient(region string) *ecs.ECS {
+func (d *Driver) NewClient(region string) (*ecs.ECS, error) {
 	if region == "all" || region == "" {
 		region = "cn-beijing"
 	}
-	sess, _ := session.NewSession(d.Conf.WithRegion(region))
-	return ecs.New(sess)
+	sess, err := session.NewSession(d.Conf.WithRegion(region))
+	if err != nil {
+		return nil, err
+	}
+	return ecs.New(sess), nil
 }
 
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := []schema.Host{}
 	logger.Info("List ECS instances ...")
-	svc := d.NewClient(d.Region)
+	svc, err := d.NewClient(d.Region)
+	if err != nil {
+		return list, err
+	}
 
 	var regions []string
 	if d.Region == "all" {
@@ -48,7 +54,10 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	prevLength := 0
 	count := 0
 	for _, r := range regions {
-		svc = d.NewClient(r)
+		svc, err = d.NewClient(r)
+		if err != nil {
+			continue
+		}
 		token := volcengine.String("")
 		for {
 			request := &ecs.DescribeInstancesInput{

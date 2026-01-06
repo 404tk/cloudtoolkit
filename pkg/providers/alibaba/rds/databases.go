@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -20,7 +21,22 @@ type Driver struct {
 	Region string
 }
 
-var CacheDBList []schema.Database
+var (
+	CacheDBList []schema.Database
+	dbCacheMu   sync.RWMutex
+)
+
+func SetCacheDBList(dbs []schema.Database) {
+	dbCacheMu.Lock()
+	defer dbCacheMu.Unlock()
+	CacheDBList = dbs
+}
+
+func GetCacheDBList() []schema.Database {
+	dbCacheMu.RLock()
+	defer dbCacheMu.RUnlock()
+	return CacheDBList
+}
 
 func (d *Driver) NewClient() (*rds.Client, error) {
 	region := d.Region
@@ -38,7 +54,7 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 	default:
 		logger.Info("List RDS instances ...")
 	}
-	defer func() { CacheDBList = list }()
+	defer func() { SetCacheDBList(list) }()
 	client, err := d.NewClient()
 	if err != nil {
 		return list, err

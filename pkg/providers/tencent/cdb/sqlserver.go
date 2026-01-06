@@ -22,7 +22,10 @@ func (d *Driver) ListSQLServer(ctx context.Context) ([]schema.Database, error) {
 	cpf := profile.NewClientProfile()
 	var regions []string
 	if d.Region == "all" {
-		client, _ := sqlserver.NewClient(d.Credential, "ap-guangzhou", cpf)
+		client, err := sqlserver.NewClient(d.Credential, "ap-guangzhou", cpf)
+		if err != nil {
+			return list, err
+		}
 		req := sqlserver.NewDescribeRegionsRequest()
 		resp, err := client.DescribeRegions(req)
 		if err != nil {
@@ -41,7 +44,10 @@ func (d *Driver) ListSQLServer(ctx context.Context) ([]schema.Database, error) {
 	flag := false
 	prevLength := 0
 	for _, r := range regions {
-		client, _ := sqlserver.NewClient(d.Credential, r, cpf)
+		client, err := sqlserver.NewClient(d.Credential, r, cpf)
+		if err != nil {
+			continue
+		}
 		request := sqlserver.NewDescribeDBInstancesRequest()
 		response, err := client.DescribeDBInstances(request)
 		if err != nil {

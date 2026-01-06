@@ -8,8 +8,12 @@ import (
 )
 
 func (d *Driver) AddRole() {
-	client := d.NewClient()
-	err := createRole(client, d.RoleName, d.AccountId)
+	client, err := d.NewClient()
+	if err != nil {
+		logger.Error("Create RAM client failed:", err.Error())
+		return
+	}
+	err = createRole(client, d.RoleName, d.AccountId)
 	if err != nil {
 		logger.Error("Create role failed:", err.Error())
 		return

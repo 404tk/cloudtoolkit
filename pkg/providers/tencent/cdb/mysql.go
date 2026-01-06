@@ -29,7 +29,10 @@ func (d *Driver) ListMySQL(ctx context.Context) ([]schema.Database, error) {
 	cpf := profile.NewClientProfile()
 	var regions []string
 	if d.Region == "all" {
-		client, _ := cdb.NewClient(d.Credential, "ap-guangzhou", cpf)
+		client, err := cdb.NewClient(d.Credential, "ap-guangzhou", cpf)
+		if err != nil {
+			return list, err
+		}
 		req := cdb.NewDescribeCdbZoneConfigRequest()
 		resp, err := client.DescribeCdbZoneConfig(req)
 		if err != nil {
@@ -46,7 +49,10 @@ func (d *Driver) ListMySQL(ctx context.Context) ([]schema.Database, error) {
 	flag := false
 	prevLength := 0
 	for _, r := range regions {
-		client, _ := cdb.NewClient(d.Credential, r, cpf)
+		client, err := cdb.NewClient(d.Credential, r, cpf)
+		if err != nil {
+			continue
+		}
 		request := cdb.NewDescribeDBInstancesRequest()
 		response, err := client.DescribeDBInstances(request)
 		if err != nil {

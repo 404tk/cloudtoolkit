@@ -11,8 +11,12 @@ import (
 
 func (d *Driver) AddRole() {
 	cpf := profile.NewClientProfile()
-	client, _ := cam.NewClient(d.Credential, "", cpf)
-	err := createRole(client, d.RoleName, d.Uin)
+	client, err := cam.NewClient(d.Credential, "", cpf)
+	if err != nil {
+		logger.Error("Create CAM client failed:", err.Error())
+		return
+	}
+	err = createRole(client, d.RoleName, d.Uin)
 	if err != nil {
 		logger.Error("Create role failed:", err.Error())
 		return

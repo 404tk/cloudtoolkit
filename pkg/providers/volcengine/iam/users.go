@@ -17,9 +17,12 @@ type Driver struct {
 	Conf *volcengine.Config
 }
 
-func (d *Driver) NewClient() *iam.IAM {
-	sess, _ := session.NewSession(d.Conf.WithRegion("cn-beijing"))
-	return iam.New(sess)
+func (d *Driver) NewClient() (*iam.IAM, error) {
+	sess, err := session.NewSession(d.Conf.WithRegion("cn-beijing"))
+	if err != nil {
+		return nil, err
+	}
+	return iam.New(sess), nil
 }
 
 func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
@@ -30,7 +33,10 @@ func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 	default:
 		logger.Info("List IAM users ...")
 	}
-	svc := d.NewClient()
+	svc, err := d.NewClient()
+	if err != nil {
+		return list, err
+	}
 	var offset int32 = 0
 	//policy_infos = make(map[string]string)
 	for {

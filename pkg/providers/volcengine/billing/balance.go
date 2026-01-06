@@ -8,7 +8,10 @@ import (
 )
 
 func QueryAccountBalance(conf *volcengine.Config) {
-	sess, _ := session.NewSession(conf.WithRegion("cn-beijing"))
+	sess, err := session.NewSession(conf.WithRegion("cn-beijing"))
+	if err != nil {
+		return
+	}
 	svc := billing.New(sess)
 	queryBalanceAcctInput := &billing.QueryBalanceAcctInput{}
 	resp, err := svc.QueryBalanceAcct(queryBalanceAcctInput)

@@ -11,8 +11,12 @@ import (
 
 func (d *Driver) DelRole() {
 	cpf := profile.NewClientProfile()
-	client, _ := cam.NewClient(d.Credential, "", cpf)
-	err := detachPolicyFromRole(client, d.RoleName)
+	client, err := cam.NewClient(d.Credential, "", cpf)
+	if err != nil {
+		logger.Error("Create CAM client failed:", err.Error())
+		return
+	}
+	err = detachPolicyFromRole(client, d.RoleName)
 	if err != nil {
 		logger.Error(fmt.Sprintf("Remove policy from %s failed: %s", d.RoleName, err.Error()))
 		return

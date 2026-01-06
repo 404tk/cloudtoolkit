@@ -13,7 +13,11 @@ import (
 func (d *Driver) ListObjects(ctx context.Context, buckets map[string]string) {
 	for b, r := range buckets {
 		d.Region = r
-		client := d.NewClient()
+		client, err := d.NewClient()
+		if err != nil {
+			logger.Error(err)
+			return
+		}
 		bucket, err := client.Bucket(b)
 		if err != nil {
 			logger.Error(err)
@@ -66,7 +70,11 @@ func (d *Driver) TotalObjects(ctx context.Context, buckets map[string]string) {
 		isTruncated := true
 		for isTruncated {
 			d.Region = r
-			client := d.NewClient()
+			client, err := d.NewClient()
+			if err != nil {
+				logger.Error(err)
+				return
+			}
 			bucket, err := client.Bucket(b)
 			if err != nil {
 				logger.Error(err)

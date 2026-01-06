@@ -11,8 +11,12 @@ import (
 
 func (d *Driver) AddUser() {
 	cpf := profile.NewClientProfile()
-	client, _ := cam.NewClient(d.Credential, "", cpf)
-	err := createUser(client, d.UserName, d.Password)
+	client, err := cam.NewClient(d.Credential, "", cpf)
+	if err != nil {
+		logger.Error("Create CAM client failed:", err.Error())
+		return
+	}
+	err = createUser(client, d.UserName, d.Password)
 	if err != nil {
 		logger.Error("Create user failed:", err.Error())
 		return

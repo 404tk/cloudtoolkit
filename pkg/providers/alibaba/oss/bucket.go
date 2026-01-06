@@ -15,17 +15,16 @@ type Driver struct {
 	Region string
 }
 
-func (d *Driver) NewClient() *oss.Client {
+func (d *Driver) NewClient() (*oss.Client, error) {
 	region := d.Region
 	if region == "all" {
 		region = "cn-hangzhou"
 	}
-	client, _ := oss.New(
+	return oss.New(
 		"https://oss-"+region+".aliyuncs.com",
 		d.Cred.AccessKeyId,
 		d.Cred.AccessKeySecret,
 		oss.SecurityToken(d.Cred.AccessKeyStsToken))
-	return client
 }
 
 func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
@@ -36,7 +35,10 @@ func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	default:
 		logger.Info("List OSS buckets ...")
 	}
-	client := d.NewClient()
+	client, err := d.NewClient()
+	if err != nil {
+		return list, err
+	}
 	response, err := client.ListBuckets(oss.MaxKeys(1000))
 	if err != nil {
 		logger.Error("List buckets failed.")

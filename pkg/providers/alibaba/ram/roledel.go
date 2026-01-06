@@ -8,8 +8,12 @@ import (
 )
 
 func (d *Driver) DelRole() {
-	client := d.NewClient()
-	err := detachPolicyFromRole(client, d.RoleName)
+	client, err := d.NewClient()
+	if err != nil {
+		logger.Error("Create RAM client failed:", err.Error())
+		return
+	}
+	err = detachPolicyFromRole(client, d.RoleName)
 	if err != nil {
 		logger.Error(fmt.Sprintf("Remove policy from %s failed: %s", d.RoleName, err.Error()))
 		return

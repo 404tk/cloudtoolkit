@@ -9,8 +9,12 @@ import (
 )
 
 func (d *Driver) DelUser() {
-	client := d.NewClient()
-	err := detachPolicyFromUser(client, d.UserName)
+	client, err := d.NewClient()
+	if err != nil {
+		logger.Error("Create RAM client failed:", err.Error())
+		return
+	}
+	err = detachPolicyFromUser(client, d.UserName)
 	if err != nil {
 		if !strings.Contains(err.Error(), "EntityNotExist") {
 			logger.Error(fmt.Sprintf("Remove policy from %s failed: %s", d.UserName, err))

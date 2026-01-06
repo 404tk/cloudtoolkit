@@ -11,8 +11,12 @@ import (
 
 func (d *Driver) DelUser() {
 	cpf := profile.NewClientProfile()
-	client, _ := cam.NewClient(d.Credential, "", cpf)
-	err := detachPolicyFromUser(client, d.UserName)
+	client, err := cam.NewClient(d.Credential, "", cpf)
+	if err != nil {
+		logger.Error("Create CAM client failed:", err.Error())
+		return
+	}
+	err = detachPolicyFromUser(client, d.UserName)
 	if err != nil {
 		logger.Error(fmt.Sprintf("Remove policy from %s failed: %s", d.UserName, err.Error()))
 		return

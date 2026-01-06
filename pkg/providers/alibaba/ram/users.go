@@ -23,13 +23,12 @@ type Driver struct {
 	AccountId string
 }
 
-func (d *Driver) NewClient() *ram.Client {
+func (d *Driver) NewClient() (*ram.Client, error) {
 	region := d.Region
 	if region == "all" {
 		region = "cn-hangzhou"
 	}
-	client, _ := ram.NewClientWithOptions(region, sdk.NewConfig(), d.Cred)
-	return client
+	return ram.NewClientWithOptions(region, sdk.NewConfig(), d.Cred)
 }
 
 func (d *Driver) GetRamUser(ctx context.Context) ([]schema.User, error) {
@@ -40,7 +39,10 @@ func (d *Driver) GetRamUser(ctx context.Context) ([]schema.User, error) {
 	default:
 		logger.Info("List RAM users ...")
 	}
-	client := d.NewClient()
+	client, err := d.NewClient()
+	if err != nil {
+		return list, err
+	}
 	marker := ""
 	policy_infos = make(map[string]string)
 	for {

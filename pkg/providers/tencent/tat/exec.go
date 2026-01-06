@@ -3,6 +3,7 @@ package tat
 import (
 	"encoding/base64"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
@@ -17,11 +18,30 @@ type Driver struct {
 	Region     string
 }
 
-var CacheHostList []schema.Host
+var (
+	CacheHostList []schema.Host
+	hostCacheMu   sync.RWMutex
+)
+
+func SetCacheHostList(hosts []schema.Host) {
+	hostCacheMu.Lock()
+	defer hostCacheMu.Unlock()
+	CacheHostList = hosts
+}
+
+func GetCacheHostList() []schema.Host {
+	hostCacheMu.RLock()
+	defer hostCacheMu.RUnlock()
+	return CacheHostList
+}
 
 func (d *Driver) RunCommand(instanceId, ostype, cmd string) string {
 	cpf := profile.NewClientProfile()
-	client, _ := tat.NewClient(d.Credential, d.Region, cpf)
+	client, err := tat.NewClient(d.Credential, d.Region, cpf)
+	if err != nil {
+		logger.Error(err)
+		return ""
+	}
 	request := tat.NewRunCommandRequest()
 	switch ostype {
 	case "LINUX_UNIX":

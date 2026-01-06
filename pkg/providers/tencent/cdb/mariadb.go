@@ -22,7 +22,10 @@ func (d *Driver) ListMariaDB(ctx context.Context) ([]schema.Database, error) {
 	cpf := profile.NewClientProfile()
 	var regions []string
 	if d.Region == "all" {
-		client, _ := mariadb.NewClient(d.Credential, "ap-guangzhou", cpf)
+		client, err := mariadb.NewClient(d.Credential, "ap-guangzhou", cpf)
+		if err != nil {
+			return list, err
+		}
 		req := mariadb.NewDescribeSaleInfoRequest()
 		resp, err := client.DescribeSaleInfo(req)
 		if err != nil {
@@ -39,7 +42,10 @@ func (d *Driver) ListMariaDB(ctx context.Context) ([]schema.Database, error) {
 	flag := false
 	prevLength := 0
 	for _, r := range regions {
-		client, _ := mariadb.NewClient(d.Credential, r, cpf)
+		client, err := mariadb.NewClient(d.Credential, r, cpf)
+		if err != nil {
+			continue
+		}
 		request := mariadb.NewDescribeDBInstancesRequest()
 		response, err := client.DescribeDBInstances(request)
 		if err != nil {

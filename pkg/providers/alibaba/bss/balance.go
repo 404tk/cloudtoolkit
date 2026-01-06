@@ -24,7 +24,10 @@ func (d *Driver) QueryAccountBalance(ctx context.Context) {
 	if region == "all" {
 		region = "cn-hangzhou"
 	}
-	bssclient, _ := bssopenapi.NewClientWithOptions(region, sdk.NewConfig(), d.Cred)
+	bssclient, err := bssopenapi.NewClientWithOptions(region, sdk.NewConfig(), d.Cred)
+	if err != nil {
+		return
+	}
 	req_bss := bssopenapi.CreateQueryAccountBalanceRequest()
 	req_bss.Scheme = "https"
 	resp, err := bssclient.QueryAccountBalance(req_bss)

@@ -27,7 +27,10 @@ func (d *Driver) QueryAccountBalance(ctx context.Context) {
 	}
 	cpf := profile.NewClientProfile()
 	// cpf.HttpProfile.Endpoint = "billing.tencentcloudapi.com"
-	client, _ := billing.NewClient(d.Cred, region, cpf)
+	client, err := billing.NewClient(d.Cred, region, cpf)
+	if err != nil {
+		return
+	}
 	req_billing := billing.NewDescribeAccountBalanceRequest()
 	resp_billing, err := client.DescribeAccountBalance(req_billing)
 	if err == nil {

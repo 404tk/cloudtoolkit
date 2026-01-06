@@ -2,6 +2,7 @@ package ecs
 
 import (
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
@@ -9,7 +10,22 @@ import (
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/ecs"
 )
 
-var CacheHostList []schema.Host
+var (
+	CacheHostList []schema.Host
+	hostCacheMu   sync.RWMutex
+)
+
+func SetCacheHostList(hosts []schema.Host) {
+	hostCacheMu.Lock()
+	defer hostCacheMu.Unlock()
+	CacheHostList = hosts
+}
+
+func GetCacheHostList() []schema.Host {
+	hostCacheMu.RLock()
+	defer hostCacheMu.RUnlock()
+	return CacheHostList
+}
 
 func RunCommand(client *ecs.Client, instanceId, region, ostype, cmd string) string {
 	request := ecs.CreateRunCommandRequest()

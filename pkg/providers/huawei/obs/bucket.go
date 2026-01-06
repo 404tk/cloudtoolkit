@@ -24,7 +24,10 @@ func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	}
 	for _, r := range d.Regions {
 		endPoint := "obs." + r + ".myhuaweicloud.com"
-		client, _ := obs.New(d.Auth.AK, d.Auth.SK, endPoint)
+		client, err := obs.New(d.Auth.AK, d.Auth.SK, endPoint)
+		if err != nil {
+			continue
+		}
 		response, err := client.ListBuckets(nil)
 		if err != nil {
 			logger.Error("List buckets failed with", r)

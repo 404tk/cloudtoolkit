@@ -48,7 +48,10 @@ func New(options schema.Options) (*Provider, error) {
 	if payload == "cloudlist" {
 		request := sts.NewGetCallerIdentityRequest()
 		// cpf.HttpProfile.Endpoint = "sts.tencentcloudapi.com"
-		stsclient, _ := sts.NewClient(credential, "ap-guangzhou", cpf)
+		stsclient, err := sts.NewClient(credential, "ap-guangzhou", cpf)
+		if err != nil {
+			return nil, err
+		}
 		response, err := stsclient.GetCallerIdentity(request)
 		if err != nil {
 			return nil, err
@@ -88,7 +91,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			light := &lighthouse.Driver{Credential: p.credential, Region: p.region}
 			lights, err = light.GetResource(ctx)
 			list.Hosts = append(list.Hosts, lights...)
-			tat.CacheHostList = list.Hosts
+			tat.SetCacheHostList(list.Hosts)
 		case "domain":
 			dnsprovider := &dns.Driver{Credential: p.credential}
 			list.Domains, err = dnsprovider.GetDomains(ctx)
@@ -146,7 +149,7 @@ func (p *Provider) EventDump(action, sourceIp string) {}
 
 func (p *Provider) ExecuteCloudVMCommand(instanceId, cmd string) {
 	var region, ostype string
-	for _, host := range tat.CacheHostList {
+	for _, host := range tat.GetCacheHostList() {
 		if host.ID == instanceId {
 			region = host.Region
 			ostype = host.OSType

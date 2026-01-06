@@ -15,7 +15,7 @@ type Driver struct {
 
 func (d *Driver) GetServiceAccounts(ctx context.Context) ([]schema.User, error) {
 	list := []schema.User{}
-	logger.Info("Listg IAM users ...")
+	logger.Info("List IAM users ...")
 	r := &request.DefaultHttpRequest{
 		Endpoint: "iam.googleapis.com",
 		Method:   "GET",

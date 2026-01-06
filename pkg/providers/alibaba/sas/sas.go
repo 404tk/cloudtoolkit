@@ -26,14 +26,16 @@ type Driver struct {
 	Cred *credentials.StsTokenCredential
 }
 
-func (d *Driver) NewClient() *sas.Client {
-	client, _ := sas.NewClientWithOptions("cn-hangzhou", sdk.NewConfig(), d.Cred)
-	return client
+func (d *Driver) NewClient() (*sas.Client, error) {
+	return sas.NewClientWithOptions("cn-hangzhou", sdk.NewConfig(), d.Cred)
 }
 
 func (d *Driver) DumpEvents() ([]schema.Event, error) {
 	var events []schema.Event
-	client := d.NewClient()
+	client, err := d.NewClient()
+	if err != nil {
+		return events, err
+	}
 	request := sas.CreateDescribeSuspEventsRequest()
 	request.Scheme = "https"
 	/*
@@ -83,7 +85,11 @@ func (d *Driver) DumpEvents() ([]schema.Event, error) {
 }
 
 func (d *Driver) HandleEvents(eid string) {
-	client := d.NewClient()
+	client, err := d.NewClient()
+	if err != nil {
+		logger.Error(err)
+		return
+	}
 	request := requests.NewCommonRequest()
 	request.Method = "POST"
 	request.Scheme = "https"

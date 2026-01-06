@@ -30,7 +30,10 @@ func (d *Driver) GetCamUser(ctx context.Context) ([]schema.User, error) {
 	}
 	cpf := profile.NewClientProfile()
 	// cpf.HttpProfile.Endpoint = "cam.tencentcloudapi.com"
-	client, _ := cam.NewClient(d.Credential, "", cpf)
+	client, err := cam.NewClient(d.Credential, "", cpf)
+	if err != nil {
+		return list, err
+	}
 	listUsersRequest := cam.NewListUsersRequest()
 	listUsersResponse, err := client.ListUsers(listUsersRequest)
 	if err != nil {

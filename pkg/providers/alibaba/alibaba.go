@@ -200,7 +200,7 @@ func (p *Provider) EventDump(action, args string) {
 
 func (p *Provider) ExecuteCloudVMCommand(instanceId, cmd string) {
 	var region, ostype string
-	for _, host := range _ecs.CacheHostList {
+	for _, host := range _ecs.GetCacheHostList() {
 		if host.ID == instanceId {
 			region = host.Region
 			ostype = host.OSType
@@ -234,7 +234,7 @@ func (p *Provider) DBManagement(action, args string) {
 	case "useradd":
 		var region, dbname string
 		//var instance schema.Database
-		for _, db := range _rds.CacheDBList {
+		for _, db := range _rds.GetCacheDBList() {
 			if db.InstanceId == args {
 				region = db.Region
 				dbname = db.DBNames

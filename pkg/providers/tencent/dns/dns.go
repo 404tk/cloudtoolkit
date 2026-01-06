@@ -24,7 +24,10 @@ func (d *Driver) GetDomains(ctx context.Context) ([]schema.Domain, error) {
 	}
 	cpf := profile.NewClientProfile()
 	//cpf.HttpProfile.Endpoint = "dnspod.tencentcloudapi.com"
-	client, _ := dnspod.NewClient(d.Credential, "", cpf)
+	client, err := dnspod.NewClient(d.Credential, "", cpf)
+	if err != nil {
+		return list, err
+	}
 	request := dnspod.NewDescribeDomainListRequest()
 	response, err := client.DescribeDomainList(request)
 	if err != nil {

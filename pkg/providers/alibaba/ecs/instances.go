@@ -32,13 +32,16 @@ func (d *Driver) NewClient() (*ecs.Client, error) {
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := []schema.Host{}
 	logger.Info("List ECS instances...")
-	defer func() { CacheHostList = list }()
+	defer func() { SetCacheHostList(list) }()
 	client, err := d.NewClient()
 	if err != nil {
 		return list, err
 	}
 	// check permission
-	vpc_client, _ := vpc.NewClientWithOptions("cn-hangzhou", sdk.NewConfig(), d.Cred)
+	vpc_client, err := vpc.NewClientWithOptions("cn-hangzhou", sdk.NewConfig(), d.Cred)
+	if err != nil {
+		return list, err
+	}
 	req_vpc := vpc.CreateDescribeVpcsRequest()
 	_, err = vpc_client.DescribeVpcs(req_vpc)
 	if err != nil {

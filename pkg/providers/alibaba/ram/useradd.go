@@ -8,8 +8,12 @@ import (
 )
 
 func (d *Driver) AddUser() {
-	client := d.NewClient()
-	err := createUser(client, d.UserName)
+	client, err := d.NewClient()
+	if err != nil {
+		logger.Error("Create RAM client failed:", err.Error())
+		return
+	}
+	err = createUser(client, d.UserName)
 	if err != nil {
 		logger.Error("Create user failed:", err.Error())
 		return

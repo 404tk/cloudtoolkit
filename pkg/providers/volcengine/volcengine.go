@@ -58,7 +58,10 @@ func getProject(r string, conf *volcengine.Config) (string, error) {
 	} else {
 		conf = conf.WithRegion(r)
 	}
-	sess, _ := session.NewSession(conf)
+	sess, err := session.NewSession(conf)
+	if err != nil {
+		return "", err
+	}
 	svc := iam20210801.New(sess)
 	out, err := svc.ListProjects(&iam20210801.ListProjectsInput{})
 	if err != nil {
