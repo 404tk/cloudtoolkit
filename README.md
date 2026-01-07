@@ -1,23 +1,43 @@
-# cloudtoolkit
-Cloud Penetration Testing Toolkit
+# CloudToolKit
 
-## Usage  
-Reference [Wiki](https://github.com/404tk/cloudtoolkit/wiki)  
+Interactive multi-cloud security assessment framework.
 
-## Capability overview
+## Features
 
-|          Provider          |                   Payload                   |                          Supported                           |
-| :-------------------------: | :-----------------------------------------: | :----------------------------------------------------------: |
-|        Alibaba Cloud        | cloudlist<br/>backdoor-user<br/>bucket-dump<br/>event-dump<br/>exec-command<br/>database-account | ECS <br/>OSS<br/>RAM <br/>RDS <br/>SMS <br/>AliDNS<br/>SLS |
-|        Tencent Cloud        |         cloudlist<br/>backdoor-user<br/>exec-command         | CVM <br/>Lighthouse<br/>COS<br/>CAM <br/>CDB <br/>DNSPod |
-|        Huawei Cloud         |         cloudlist<br/>backdoor-user         | ECS <br/>OBS <br/>IAM <br/>RDS |
-|       Microsoft Azure       |                  cloudlist                  |              Virtual Machines<br/>Blob Storage               |
-|  AWS  | cloudlist<br/>backdoor-user<br/>bucket-dump | EC2<br/>S3 <br/>IAM |
-| GCP |                  cloudlist                  |                 Compute Engine<br/>Cloud DNS<br/>IAM                 |
-|         Volcengine          |                          cloudlist                           |                         ECS<br/>IAM                          |
-| JDCloud | cloudlist | VM<br/>IAM<br/>OSS |
+- **Multi-Cloud Support** - Alibaba, Tencent, Huawei, AWS, Azure, GCP, Volcengine, JDCloud
+- **Asset Enumeration** - Hosts, databases, storage buckets, domains, IAM users
+- **Security Testing** - Backdoor user creation, command execution, bucket dumping
+- **Interactive CLI** - Tab completion, session management, credential caching
 
-## Thanks
+## Quick Start
+
+```bash
+# Download from releases or build from source
+go build --ldflags "-s -w" -trimpath -o ctk cmd/main.go
+
+# Run interactive console
+./ctk
+```
+
+## Supported Capabilities
+
+| Provider | Enumeration | Security Testing |
+|:--------:|:-----------:|:----------------:|
+| Alibaba Cloud | ECS, OSS, RAM, RDS, DNS, SLS, SMS | backdoor-user, bucket-dump, exec-command, event-dump, database-account |
+| Tencent Cloud | CVM, Lighthouse, COS, CAM, CDB, DNSPod | backdoor-user, exec-command |
+| Huawei Cloud | ECS, OBS, IAM, RDS | backdoor-user |
+| AWS | EC2, S3, IAM | backdoor-user, bucket-dump |
+| Azure | Virtual Machines, Blob Storage | - |
+| GCP | Compute Engine, Cloud DNS, IAM | - |
+| Volcengine | ECS, IAM | - |
+| JDCloud | VM, IAM, OSS | - |
+
+## Documentation
+
+See [Wiki](https://github.com/404tk/cloudtoolkit/wiki) for detailed usage.
+
+## Acknowledgements
+
 - [c-bata/go-prompt](https://github.com/c-bata/go-prompt)
 - [projectdiscovery/cloudlist](https://github.com/projectdiscovery/cloudlist)
 - [rapid7/metasploit-framework](https://github.com/rapid7/metasploit-framework)
