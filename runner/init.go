@@ -6,37 +6,59 @@ import (
 
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 )
 
 var filename = "config.yaml"
+
+type Config struct {
+	Common struct {
+		LogEnable    bool   `yaml:"log_enable"`
+		ListPolicies bool   `yaml:"list_policies"`
+		LogDir       string `yaml:"log_dir"`
+	} `yaml:"common"`
+	Cloudlist    []string `yaml:"cloudlist"`
+	BackdoorUser struct {
+		Action   string `yaml:"action"`
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+	} `yaml:"backdoor-user"`
+	DatabaseAccount struct {
+		Username string `yaml:"username"`
+		Password string `yaml:"password"`
+	} `yaml:"database-account"`
+}
 
 func InitConfig() {
 	_, err := os.Stat(filename)
 	if os.IsNotExist(err) || err != nil {
 		_ = os.WriteFile(filename, []byte(defaultConfigFile), os.ModePerm)
 	}
-	viper.AddConfigPath(".")
-	viper.SetConfigFile(filename)
-	err = viper.ReadInConfig()
+
+	data, err := os.ReadFile(filename)
 	if err != nil {
 		logger.Fatalf("Read config failed: %v\n", err)
 	}
 
-	utils.DoSave = viper.GetBool("common.log_enable")
-	utils.ListPolicies = viper.GetBool("common.list_policies")
-	utils.LogDir = viper.GetString("common.log_dir")
-	utils.Cloudlist = viper.GetStringSlice("cloudlist")
+	var cfg Config
+	if err := yaml.Unmarshal(data, &cfg); err != nil {
+		logger.Fatalf("Parse config failed: %v\n", err)
+	}
+
+	utils.DoSave = cfg.Common.LogEnable
+	utils.ListPolicies = cfg.Common.ListPolicies
+	utils.LogDir = cfg.Common.LogDir
+	utils.Cloudlist = cfg.Cloudlist
 
 	utils.BackdoorUser = fmt.Sprintf("%s %s %s",
-		viper.GetString("backdoor-user.action"),
-		viper.GetString("backdoor-user.username"),
-		viper.GetString("backdoor-user.password"),
+		cfg.BackdoorUser.Action,
+		cfg.BackdoorUser.Username,
+		cfg.BackdoorUser.Password,
 	)
 
 	utils.DBAccount = fmt.Sprintf("%s:%s",
-		viper.GetString("database-account.username"),
-		viper.GetString("database-account.password"),
+		cfg.DatabaseAccount.Username,
+		cfg.DatabaseAccount.Password,
 	)
 }
 
