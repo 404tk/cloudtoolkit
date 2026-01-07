@@ -97,7 +97,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			list.Domains, err = dnsprovider.GetDomains(ctx)
 		case "account":
 			camprovider := &cam.Driver{Credential: p.credential}
-			list.Users, err = camprovider.GetCamUser(ctx)
+			list.Users, err = camprovider.ListUsers(ctx)
 		case "database":
 			var mysqls, mariadbs, postgres, mssqls []schema.Database
 			cdbprovider := cdb.Driver{Credential: p.credential, Region: p.region}

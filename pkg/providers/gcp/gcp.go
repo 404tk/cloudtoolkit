@@ -80,7 +80,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			list.Hosts = append(list.Hosts, computes...)
 		case "account":
 			saProvider := &_iam.Driver{Projects: p.projects, Token: p.token}
-			list.Users, err = saProvider.GetServiceAccounts(ctx)
+			list.Users, err = saProvider.ListUsers(ctx)
 		default:
 		}
 	}

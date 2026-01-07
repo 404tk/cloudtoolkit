@@ -99,7 +99,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			list.Domains, err = dnsprovider.GetDomains(ctx)
 		case "account":
 			ramprovider := &_ram.Driver{Cred: p.cred, Region: p.region}
-			list.Users, err = ramprovider.GetRamUser(ctx)
+			list.Users, err = ramprovider.ListUsers(ctx)
 		case "database":
 			rdsprovider := &_rds.Driver{Cred: p.cred, Region: p.region}
 			list.Databases, err = rdsprovider.GetDatabases(ctx)

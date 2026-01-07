@@ -97,7 +97,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			list.Hosts, err = ec2provider.GetResource(ctx)
 		case "account":
 			iamprovider := &_iam.Driver{Session: p.session}
-			list.Users, err = iamprovider.GetIAMUser(ctx)
+			list.Users, err = iamprovider.ListUsers(ctx)
 		case "bucket":
 			s3provider := &_s3.Driver{Session: p.session}
 			list.Storages, err = s3provider.GetBuckets(ctx)

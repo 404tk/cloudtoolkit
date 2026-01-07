@@ -13,7 +13,7 @@ type Driver struct {
 	Token    string
 }
 
-func (d *Driver) GetServiceAccounts(ctx context.Context) ([]schema.User, error) {
+func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 	list := []schema.User{}
 	logger.Info("List IAM users ...")
 	r := &request.DefaultHttpRequest{

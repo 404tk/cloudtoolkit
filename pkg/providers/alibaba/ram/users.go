@@ -31,7 +31,7 @@ func (d *Driver) NewClient() (*ram.Client, error) {
 	return ram.NewClientWithOptions(region, sdk.NewConfig(), d.Cred)
 }
 
-func (d *Driver) GetRamUser(ctx context.Context) ([]schema.User, error) {
+func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 	list := []schema.User{}
 	select {
 	case <-ctx.Done():

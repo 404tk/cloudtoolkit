@@ -16,7 +16,7 @@ type Driver struct {
 	Password string
 }
 
-func (d *Driver) GetIAMUser(ctx context.Context) ([]schema.User, error) {
+func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 	list := []schema.User{}
 	select {
 	case <-ctx.Done():

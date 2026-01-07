@@ -20,7 +20,7 @@ type Driver struct {
 	Uin        string
 }
 
-func (d *Driver) GetCamUser(ctx context.Context) ([]schema.User, error) {
+func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 	list := []schema.User{}
 	select {
 	case <-ctx.Done():
