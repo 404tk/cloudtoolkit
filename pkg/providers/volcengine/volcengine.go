@@ -108,7 +108,7 @@ func (p *Provider) UserManagement(action, username, password string) {}
 
 func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {}
 
-func (p *Provider) EventDump(action, sourceIP string) {}
+func (p *Provider) EventDump(action, args string) {}
 
 func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {}
 

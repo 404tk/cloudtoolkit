@@ -171,7 +171,7 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
 	}
 }
 
-func (p *Provider) EventDump(action, sourceIP string) {
+func (p *Provider) EventDump(action, args string) {
 	d := _sas.Driver{Cred: p.cred}
 	switch action {
 	case "dump":
@@ -192,7 +192,7 @@ func (p *Provider) EventDump(action, sourceIP string) {
 			logger.Info(msg)
 		}
 	case "whitelist":
-		d.HandleEvents(sourceIP) // sourceIP here means SecurityEventIds
+		d.HandleEvents(args) // args means SecurityEventIds
 	default:
 		logger.Error("Please set metadata like \"dump all\"")
 	}

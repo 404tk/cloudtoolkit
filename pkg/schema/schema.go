@@ -16,7 +16,7 @@ type Provider interface {
 	Resources(ctx context.Context) (Resources, error)
 	UserManagement(action, username, password string)
 	BucketDump(ctx context.Context, action, bucketName string)
-	EventDump(action, sourceIP string)
+	EventDump(action, args string)
 	ExecuteCloudVMCommand(instanceID, cmd string)
 	DBManagement(action, instanceID string)
 }

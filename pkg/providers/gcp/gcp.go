@@ -96,7 +96,7 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
 	logger.Error("Not supported yet.")
 }
 
-func (p *Provider) EventDump(action, sourceIP string) {}
+func (p *Provider) EventDump(action, args string) {}
 
 func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {}
 
