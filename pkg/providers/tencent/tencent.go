@@ -119,22 +119,22 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	return list, err
 }
 
-func (p *Provider) UserManagement(action, args_1, args_2 string) {
+func (p *Provider) UserManagement(action, userName, password string) {
 	c := &cam.Driver{Credential: p.credential}
 	switch action {
 	case "add":
-		c.UserName = args_1
-		c.Password = args_2
+		c.UserName = userName
+		c.Password = password
 		c.AddUser()
 	case "del":
-		c.UserName = args_1
+		c.UserName = userName
 		c.DelUser()
 	case "shadow":
-		c.RoleName = args_1
-		c.Uin = args_2
+		c.RoleName = userName
+		c.Uin = password
 		c.AddRole()
 	case "delrole":
-		c.RoleName = args_1
+		c.RoleName = userName
 		c.DelRole()
 	default:
 		logger.Error("Please set metadata like \"add username password\" or \"del username\"")

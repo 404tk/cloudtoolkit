@@ -104,7 +104,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	return list, err
 }
 
-func (p *Provider) UserManagement(action, args_1, args_2 string) {}
+func (p *Provider) UserManagement(action, userName, password string) {}
 
 func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {}
 

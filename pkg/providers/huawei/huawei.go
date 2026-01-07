@@ -25,7 +25,7 @@ type Provider struct {
 	intl    bool
 }
 
-var default_region = "cn-north-4"
+var defaultRegion = "cn-north-4"
 
 // New creates a new provider client for huawei API
 func New(options schema.Options) (*Provider, error) {
@@ -46,7 +46,7 @@ func New(options schema.Options) (*Provider, error) {
 
 	var r = &_iam.DefaultHttpRequest{}
 	if regionId == "all" {
-		r = _iam.NewGetRequest(default_region)
+		r = _iam.NewGetRequest(defaultRegion)
 	} else {
 		r = _iam.NewGetRequest(regionId)
 	}
@@ -77,7 +77,7 @@ func New(options schema.Options) (*Provider, error) {
 	if regionId == "all" && payload == "cloudlist" {
 		client := iam.NewIamClient(
 			iam.IamClientBuilder().
-				WithRegion(region.ValueOf(default_region)).
+				WithRegion(region.ValueOf(defaultRegion)).
 				WithCredential(auth).
 				Build())
 		req := &model.KeystoneListRegionsRequest{}
@@ -90,7 +90,7 @@ func New(options schema.Options) (*Provider, error) {
 			regions = append(regions, r.Id)
 		}
 	} else if regionId == "all" && payload != "cloudlist" {
-		regions = append(regions, default_region)
+		regions = append(regions, defaultRegion)
 	} else {
 		regions = append(regions, regionId)
 	}

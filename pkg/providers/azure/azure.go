@@ -44,7 +44,7 @@ func New(options schema.Options) (*Provider, error) {
 		return nil, err
 	}
 
-	var subscription_ids []string
+	var subscriptionIDs []string
 	subscriptionID, ok := options.GetMetadata(utils.AzureSubscriptionId)
 	if !ok {
 		client := subscriptions.NewClient()
@@ -59,17 +59,17 @@ func New(options schema.Options) (*Provider, error) {
 				logger.Warning(fmt.Sprintf("Found Subscription: %s(%s)", *v.DisplayName, *v.SubscriptionID))
 				cache.Cfg.CredInsert(*v.DisplayName, options)
 			}
-			subscription_ids = append(subscription_ids, *v.SubscriptionID)
+			subscriptionIDs = append(subscriptionIDs, *v.SubscriptionID)
 		}
 	} else {
-		subscription_ids = append(subscription_ids, subscriptionID)
+		subscriptionIDs = append(subscriptionIDs, subscriptionID)
 	}
-	if len(subscription_ids) == 0 || subscription_ids[0] == "" {
+	if len(subscriptionIDs) == 0 || subscriptionIDs[0] == "" {
 		return nil, errors.New("No Subscription found.")
 	}
 
 	return &Provider{
-		SubscriptionIDs:   subscription_ids,
+		SubscriptionIDs:   subscriptionIDs,
 		Authorizer:        authorizer,
 		CredentialsConfig: config,
 	}, nil
