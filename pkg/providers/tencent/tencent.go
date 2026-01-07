@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/billing"
-	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cam"
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/iam"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cdb"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cos"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cvm"
@@ -96,7 +96,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			dnsprovider := &dns.Driver{Credential: p.credential}
 			list.Domains, err = dnsprovider.GetDomains(ctx)
 		case "account":
-			camprovider := &cam.Driver{Credential: p.credential}
+			camprovider := &iam.Driver{Credential: p.credential}
 			list.Users, err = camprovider.ListUsers(ctx)
 		case "database":
 			var mysqls, mariadbs, postgres, mssqls []schema.Database
@@ -120,7 +120,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 }
 
 func (p *Provider) UserManagement(action, username, password string) {
-	c := &cam.Driver{Credential: p.credential}
+	c := &iam.Driver{Credential: p.credential}
 	switch action {
 	case "add":
 		c.UserName = username

@@ -11,7 +11,7 @@ import (
 	_dns "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/dns"
 	_ecs "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/ecs"
 	_oss "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/oss"
-	_ram "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/ram"
+	_iam "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/iam"
 	_rds "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/rds"
 	_sas "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/sas"
 	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/sls"
@@ -98,7 +98,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			dnsprovider := &_dns.Driver{Cred: p.cred, Region: p.region}
 			list.Domains, err = dnsprovider.GetDomains(ctx)
 		case "account":
-			ramprovider := &_ram.Driver{Cred: p.cred, Region: p.region}
+			ramprovider := &_iam.Driver{Cred: p.cred, Region: p.region}
 			list.Users, err = ramprovider.ListUsers(ctx)
 		case "database":
 			rdsprovider := &_rds.Driver{Cred: p.cred, Region: p.region}
@@ -120,7 +120,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 }
 
 func (p *Provider) UserManagement(action, username, password string) {
-	r := &_ram.Driver{Cred: p.cred, Region: p.region}
+	r := &_iam.Driver{Cred: p.cred, Region: p.region}
 	switch action {
 	case "add":
 		r.UserName = username
