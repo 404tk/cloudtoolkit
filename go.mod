@@ -1,6 +1,6 @@
 module github.com/404tk/cloudtoolkit
 
-go 1.18
+go 1.21
 
 require (
 	github.com/404tk/go-prompt v0.0.1
