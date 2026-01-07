@@ -2,7 +2,6 @@ package ecs
 
 import (
 	"context"
-	"fmt"
 	"math"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
@@ -62,9 +61,8 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	} else {
 		regions = append(regions, d.Region)
 	}
-	flag := false
-	prevLength := 0
-	count := 0
+	tracker := processbar.NewRegionTracker()
+	defer tracker.Finish()
 	for _, r := range regions {
 		page := 1
 		for {
@@ -118,15 +116,10 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		}
 		select {
 		case <-ctx.Done():
-			goto done
+			return list, nil
 		default:
-			prevLength, flag = processbar.RegionPrint(r, len(list)-count, prevLength, flag)
-			count = len(list)
+			tracker.Update(r, len(list)-tracker.Count())
 		}
-	}
-done:
-	if !flag {
-		fmt.Printf("\n\033[F\033[K")
 	}
 
 	return list, nil
