@@ -108,9 +108,9 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	return list, err
 }
 
-func (p *Provider) UserManagement(action, uname, pwd string) {
+func (p *Provider) UserManagement(action, username, password string) {
 	ramprovider := &_iam.Driver{
-		Session: p.session, Username: uname, Password: pwd}
+		Session: p.session, Username: username, Password: password}
 	switch action {
 	case "add":
 		ramprovider.AddUser()
@@ -121,29 +121,29 @@ func (p *Provider) UserManagement(action, uname, pwd string) {
 	}
 }
 
-func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
+func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
 	s3provider := &_s3.Driver{Session: p.session}
 	switch action {
 	case "list":
 		var infos = make(map[string]string)
-		if bucketname == "all" {
+		if bucketName == "all" {
 			buckets, _ := s3provider.GetBuckets(context.Background())
 			for _, b := range buckets {
 				infos[b.BucketName] = b.Region
 			}
 		} else {
-			infos[bucketname] = *p.session.Config.Region
+			infos[bucketName] = *p.session.Config.Region
 		}
 		s3provider.ListObjects(ctx, infos)
 	case "total":
 		var infos = make(map[string]string)
-		if bucketname == "all" {
+		if bucketName == "all" {
 			buckets, _ := s3provider.GetBuckets(context.Background())
 			for _, b := range buckets {
 				infos[b.BucketName] = b.Region
 			}
 		} else {
-			infos[bucketname] = *p.session.Config.Region
+			infos[bucketName] = *p.session.Config.Region
 		}
 		s3provider.TotalObjects(ctx, infos)
 	default:
@@ -151,8 +151,8 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
 	}
 }
 
-func (p *Provider) EventDump(action, sourceIp string) {}
+func (p *Provider) EventDump(action, sourceIP string) {}
 
-func (p *Provider) ExecuteCloudVMCommand(instanceId, cmd string) {}
+func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {}
 
-func (p *Provider) DBManagement(action, args string) {}
+func (p *Provider) DBManagement(action, instanceID string) {}

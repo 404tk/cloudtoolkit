@@ -119,38 +119,38 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	return list, err
 }
 
-func (p *Provider) UserManagement(action, userName, password string) {
+func (p *Provider) UserManagement(action, username, password string) {
 	c := &cam.Driver{Credential: p.credential}
 	switch action {
 	case "add":
-		c.UserName = userName
+		c.UserName = username
 		c.Password = password
 		c.AddUser()
 	case "del":
-		c.UserName = userName
+		c.UserName = username
 		c.DelUser()
 	case "shadow":
-		c.RoleName = userName
+		c.RoleName = username
 		c.Uin = password
 		c.AddRole()
 	case "delrole":
-		c.RoleName = userName
+		c.RoleName = username
 		c.DelRole()
 	default:
 		logger.Error("Please set metadata like \"add username password\" or \"del username\"")
 	}
 }
 
-func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
+func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
 	logger.Info("Recommended use https://cosbrowser.cloud.tencent.com/web")
 }
 
-func (p *Provider) EventDump(action, sourceIp string) {}
+func (p *Provider) EventDump(action, sourceIP string) {}
 
-func (p *Provider) ExecuteCloudVMCommand(instanceId, cmd string) {
+func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {
 	var region, ostype string
 	for _, host := range tat.GetCacheHostList() {
-		if host.ID == instanceId {
+		if host.ID == instanceID {
 			region = host.Region
 			ostype = host.OSType
 			break
@@ -166,10 +166,10 @@ func (p *Provider) ExecuteCloudVMCommand(instanceId, cmd string) {
 		logger.Error(err.Error())
 		return
 	}
-	output := d.RunCommand(instanceId, ostype, string(command))
+	output := d.RunCommand(instanceID, ostype, string(command))
 	if output != "" {
 		fmt.Println(output)
 	}
 }
 
-func (p *Provider) DBManagement(action, args string) {}
+func (p *Provider) DBManagement(action, instanceID string) {}

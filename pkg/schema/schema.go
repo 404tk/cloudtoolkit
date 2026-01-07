@@ -14,11 +14,11 @@ type Provider interface {
 	Name() string
 	// Resources returns the provider for an resource deployment source.
 	Resources(ctx context.Context) (Resources, error)
-	UserManagement(action, uname, pwd string)
-	BucketDump(ctx context.Context, action, bucketname string)
-	EventDump(action, sourceIp string)
-	ExecuteCloudVMCommand(instanceId, cmd string)
-	DBManagement(action, args string)
+	UserManagement(action, username, password string)
+	BucketDump(ctx context.Context, action, bucketName string)
+	EventDump(action, sourceIP string)
+	ExecuteCloudVMCommand(instanceID, cmd string)
+	DBManagement(action, instanceID string)
 }
 
 // NewResources creates a new resources structure

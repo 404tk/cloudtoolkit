@@ -119,51 +119,51 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	return list, err
 }
 
-func (p *Provider) UserManagement(action, userName, password string) {
+func (p *Provider) UserManagement(action, username, password string) {
 	r := &_ram.Driver{Cred: p.cred, Region: p.region}
 	switch action {
 	case "add":
-		r.UserName = userName
+		r.UserName = username
 		r.Password = password
 		r.AddUser()
 	case "del":
-		r.UserName = userName
+		r.UserName = username
 		r.DelUser()
 	case "shadow":
-		r.RoleName = userName
+		r.RoleName = username
 		r.AccountId = password
 		r.AddRole()
 	case "delrole":
-		r.RoleName = userName
+		r.RoleName = username
 		r.DelRole()
 	default:
 		logger.Error("Please set metadata like \"add username password\" or \"del username\"")
 	}
 }
 
-func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
+func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
 	ossdrvier := &_oss.Driver{Cred: p.cred, Region: p.region}
 	switch action {
 	case "list":
 		var infos = make(map[string]string)
-		if bucketname == "all" {
+		if bucketName == "all" {
 			buckets, _ := ossdrvier.GetBuckets(context.Background())
 			for _, b := range buckets {
 				infos[b.BucketName] = b.Region
 			}
 		} else {
-			infos[bucketname] = p.region
+			infos[bucketName] = p.region
 		}
 		ossdrvier.ListObjects(ctx, infos)
 	case "total":
 		var infos = make(map[string]string)
-		if bucketname == "all" {
+		if bucketName == "all" {
 			buckets, _ := ossdrvier.GetBuckets(context.Background())
 			for _, b := range buckets {
 				infos[b.BucketName] = b.Region
 			}
 		} else {
-			infos[bucketname] = p.region
+			infos[bucketName] = p.region
 		}
 		ossdrvier.TotalObjects(ctx, infos)
 	default:
@@ -171,7 +171,7 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
 	}
 }
 
-func (p *Provider) EventDump(action, args string) {
+func (p *Provider) EventDump(action, sourceIP string) {
 	d := _sas.Driver{Cred: p.cred}
 	switch action {
 	case "dump":
@@ -192,16 +192,16 @@ func (p *Provider) EventDump(action, args string) {
 			logger.Info(msg)
 		}
 	case "whitelist":
-		d.HandleEvents(args) // args here means SecurityEventIds
+		d.HandleEvents(sourceIP) // sourceIP here means SecurityEventIds
 	default:
 		logger.Error("Please set metadata like \"dump all\"")
 	}
 }
 
-func (p *Provider) ExecuteCloudVMCommand(instanceId, cmd string) {
+func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {
 	var region, ostype string
 	for _, host := range _ecs.GetCacheHostList() {
-		if host.ID == instanceId {
+		if host.ID == instanceID {
 			region = host.Region
 			ostype = host.OSType
 			break
@@ -222,20 +222,20 @@ func (p *Provider) ExecuteCloudVMCommand(instanceId, cmd string) {
 		logger.Error(err.Error())
 		return
 	}
-	output := _ecs.RunCommand(client, instanceId, region, ostype, string(command))
+	output := _ecs.RunCommand(client, instanceID, region, ostype, string(command))
 	if output != "" {
 		fmt.Println(output)
 	}
 }
 
-func (p *Provider) DBManagement(action, args string) {
+func (p *Provider) DBManagement(action, instanceID string) {
 	r := &_rds.Driver{Cred: p.cred, Region: p.region}
 	switch action {
 	case "useradd":
 		var region, dbname string
 		//var instance schema.Database
 		for _, db := range _rds.GetCacheDBList() {
-			if db.InstanceId == args {
+			if db.InstanceId == instanceID {
 				region = db.Region
 				dbname = db.DBNames
 				//instance = db
@@ -247,9 +247,9 @@ func (p *Provider) DBManagement(action, args string) {
 			return
 		}
 		r.Region = region
-		r.CreateAccount(args, dbname)
+		r.CreateAccount(instanceID, dbname)
 	case "userdel":
-		r.DeleteAccount(args)
+		r.DeleteAccount(instanceID)
 	default:
 		logger.Error("`instanceId` is missing")
 	}

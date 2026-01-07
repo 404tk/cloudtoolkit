@@ -136,9 +136,9 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	return list, err
 }
 
-func (p *Provider) UserManagement(action, uname, pwd string) {
+func (p *Provider) UserManagement(action, username, password string) {
 	r := &_iam.Driver{
-		Auth: p.auth, Username: uname, Password: pwd}
+		Auth: p.auth, Username: username, Password: password}
 	switch action {
 	case "add":
 		r.AddUser()
@@ -149,12 +149,12 @@ func (p *Provider) UserManagement(action, uname, pwd string) {
 	}
 }
 
-func (p *Provider) BucketDump(ctx context.Context, action, bucketname string) {
+func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
 	logger.Error("Not supported yet.")
 }
 
-func (p *Provider) EventDump(action, sourceIp string) {}
+func (p *Provider) EventDump(action, sourceIP string) {}
 
-func (p *Provider) ExecuteCloudVMCommand(instanceId, cmd string) {}
+func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {}
 
-func (p *Provider) DBManagement(action, args string) {}
+func (p *Provider) DBManagement(action, instanceID string) {}
