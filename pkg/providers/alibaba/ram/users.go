@@ -18,7 +18,7 @@ type Driver struct {
 	Cred      *credentials.StsTokenCredential
 	Region    string
 	UserName  string
-	PassWord  string
+	Password  string
 	RoleName  string
 	AccountId string
 }

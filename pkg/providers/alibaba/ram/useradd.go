@@ -18,7 +18,7 @@ func (d *Driver) AddUser() {
 		logger.Error("Create user failed:", err.Error())
 		return
 	}
-	err = createLoginProfile(client, d.UserName, d.PassWord)
+	err = createLoginProfile(client, d.UserName, d.Password)
 	if err != nil {
 		logger.Error("Create login password failed:", err.Error())
 		return
@@ -32,7 +32,7 @@ func (d *Driver) AddUser() {
 	fmt.Printf("\n%-10s\t%-10s\t%-60s\n", "Username", "Password", "Login URL")
 	fmt.Printf("%-10s\t%-10s\t%-60s\n", "--------", "--------", "---------")
 	fmt.Printf("%-10s\t%-10s\t%-60s\n\n",
-		d.UserName, d.PassWord,
+		d.UserName, d.Password,
 		fmt.Sprintf("https://signin.aliyun.com/%s/login.htm", accountAlias))
 }
 

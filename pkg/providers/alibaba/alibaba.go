@@ -124,7 +124,7 @@ func (p *Provider) UserManagement(action, userName, password string) {
 	switch action {
 	case "add":
 		r.UserName = userName
-		r.PassWord = password
+		r.Password = password
 		r.AddUser()
 	case "del":
 		r.UserName = userName
