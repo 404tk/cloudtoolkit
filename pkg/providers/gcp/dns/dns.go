@@ -15,9 +15,14 @@ type Driver struct {
 	Token    string
 }
 
-func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
-	list := []schema.Host{}
-	logger.Info("List DNS ...")
+func (d *Driver) GetDomains(ctx context.Context) ([]schema.Domain, error) {
+	list := []schema.Domain{}
+	select {
+	case <-ctx.Done():
+		return list, nil
+	default:
+		logger.Info("List DNS ...")
+	}
 	r := &request.DefaultHttpRequest{
 		Endpoint: "dns.googleapis.com",
 		Method:   "GET",
@@ -31,13 +36,21 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 			return list, err
 		}
 		for _, z := range zones {
-			resources, err := r.ListRRSets(project, z)
+			zoneName := z.Get("name").String()
+			resources, err := r.ListRRSets(project, zoneName)
 			if err != nil {
-				logger.Error(fmt.Sprintf("List projects/%s/managedZones/%s/rrsets failed: %s", project, z, err.Error()))
+				logger.Error(fmt.Sprintf("List projects/%s/managedZones/%s/rrsets failed: %s", project, zoneName, err.Error()))
 				return list, err
 			}
-			items := d.parseRecordsForResourceSet(resources, z)
-			list = append(list, items...)
+			domainName := z.Get("dnsName").String()
+			if domainName == "" {
+				domainName = zoneName
+			}
+			records := d.parseRecordsForResourceSet(resources)
+			list = append(list, schema.Domain{
+				DomainName: domainName,
+				Records:    records,
+			})
 		}
 	}
 
@@ -45,8 +58,8 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 }
 
 // parseRecordsForResourceSet parses and returns the records for a resource set
-func (d *Driver) parseRecordsForResourceSet(r []gjson.Result, zone string) []schema.Host {
-	list := []schema.Host{}
+func (d *Driver) parseRecordsForResourceSet(r []gjson.Result) []schema.Record {
+	list := []schema.Record{}
 
 	for _, resource := range r {
 		_type := resource.Get("type").String()
@@ -57,11 +70,10 @@ func (d *Driver) parseRecordsForResourceSet(r []gjson.Result, zone string) []sch
 		name := resource.Get("name").String()
 		datas := resource.Get("rrdatas").Array()
 		for _, data := range datas {
-			list = append(list, schema.Host{
-				DNSName:    name,
-				Public:     true,
-				PublicIPv4: data.String(),
-				Region:     zone,
+			list = append(list, schema.Record{
+				RR:    name,
+				Type:  _type,
+				Value: data.String(),
 			})
 		}
 	}

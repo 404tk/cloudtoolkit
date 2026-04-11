@@ -6,11 +6,11 @@ import (
 	"fmt"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/billing"
-	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/iam"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cdb"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cos"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cvm"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/dns"
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/iam"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/lighthouse"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/tat"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
@@ -77,46 +77,55 @@ func (p *Provider) Name() string {
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.Name()
-	var err error
 	for _, product := range utils.Cloudlist {
 		switch product {
 		case "balance":
 			d := &billing.Driver{Cred: p.credential, Region: p.region}
 			d.QueryAccountBalance(ctx)
 		case "host":
-			var cvms, lights []schema.Host
 			cvmprovider := &cvm.Driver{Credential: p.credential, Region: p.region}
-			cvms, err = cvmprovider.GetResource(ctx)
+			cvms, err := cvmprovider.GetResource(ctx)
 			list.Hosts = append(list.Hosts, cvms...)
+			list.AddError("host/cvm", err)
 			light := &lighthouse.Driver{Credential: p.credential, Region: p.region}
-			lights, err = light.GetResource(ctx)
+			lights, err := light.GetResource(ctx)
 			list.Hosts = append(list.Hosts, lights...)
+			list.AddError("host/lighthouse", err)
 			tat.SetCacheHostList(list.Hosts)
 		case "domain":
 			dnsprovider := &dns.Driver{Credential: p.credential}
-			list.Domains, err = dnsprovider.GetDomains(ctx)
+			domains, err := dnsprovider.GetDomains(ctx)
+			list.Domains = append(list.Domains, domains...)
+			list.AddError("domain", err)
 		case "account":
 			camprovider := &iam.Driver{Credential: p.credential}
-			list.Users, err = camprovider.ListUsers(ctx)
+			users, err := camprovider.ListUsers(ctx)
+			list.Users = append(list.Users, users...)
+			list.AddError("account", err)
 		case "database":
-			var mysqls, mariadbs, postgres, mssqls []schema.Database
 			cdbprovider := cdb.Driver{Credential: p.credential, Region: p.region}
-			mysqls, err = cdbprovider.ListMySQL(ctx)
+			mysqls, err := cdbprovider.ListMySQL(ctx)
 			list.Databases = append(list.Databases, mysqls...)
-			mariadbs, err = cdbprovider.ListMariaDB(ctx)
+			list.AddError("database/mysql", err)
+			mariadbs, err := cdbprovider.ListMariaDB(ctx)
 			list.Databases = append(list.Databases, mariadbs...)
-			postgres, err = cdbprovider.ListPostgreSQL(ctx)
+			list.AddError("database/mariadb", err)
+			postgres, err := cdbprovider.ListPostgreSQL(ctx)
 			list.Databases = append(list.Databases, postgres...)
-			mssqls, err = cdbprovider.ListSQLServer(ctx)
+			list.AddError("database/postgresql", err)
+			mssqls, err := cdbprovider.ListSQLServer(ctx)
 			list.Databases = append(list.Databases, mssqls...)
+			list.AddError("database/sqlserver", err)
 		case "bucket":
 			cosprovider := &cos.Driver{Credential: p.credential}
-			list.Storages, err = cosprovider.GetBuckets(ctx)
+			storages, err := cosprovider.GetBuckets(ctx)
+			list.Storages = append(list.Storages, storages...)
+			list.AddError("bucket", err)
 		default:
 		}
 	}
 
-	return list, err
+	return list, list.Err()
 }
 
 func (p *Provider) UserManagement(action, username, password string) {
@@ -148,28 +157,50 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
 func (p *Provider) EventDump(action, args string) {}
 
 func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {
-	var region, ostype string
-	for _, host := range tat.GetCacheHostList() {
-		if host.ID == instanceID {
-			region = host.Region
-			ostype = host.OSType
-			break
-		}
-	}
-	if region == "" {
-		logger.Error("Run cloudlist first")
+	host, ok := p.lookupHost(instanceID)
+	if !ok {
+		logger.Error("Unable to resolve instance metadata.")
 		return
 	}
-	d := tat.Driver{Credential: p.credential, Region: region}
+	d := tat.Driver{Credential: p.credential, Region: host.Region}
 	command, err := base64.StdEncoding.DecodeString(cmd)
 	if err != nil {
 		logger.Error(err.Error())
 		return
 	}
-	output := d.RunCommand(instanceID, ostype, string(command))
+	output := d.RunCommand(instanceID, host.OSType, string(command))
 	if output != "" {
 		fmt.Println(output)
 	}
 }
 
 func (p *Provider) DBManagement(action, instanceID string) {}
+
+func (p *Provider) lookupHost(instanceID string) (schema.Host, bool) {
+	for _, host := range tat.GetCacheHostList() {
+		if host.ID == instanceID {
+			return host, true
+		}
+	}
+	logger.Info("Host metadata cache miss, refreshing instances ...")
+	cvmProvider := &cvm.Driver{Credential: p.credential, Region: p.region}
+	hosts, err := cvmProvider.GetResource(context.Background())
+	if err != nil {
+		logger.Error(err)
+	}
+	lightProvider := &lighthouse.Driver{Credential: p.credential, Region: p.region}
+	lights, lightErr := lightProvider.GetResource(context.Background())
+	if lightErr != nil {
+		logger.Error(lightErr)
+	}
+	hosts = append(hosts, lights...)
+	if len(hosts) > 0 {
+		tat.SetCacheHostList(hosts)
+	}
+	for _, host := range hosts {
+		if host.ID == instanceID {
+			return host, true
+		}
+	}
+	return schema.Host{}, false
+}

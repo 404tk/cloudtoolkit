@@ -89,23 +89,28 @@ func (p *Provider) Name() string {
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.Name()
-	var err error
 	for _, product := range utils.Cloudlist {
 		switch product {
 		case "host":
 			ec2provider := &_ec2.Driver{Session: p.session, Region: p.region}
-			list.Hosts, err = ec2provider.GetResource(ctx)
+			hosts, err := ec2provider.GetResource(ctx)
+			list.Hosts = append(list.Hosts, hosts...)
+			list.AddError("host", err)
 		case "account":
 			iamprovider := &_iam.Driver{Session: p.session}
-			list.Users, err = iamprovider.ListUsers(ctx)
+			users, err := iamprovider.ListUsers(ctx)
+			list.Users = append(list.Users, users...)
+			list.AddError("account", err)
 		case "bucket":
 			s3provider := &_s3.Driver{Session: p.session}
-			list.Storages, err = s3provider.GetBuckets(ctx)
+			storages, err := s3provider.GetBuckets(ctx)
+			list.Storages = append(list.Storages, storages...)
+			list.AddError("bucket", err)
 		default:
 		}
 	}
 
-	return list, err
+	return list, list.Err()
 }
 
 func (p *Provider) UserManagement(action, username, password string) {

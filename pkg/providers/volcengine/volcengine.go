@@ -81,18 +81,21 @@ func (p *Provider) Name() string {
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.Name()
-	var err error
 	for _, product := range utils.Cloudlist {
 		switch product {
 		case "balance":
 			billing.QueryAccountBalance(p.conf)
 		case "host":
 			d := &ecs.Driver{Conf: p.conf, Region: p.region}
-			list.Hosts, err = d.GetResource(ctx)
+			hosts, err := d.GetResource(ctx)
+			list.Hosts = append(list.Hosts, hosts...)
+			list.AddError("host", err)
 		case "domain":
 		case "account":
 			d := &iam.Driver{Conf: p.conf}
-			list.Users, err = d.ListUsers(ctx)
+			users, err := d.ListUsers(ctx)
+			list.Users = append(list.Users, users...)
+			list.AddError("account", err)
 		case "database":
 		case "bucket":
 		case "sms":
@@ -101,7 +104,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 		}
 	}
 
-	return list, err
+	return list, list.Err()
 }
 
 func (p *Provider) UserManagement(action, username, password string) {}

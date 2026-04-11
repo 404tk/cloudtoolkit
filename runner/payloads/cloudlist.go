@@ -21,9 +21,9 @@ func (p CloudList) Run(ctx context.Context, config map[string]string) {
 	}
 
 	resources, err := i.Providers.Resources(ctx)
-	if err != nil {
+	if err != nil && len(resources.Errors) == 0 {
 		logger.Error(err)
-		// return
+		return
 	}
 	select {
 	case <-ctx.Done():
@@ -56,8 +56,16 @@ func (p CloudList) Run(ctx context.Context, config map[string]string) {
 			msg := fmt.Sprintf("The total number of SMS messages sent today is %v.", resources.Sms.DailySize)
 			logger.Info(msg)
 		}
+		for _, item := range resources.Errors {
+			logger.Error(fmt.Sprintf("%s failed: %s", item.Scope, item.Message))
+		}
 		if utils.DoSave {
 			logger.Info(fmt.Sprintf("Output written to [%s]", path))
+			if len(resources.Errors) > 0 {
+				logger.Error("Cloud asset enumeration completed with partial errors.")
+			}
+		} else if len(resources.Errors) > 0 {
+			logger.Error("Cloud asset enumeration completed with partial errors.")
 		} else {
 			logger.Info("Done.")
 		}

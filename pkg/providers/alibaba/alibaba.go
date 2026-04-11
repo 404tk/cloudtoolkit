@@ -10,8 +10,8 @@ import (
 	_bss "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/bss"
 	_dns "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/dns"
 	_ecs "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/ecs"
-	_oss "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/oss"
 	_iam "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/iam"
+	_oss "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/oss"
 	_rds "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/rds"
 	_sas "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/sas"
 	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/sls"
@@ -85,7 +85,6 @@ func (p *Provider) Name() string {
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.Name()
-	var err error
 	for _, product := range utils.Cloudlist {
 		switch product {
 		case "balance":
@@ -93,30 +92,44 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			d.QueryAccountBalance(ctx)
 		case "host":
 			ecsprovider := &_ecs.Driver{Cred: p.cred, Region: p.region}
-			list.Hosts, err = ecsprovider.GetResource(ctx)
+			hosts, err := ecsprovider.GetResource(ctx)
+			list.Hosts = append(list.Hosts, hosts...)
+			list.AddError("host", err)
 		case "domain":
 			dnsprovider := &_dns.Driver{Cred: p.cred, Region: p.region}
-			list.Domains, err = dnsprovider.GetDomains(ctx)
+			domains, err := dnsprovider.GetDomains(ctx)
+			list.Domains = append(list.Domains, domains...)
+			list.AddError("domain", err)
 		case "account":
 			ramprovider := &_iam.Driver{Cred: p.cred, Region: p.region}
-			list.Users, err = ramprovider.ListUsers(ctx)
+			users, err := ramprovider.ListUsers(ctx)
+			list.Users = append(list.Users, users...)
+			list.AddError("account", err)
 		case "database":
 			rdsprovider := &_rds.Driver{Cred: p.cred, Region: p.region}
-			list.Databases, err = rdsprovider.GetDatabases(ctx)
+			databases, err := rdsprovider.GetDatabases(ctx)
+			list.Databases = append(list.Databases, databases...)
+			list.AddError("database", err)
 		case "bucket":
 			ossprovider := &_oss.Driver{Cred: p.cred, Region: p.region}
-			list.Storages, err = ossprovider.GetBuckets(ctx)
+			storages, err := ossprovider.GetBuckets(ctx)
+			list.Storages = append(list.Storages, storages...)
+			list.AddError("bucket", err)
 		case "sms":
 			smsprovider := &_sms.Driver{Cred: p.cred, Region: p.region}
-			list.Sms, err = smsprovider.GetResource(ctx)
+			sms, err := smsprovider.GetResource(ctx)
+			list.Sms = sms
+			list.AddError("sms", err)
 		case "log":
 			slsprovider := &sls.Driver{Cred: p.cred, Region: p.region}
-			list.Logs, err = slsprovider.ListProjects(ctx)
+			logs, err := slsprovider.ListProjects(ctx)
+			list.Logs = append(list.Logs, logs...)
+			list.AddError("log", err)
 		default:
 		}
 	}
 
-	return list, err
+	return list, list.Err()
 }
 
 func (p *Provider) UserManagement(action, username, password string) {
@@ -199,19 +212,12 @@ func (p *Provider) EventDump(action, args string) {
 }
 
 func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {
-	var region, ostype string
-	for _, host := range _ecs.GetCacheHostList() {
-		if host.ID == instanceID {
-			region = host.Region
-			ostype = host.OSType
-			break
-		}
-	}
-	if region == "" {
-		logger.Error("Run cloudlist first")
+	host, ok := p.lookupHost(instanceID)
+	if !ok {
+		logger.Error("Unable to resolve instance metadata.")
 		return
 	}
-	d := _ecs.Driver{Cred: p.cred, Region: region}
+	d := _ecs.Driver{Cred: p.cred, Region: host.Region}
 	client, err := d.NewClient()
 	if err != nil {
 		logger.Error(err)
@@ -222,7 +228,7 @@ func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {
 		logger.Error(err.Error())
 		return
 	}
-	output := _ecs.RunCommand(client, instanceID, region, ostype, string(command))
+	output := _ecs.RunCommand(client, instanceID, host.Region, host.OSType, string(command))
 	if output != "" {
 		fmt.Println(output)
 	}
@@ -232,25 +238,58 @@ func (p *Provider) DBManagement(action, instanceID string) {
 	r := &_rds.Driver{Cred: p.cred, Region: p.region}
 	switch action {
 	case "useradd":
-		var region, dbname string
-		//var instance schema.Database
-		for _, db := range _rds.GetCacheDBList() {
-			if db.InstanceId == instanceID {
-				region = db.Region
-				dbname = db.DBNames
-				//instance = db
-				break
-			}
-		}
-		if region == "" {
-			logger.Error("Run cloudlist first")
+		db, ok := p.lookupDatabase(instanceID)
+		if !ok {
+			logger.Error("Unable to resolve database metadata.")
 			return
 		}
-		r.Region = region
-		r.CreateAccount(instanceID, dbname)
+		r.Region = db.Region
+		r.CreateAccount(instanceID, db.DBNames)
 	case "userdel":
 		r.DeleteAccount(instanceID)
 	default:
 		logger.Error("`instanceId` is missing")
 	}
+}
+
+func (p *Provider) lookupHost(instanceID string) (schema.Host, bool) {
+	for _, host := range _ecs.GetCacheHostList() {
+		if host.ID == instanceID {
+			return host, true
+		}
+	}
+	logger.Info("Host metadata cache miss, refreshing instances ...")
+	driver := &_ecs.Driver{Cred: p.cred, Region: p.region}
+	hosts, err := driver.GetResource(context.Background())
+	if err != nil {
+		logger.Error(err)
+		return schema.Host{}, false
+	}
+	for _, host := range hosts {
+		if host.ID == instanceID {
+			return host, true
+		}
+	}
+	return schema.Host{}, false
+}
+
+func (p *Provider) lookupDatabase(instanceID string) (schema.Database, bool) {
+	for _, db := range _rds.GetCacheDBList() {
+		if db.InstanceId == instanceID {
+			return db, true
+		}
+	}
+	logger.Info("Database metadata cache miss, refreshing instances ...")
+	driver := &_rds.Driver{Cred: p.cred, Region: p.region}
+	databases, err := driver.GetDatabases(context.Background())
+	if err != nil {
+		logger.Error(err)
+		return schema.Database{}, false
+	}
+	for _, db := range databases {
+		if db.InstanceId == instanceID {
+			return db, true
+		}
+	}
+	return schema.Database{}, false
 }

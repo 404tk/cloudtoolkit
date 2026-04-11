@@ -111,7 +111,6 @@ func (p *Provider) Name() string {
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.Name()
-	var err error
 	for _, product := range utils.Cloudlist {
 		switch product {
 		case "balance":
@@ -119,21 +118,29 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			d.QueryAccountBalance(ctx)
 		case "host":
 			ecsprovider := &ecs.Driver{Auth: p.auth, Regions: p.regions}
-			list.Hosts, err = ecsprovider.GetResource(ctx)
+			hosts, err := ecsprovider.GetResource(ctx)
+			list.Hosts = append(list.Hosts, hosts...)
+			list.AddError("host", err)
 		case "account":
 			iamprovider := &_iam.Driver{Auth: p.auth}
-			list.Users, err = iamprovider.ListUsers(ctx)
+			users, err := iamprovider.ListUsers(ctx)
+			list.Users = append(list.Users, users...)
+			list.AddError("account", err)
 		case "database":
 			rdsprovider := &_rds.Driver{Auth: p.auth, Regions: p.regions}
-			list.Databases, err = rdsprovider.GetDatabases(ctx)
+			databases, err := rdsprovider.GetDatabases(ctx)
+			list.Databases = append(list.Databases, databases...)
+			list.AddError("database", err)
 		case "bucket":
 			obsprovider := &_obs.Driver{Auth: p.auth, Regions: p.regions}
-			list.Storages, err = obsprovider.GetBuckets(ctx)
+			storages, err := obsprovider.GetBuckets(ctx)
+			list.Storages = append(list.Storages, storages...)
+			list.AddError("bucket", err)
 		default:
 		}
 	}
 
-	return list, err
+	return list, list.Err()
 }
 
 func (p *Provider) UserManagement(action, username, password string) {

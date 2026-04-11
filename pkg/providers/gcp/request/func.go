@@ -7,8 +7,8 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-func (r *DefaultHttpRequest) ListManagedZones(project string) ([]string, error) {
-	var zones []string
+func (r *DefaultHttpRequest) ListManagedZones(project string) ([]gjson.Result, error) {
+	var zones []gjson.Result
 	r.Path = fmt.Sprintf("/dns/v1/projects/%s/managedZones", project)
 
 	body, err := r.DoGetRequest()
@@ -19,10 +19,7 @@ func (r *DefaultHttpRequest) ListManagedZones(project string) ([]string, error) 
 	if len(items) == 0 {
 		err = errors.New(gjson.Get(string(body), "error.status").String())
 	}
-	for _, i := range items {
-		zones = append(zones, i.Get("name").String())
-	}
-	return zones, err
+	return items, err
 }
 
 func (r *DefaultHttpRequest) ListRRSets(project, zone string) ([]gjson.Result, error) {

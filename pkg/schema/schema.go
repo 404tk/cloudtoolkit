@@ -3,6 +3,7 @@ package schema
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
 // Provider is an interface implemented by any cloud service provider.
@@ -35,6 +36,37 @@ type Resources struct {
 	Domains   []Domain
 	Sms       Sms
 	Logs      []Log
+	Errors    []ResourceError
+}
+
+type ResourceError struct {
+	Scope   string
+	Message string
+}
+
+func (r *Resources) AddError(scope string, err error) {
+	if err == nil {
+		return
+	}
+	r.Errors = append(r.Errors, ResourceError{
+		Scope:   scope,
+		Message: err.Error(),
+	})
+}
+
+func (r Resources) Err() error {
+	if len(r.Errors) == 0 {
+		return nil
+	}
+	messages := make([]string, 0, len(r.Errors))
+	for _, item := range r.Errors {
+		if item.Scope == "" {
+			messages = append(messages, item.Message)
+			continue
+		}
+		messages = append(messages, fmt.Sprintf("%s: %s", item.Scope, item.Message))
+	}
+	return fmt.Errorf("partial enumeration errors: %s", strings.Join(messages, "; "))
 }
 
 type Host struct {

@@ -13,7 +13,7 @@ type ExecuteCloudVMCommand struct{}
 func (p ExecuteCloudVMCommand) Run(ctx context.Context, config map[string]string) {
 	var instanceId, cmd string
 	if metadata, ok := config["metadata"]; ok {
-		data := strings.Split(metadata, " ")
+		data := strings.SplitN(metadata, " ", 2)
 		if len(data) < 2 {
 			logger.Error("Execute `set metadata <instance-id> <cmd>`")
 			return

@@ -78,7 +78,7 @@ func (cfg *InitCfg) CredNote(uuid, data string) {
 func (cfg *InitCfg) CredDelete(uuid string) {
 	for index, v := range cfg.Creds {
 		if v.UUID == uuid {
-			if index == len(cfg.Creds) {
+			if index == len(cfg.Creds)-1 {
 				cfg.Creds = cfg.Creds[:index]
 			} else {
 				cfg.Creds = append(cfg.Creds[:index], cfg.Creds[index+1:]...)

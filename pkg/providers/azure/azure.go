@@ -84,16 +84,19 @@ func (p *Provider) Name() string {
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.Name()
-	var err error
 	for _, product := range utils.Cloudlist {
 		switch product {
 		case "host":
 			vmProvider := &compute.Driver{SubscriptionIDs: p.SubscriptionIDs, Authorizer: p.Authorizer}
-			list.Hosts, err = vmProvider.GetResource(ctx)
+			hosts, err := vmProvider.GetResource(ctx)
+			list.Hosts = append(list.Hosts, hosts...)
+			list.AddError("host", err)
 		case "bucket":
 			storageProvider := &storage.Driver{
 				SubscriptionIDs: p.SubscriptionIDs, Authorizer: p.Authorizer}
-			list.Storages, err = storageProvider.GetStorages(ctx)
+			storages, err := storageProvider.GetStorages(ctx)
+			list.Storages = append(list.Storages, storages...)
+			list.AddError("bucket", err)
 		default:
 		}
 	}
@@ -101,7 +104,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	// adProvider := activeDirectory.ADProvider{Config: p.CredentialsConfig}
 	// list.Users, err = adProvider.GetActiveDirectory(ctx)
 
-	return list, err
+	return list, list.Err()
 }
 
 func (p *Provider) UserManagement(action, username, password string) {
