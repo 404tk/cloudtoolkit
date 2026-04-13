@@ -14,7 +14,7 @@ import (
 )
 
 type Driver struct {
-	Auth    basic.Credentials
+	Auth    *basic.Credentials
 	Regions []string
 }
 
@@ -84,7 +84,7 @@ done:
 	return list, nil
 }
 
-func newClient(r string, auth basic.Credentials) *ecs.EcsClient {
+func newClient(r string, auth *basic.Credentials) *ecs.EcsClient {
 	defer func() {
 		if err := recover(); err != nil {
 			return

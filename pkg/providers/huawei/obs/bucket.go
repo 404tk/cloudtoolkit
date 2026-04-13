@@ -10,7 +10,7 @@ import (
 )
 
 type Driver struct {
-	Auth    basic.Credentials
+	Auth    *basic.Credentials
 	Regions []string
 }
 

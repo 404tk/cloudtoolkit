@@ -20,7 +20,7 @@ import (
 
 // Provider is a data provider for huawei API
 type Provider struct {
-	auth    basic.Credentials
+	auth    *basic.Credentials
 	regions []string
 	intl    bool
 }

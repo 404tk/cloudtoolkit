@@ -12,7 +12,7 @@ import (
 )
 
 type Driver struct {
-	Cred basic.Credentials
+	Cred *basic.Credentials
 	Intl bool
 }
 

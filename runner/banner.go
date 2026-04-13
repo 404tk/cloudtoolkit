@@ -11,10 +11,10 @@ const banner = `
                       v%s
 `
 
-// Version is the current version of cloudtoolkit
-const Version = `0.1.7`
+// version is the current version of cloudtoolkit
+const version = `0.1.8`
 
 // showBanner is used to show the banner to the user
 func ShowBanner() {
-	fmt.Printf(banner, Version)
+	fmt.Printf(banner, version)
 }

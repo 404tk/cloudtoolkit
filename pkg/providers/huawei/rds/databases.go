@@ -15,7 +15,7 @@ import (
 )
 
 type Driver struct {
-	Auth    basic.Credentials
+	Auth    *basic.Credentials
 	Regions []string
 }
 
@@ -69,7 +69,7 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 	return list, nil
 }
 
-func newClient(r string, auth basic.Credentials) *rds.RdsClient {
+func newClient(r string, auth *basic.Credentials) *rds.RdsClient {
 	defer func() {
 		if err := recover(); err != nil {
 			return

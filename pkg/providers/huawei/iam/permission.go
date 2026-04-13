@@ -1,12 +1,24 @@
 package iam
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
-
-	"github.com/tidwall/gjson"
 )
+
+type getUserIDResponse struct {
+	Credential struct {
+		UserID string `json:"user_id"`
+	} `json:"credential"`
+	ErrorMsg string `json:"error_msg"`
+}
+
+type getUserNameResponse struct {
+	User struct {
+		Name string `json:"name"`
+	} `json:"user"`
+}
 
 func NewGetRequest(region string) *DefaultHttpRequest {
 	timestamp := time.Now().UTC().Format(BasicDateFormat)
@@ -28,11 +40,16 @@ func (r *DefaultHttpRequest) GetUserId(accesskey, secretkey string) (string, err
 	if err != nil {
 		return "", err
 	}
-	user_id := gjson.Get(string(body), "credential.user_id").String()
-	if user_id == "" {
-		err = errors.New(gjson.Get(string(body), "error_msg").String())
+
+	var resp getUserIDResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return "", err
 	}
-	return user_id, err
+	userID := resp.Credential.UserID
+	if userID == "" {
+		err = errors.New(resp.ErrorMsg)
+	}
+	return userID, err
 }
 
 func (r *DefaultHttpRequest) GetUserName(accesskey, secretkey string) (string, error) {
@@ -50,6 +67,10 @@ func (r *DefaultHttpRequest) GetUserName(accesskey, secretkey string) (string, e
 	if err != nil {
 		return "", err
 	}
-	username := gjson.Get(string(body), "user.name").String()
-	return username, err
+
+	var resp getUserNameResponse
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return "", err
+	}
+	return resp.User.Name, err
 }

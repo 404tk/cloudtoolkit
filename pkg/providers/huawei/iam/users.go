@@ -13,7 +13,7 @@ import (
 )
 
 type Driver struct {
-	Auth     basic.Credentials
+	Auth     *basic.Credentials
 	Username string
 	Password string
 }
