@@ -64,19 +64,19 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 		case "host":
 			d := &vm.Driver{Cred: p.cred, Token: p.token, Region: p.region}
 			hosts, err := d.GetResource(ctx)
-			list.Hosts = append(list.Hosts, hosts...)
+			schema.AppendAssets(&list, hosts)
 			list.AddError("host", err)
 		case "domain":
 		case "account":
 			d := &iam.Driver{Cred: p.cred, Token: p.token}
 			users, err := d.ListUsers(ctx)
-			list.Users = append(list.Users, users...)
+			schema.AppendAssets(&list, users)
 			list.AddError("account", err)
 		case "database":
 		case "bucket":
 			d := &oss.Driver{Cred: p.cred, Token: p.token}
 			storages, err := d.ListBuckets(ctx)
-			list.Storages = append(list.Storages, storages...)
+			schema.AppendAssets(&list, storages)
 			list.AddError("bucket", err)
 		case "sms":
 		case "log":
@@ -86,13 +86,3 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 
 	return list, list.Err()
 }
-
-func (p *Provider) UserManagement(action, username, password string) {}
-
-func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {}
-
-func (p *Provider) EventDump(action, args string) {}
-
-func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {}
-
-func (p *Provider) DBManagement(action, instanceID string) {}

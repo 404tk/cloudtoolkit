@@ -93,27 +93,27 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 		case "host":
 			ecsprovider := &_ecs.Driver{Cred: p.cred, Region: p.region}
 			hosts, err := ecsprovider.GetResource(ctx)
-			list.Hosts = append(list.Hosts, hosts...)
+			schema.AppendAssets(&list, hosts)
 			list.AddError("host", err)
 		case "domain":
 			dnsprovider := &_dns.Driver{Cred: p.cred, Region: p.region}
 			domains, err := dnsprovider.GetDomains(ctx)
-			list.Domains = append(list.Domains, domains...)
+			schema.AppendAssets(&list, domains)
 			list.AddError("domain", err)
 		case "account":
 			ramprovider := &_iam.Driver{Cred: p.cred, Region: p.region}
 			users, err := ramprovider.ListUsers(ctx)
-			list.Users = append(list.Users, users...)
+			schema.AppendAssets(&list, users)
 			list.AddError("account", err)
 		case "database":
 			rdsprovider := &_rds.Driver{Cred: p.cred, Region: p.region}
 			databases, err := rdsprovider.GetDatabases(ctx)
-			list.Databases = append(list.Databases, databases...)
+			schema.AppendAssets(&list, databases)
 			list.AddError("database", err)
 		case "bucket":
 			ossprovider := &_oss.Driver{Cred: p.cred, Region: p.region}
 			storages, err := ossprovider.GetBuckets(ctx)
-			list.Storages = append(list.Storages, storages...)
+			schema.AppendAssets(&list, storages)
 			list.AddError("bucket", err)
 		case "sms":
 			smsprovider := &_sms.Driver{Cred: p.cred, Region: p.region}
@@ -123,7 +123,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 		case "log":
 			slsprovider := &sls.Driver{Cred: p.cred, Region: p.region}
 			logs, err := slsprovider.ListProjects(ctx)
-			list.Logs = append(list.Logs, logs...)
+			schema.AppendAssets(&list, logs)
 			list.AddError("log", err)
 		default:
 		}

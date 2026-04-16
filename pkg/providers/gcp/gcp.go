@@ -74,17 +74,17 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 		case "host":
 			InstanceProvider := &_compute.Driver{Projects: p.projects, Token: p.token}
 			computes, err := InstanceProvider.GetResource(ctx)
-			list.Hosts = append(list.Hosts, computes...)
+			schema.AppendAssets(&list, computes)
 			list.AddError("host", err)
 		case "domain":
 			cloudDNSProvider := &_dns.Driver{Projects: p.projects, Token: p.token}
 			domains, err := cloudDNSProvider.GetDomains(ctx)
-			list.Domains = append(list.Domains, domains...)
+			schema.AppendAssets(&list, domains)
 			list.AddError("domain", err)
 		case "account":
 			saProvider := &_iam.Driver{Projects: p.projects, Token: p.token}
 			users, err := saProvider.ListUsers(ctx)
-			list.Users = append(list.Users, users...)
+			schema.AppendAssets(&list, users)
 			list.AddError("account", err)
 		default:
 		}
@@ -92,17 +92,3 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 
 	return list, list.Err()
 }
-
-func (p *Provider) UserManagement(action, username, password string) {
-	logger.Error("Not supported yet.")
-}
-
-func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
-	logger.Error("Not supported yet.")
-}
-
-func (p *Provider) EventDump(action, args string) {}
-
-func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {}
-
-func (p *Provider) DBManagement(action, instanceID string) {}

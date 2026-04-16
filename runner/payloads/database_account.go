@@ -2,9 +2,11 @@ package payloads
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/inventory"
+	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/audit"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -28,12 +30,17 @@ func (p DatabaseAccount) Run(ctx context.Context, config map[string]string) {
 		logger.Error(err)
 		return
 	}
+	mgr, ok := i.Providers.(schema.DBManager)
+	if !ok {
+		logger.Error(fmt.Sprintf("%s does not support database-account", i.Providers.Name()))
+		return
+	}
 	audit.Log(audit.Record{
 		Provider:  config[utils.Provider],
 		Operation: "database-account." + action,
 		Target:    args,
 	})
-	i.Providers.DBManagement(action, args)
+	mgr.DBManagement(action, args)
 }
 
 func (p DatabaseAccount) Desc() string {

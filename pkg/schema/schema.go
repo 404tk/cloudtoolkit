@@ -6,21 +6,67 @@ import (
 	"strings"
 )
 
-// Provider is an interface implemented by any cloud service provider.
-//
-// It provides the bare minimum of methods to allow complete overview of user
-// data.
+// Provider is the minimum contract every cloud must satisfy. Capability
+// interfaces below (Enumerator, IAMManager, etc.) extend it optionally; a
+// payload type-asserts for the capability it needs and fails gracefully
+// when the current provider does not implement it.
 type Provider interface {
-	// Name returns the name of the provider
 	Name() string
-	// Resources returns the provider for an resource deployment source.
+}
+
+// Enumerator powers the cloudlist payload.
+type Enumerator interface {
+	Provider
 	Resources(ctx context.Context) (Resources, error)
+}
+
+// IAMManager powers the backdoor-user payload.
+type IAMManager interface {
+	Provider
 	UserManagement(action, username, password string)
+}
+
+// BucketManager powers the bucket-dump payload.
+type BucketManager interface {
+	Provider
 	BucketDump(ctx context.Context, action, bucketName string)
+}
+
+// EventReader powers the event-dump payload.
+type EventReader interface {
+	Provider
 	EventDump(action, args string)
+}
+
+// VMExecutor powers the exec-command / shell payloads.
+type VMExecutor interface {
+	Provider
 	ExecuteCloudVMCommand(instanceID, cmd string)
+}
+
+// DBManager powers the database-account payload.
+type DBManager interface {
+	Provider
 	DBManagement(action, instanceID string)
 }
+
+// Asset is any cloud resource that can be enumerated and rendered. New asset
+// types (FaaS, K8s clusters, container registries, etc.) only need to
+// implement AssetType() to flow through the existing cloudlist pipeline.
+type Asset interface {
+	AssetType() string
+}
+
+// Asset type constants. Providers and payloads should reference these rather
+// than raw strings to keep the grouping key canonical.
+const (
+	AssetHost     = "host"
+	AssetStorage  = "storage"
+	AssetUser     = "user"
+	AssetDatabase = "database"
+	AssetDomain   = "domain"
+	AssetLog      = "log"
+)
 
 // NewResources creates a new resources structure
 func NewResources() Resources {
@@ -28,15 +74,10 @@ func NewResources() Resources {
 }
 
 type Resources struct {
-	Provider  string
-	Hosts     []Host
-	Storages  []Storage
-	Users     []User
-	Databases []Database
-	Domains   []Domain
-	Sms       Sms
-	Logs      []Log
-	Errors    []ResourceError
+	Provider string
+	Assets   []Asset
+	Sms      Sms
+	Errors   []ResourceError
 }
 
 type ResourceError struct {
@@ -69,6 +110,27 @@ func (r Resources) Err() error {
 	return fmt.Errorf("partial enumeration errors: %s", strings.Join(messages, "; "))
 }
 
+// Grouped returns assets partitioned by AssetType() while preserving insertion
+// order within each bucket. Used by the cloudlist printer so each asset type
+// renders as its own table.
+func (r *Resources) Grouped() map[string][]Asset {
+	out := make(map[string][]Asset)
+	for _, a := range r.Assets {
+		t := a.AssetType()
+		out[t] = append(out[t], a)
+	}
+	return out
+}
+
+// AppendAssets copies a typed slice into r.Assets as Asset values. Provider
+// implementations use this to flow a []Host / []Storage / ... into the open
+// asset list without writing the boxing loop inline.
+func AppendAssets[T Asset](r *Resources, items []T) {
+	for _, i := range items {
+		r.Assets = append(r.Assets, i)
+	}
+}
+
 type Host struct {
 	HostName    string `table:"HostName"`
 	ID          string `table:"Instance ID"`
@@ -81,11 +143,15 @@ type Host struct {
 	Region      string `table:"Region"`
 }
 
+func (Host) AssetType() string { return AssetHost }
+
 type Storage struct {
 	BucketName  string `table:"Bucket"`
 	AccountName string `table:"Storage Account"`
 	Region      string `table:"Region"`
 }
+
+func (Storage) AssetType() string { return AssetStorage }
 
 type User struct {
 	UserName    string `table:"User"`
@@ -95,6 +161,8 @@ type User struct {
 	LastLogin   string `table:"LastLogin"`
 	CreateTime  string `table:"CreateTime"`
 }
+
+func (User) AssetType() string { return AssetUser }
 
 type Database struct {
 	InstanceId    string `table:"ID"`
@@ -106,10 +174,14 @@ type Database struct {
 	DBNames       string `table:"DBName"`
 }
 
+func (Database) AssetType() string { return AssetDatabase }
+
 type Domain struct {
 	DomainName string
 	Records    []Record
 }
+
+func (Domain) AssetType() string { return AssetDomain }
 
 type Record struct {
 	RR     string
@@ -153,6 +225,8 @@ type Log struct {
 	Description    string
 	LastModifyTime string
 }
+
+func (Log) AssetType() string { return AssetLog }
 
 // ErrNoSuchKey means no such key exists in metadata.
 type ErrNoSuchKey struct {

@@ -121,22 +121,22 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 		case "host":
 			ecsprovider := &ecs.Driver{Auth: p.auth, Regions: p.regions}
 			hosts, err := ecsprovider.GetResource(ctx)
-			list.Hosts = append(list.Hosts, hosts...)
+			schema.AppendAssets(&list, hosts)
 			list.AddError("host", err)
 		case "account":
 			iamprovider := &_iam.Driver{Auth: p.auth}
 			users, err := iamprovider.ListUsers(ctx)
-			list.Users = append(list.Users, users...)
+			schema.AppendAssets(&list, users)
 			list.AddError("account", err)
 		case "database":
 			rdsprovider := &_rds.Driver{Auth: p.auth, Regions: p.regions}
 			databases, err := rdsprovider.GetDatabases(ctx)
-			list.Databases = append(list.Databases, databases...)
+			schema.AppendAssets(&list, databases)
 			list.AddError("database", err)
 		case "bucket":
 			obsprovider := &_obs.Driver{Auth: p.auth, Regions: p.regions}
 			storages, err := obsprovider.GetBuckets(ctx)
-			list.Storages = append(list.Storages, storages...)
+			schema.AppendAssets(&list, storages)
 			list.AddError("bucket", err)
 		default:
 		}
@@ -157,13 +157,3 @@ func (p *Provider) UserManagement(action, username, password string) {
 		logger.Error("Please set metadata like \"add username password\" or \"del username\"")
 	}
 }
-
-func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
-	logger.Error("Not supported yet.")
-}
-
-func (p *Provider) EventDump(action, args string) {}
-
-func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {}
-
-func (p *Provider) DBManagement(action, instanceID string) {}

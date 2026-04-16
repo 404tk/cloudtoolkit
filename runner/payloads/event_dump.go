@@ -2,9 +2,11 @@ package payloads
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/inventory"
+	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/audit"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -28,12 +30,17 @@ func (p EventDump) Run(ctx context.Context, config map[string]string) {
 		logger.Error(err)
 		return
 	}
+	reader, ok := i.Providers.(schema.EventReader)
+	if !ok {
+		logger.Error(fmt.Sprintf("%s does not support event-dump", i.Providers.Name()))
+		return
+	}
 	audit.Log(audit.Record{
 		Provider:  config[utils.Provider],
 		Operation: "event-dump." + action,
 		Target:    sourceIp,
 	})
-	i.Providers.EventDump(action, sourceIp)
+	reader.EventDump(action, sourceIp)
 	logger.Info("Done.")
 }
 

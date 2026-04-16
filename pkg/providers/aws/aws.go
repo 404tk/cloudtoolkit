@@ -94,17 +94,17 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 		case "host":
 			ec2provider := &_ec2.Driver{Session: p.session, Region: p.region}
 			hosts, err := ec2provider.GetResource(ctx)
-			list.Hosts = append(list.Hosts, hosts...)
+			schema.AppendAssets(&list, hosts)
 			list.AddError("host", err)
 		case "account":
 			iamprovider := &_iam.Driver{Session: p.session}
 			users, err := iamprovider.ListUsers(ctx)
-			list.Users = append(list.Users, users...)
+			schema.AppendAssets(&list, users)
 			list.AddError("account", err)
 		case "bucket":
 			s3provider := &_s3.Driver{Session: p.session}
 			storages, err := s3provider.GetBuckets(ctx)
-			list.Storages = append(list.Storages, storages...)
+			schema.AppendAssets(&list, storages)
 			list.AddError("bucket", err)
 		default:
 		}
@@ -163,9 +163,3 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
 		logger.Error("`list all` or `total all`.")
 	}
 }
-
-func (p *Provider) EventDump(action, args string) {}
-
-func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {}
-
-func (p *Provider) DBManagement(action, instanceID string) {}

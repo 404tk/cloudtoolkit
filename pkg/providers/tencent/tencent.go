@@ -85,41 +85,42 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 		case "host":
 			cvmprovider := &cvm.Driver{Credential: p.credential, Region: p.region}
 			cvms, err := cvmprovider.GetResource(ctx)
-			list.Hosts = append(list.Hosts, cvms...)
+			schema.AppendAssets(&list, cvms)
 			list.AddError("host/cvm", err)
 			light := &lighthouse.Driver{Credential: p.credential, Region: p.region}
 			lights, err := light.GetResource(ctx)
-			list.Hosts = append(list.Hosts, lights...)
+			schema.AppendAssets(&list, lights)
 			list.AddError("host/lighthouse", err)
-			tat.SetCacheHostList(list.Hosts)
+			allHosts := append(cvms, lights...)
+			tat.SetCacheHostList(allHosts)
 		case "domain":
 			dnsprovider := &dns.Driver{Credential: p.credential}
 			domains, err := dnsprovider.GetDomains(ctx)
-			list.Domains = append(list.Domains, domains...)
+			schema.AppendAssets(&list, domains)
 			list.AddError("domain", err)
 		case "account":
 			camprovider := &iam.Driver{Credential: p.credential}
 			users, err := camprovider.ListUsers(ctx)
-			list.Users = append(list.Users, users...)
+			schema.AppendAssets(&list, users)
 			list.AddError("account", err)
 		case "database":
 			cdbprovider := cdb.Driver{Credential: p.credential, Region: p.region}
 			mysqls, err := cdbprovider.ListMySQL(ctx)
-			list.Databases = append(list.Databases, mysqls...)
+			schema.AppendAssets(&list, mysqls)
 			list.AddError("database/mysql", err)
 			mariadbs, err := cdbprovider.ListMariaDB(ctx)
-			list.Databases = append(list.Databases, mariadbs...)
+			schema.AppendAssets(&list, mariadbs)
 			list.AddError("database/mariadb", err)
 			postgres, err := cdbprovider.ListPostgreSQL(ctx)
-			list.Databases = append(list.Databases, postgres...)
+			schema.AppendAssets(&list, postgres)
 			list.AddError("database/postgresql", err)
 			mssqls, err := cdbprovider.ListSQLServer(ctx)
-			list.Databases = append(list.Databases, mssqls...)
+			schema.AppendAssets(&list, mssqls)
 			list.AddError("database/sqlserver", err)
 		case "bucket":
 			cosprovider := &cos.Driver{Credential: p.credential}
 			storages, err := cosprovider.GetBuckets(ctx)
-			list.Storages = append(list.Storages, storages...)
+			schema.AppendAssets(&list, storages)
 			list.AddError("bucket", err)
 		default:
 		}
@@ -150,12 +151,6 @@ func (p *Provider) UserManagement(action, username, password string) {
 	}
 }
 
-func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
-	logger.Info("Recommended use https://cosbrowser.cloud.tencent.com/web")
-}
-
-func (p *Provider) EventDump(action, args string) {}
-
 func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {
 	host, ok := p.lookupHost(instanceID)
 	if !ok {
@@ -173,8 +168,6 @@ func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {
 		fmt.Println(output)
 	}
 }
-
-func (p *Provider) DBManagement(action, instanceID string) {}
 
 func (p *Provider) lookupHost(instanceID string) (schema.Host, bool) {
 	for _, host := range tat.GetCacheHostList() {

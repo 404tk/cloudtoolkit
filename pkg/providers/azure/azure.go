@@ -89,13 +89,13 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 		case "host":
 			vmProvider := &compute.Driver{SubscriptionIDs: p.SubscriptionIDs, Authorizer: p.Authorizer}
 			hosts, err := vmProvider.GetResource(ctx)
-			list.Hosts = append(list.Hosts, hosts...)
+			schema.AppendAssets(&list, hosts)
 			list.AddError("host", err)
 		case "bucket":
 			storageProvider := &storage.Driver{
 				SubscriptionIDs: p.SubscriptionIDs, Authorizer: p.Authorizer}
 			storages, err := storageProvider.GetStorages(ctx)
-			list.Storages = append(list.Storages, storages...)
+			schema.AppendAssets(&list, storages)
 			list.AddError("bucket", err)
 		default:
 		}
@@ -106,17 +106,3 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 
 	return list, list.Err()
 }
-
-func (p *Provider) UserManagement(action, username, password string) {
-	logger.Error("Not supported yet.")
-}
-
-func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
-	logger.Error("Not supported yet.")
-}
-
-func (p *Provider) EventDump(action, args string) {}
-
-func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {}
-
-func (p *Provider) DBManagement(action, instanceID string) {}

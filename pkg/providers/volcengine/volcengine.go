@@ -88,13 +88,13 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 		case "host":
 			d := &ecs.Driver{Conf: p.conf, Region: p.region}
 			hosts, err := d.GetResource(ctx)
-			list.Hosts = append(list.Hosts, hosts...)
+			schema.AppendAssets(&list, hosts)
 			list.AddError("host", err)
 		case "domain":
 		case "account":
 			d := &iam.Driver{Conf: p.conf}
 			users, err := d.ListUsers(ctx)
-			list.Users = append(list.Users, users...)
+			schema.AppendAssets(&list, users)
 			list.AddError("account", err)
 		case "database":
 		case "bucket":
@@ -106,13 +106,3 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 
 	return list, list.Err()
 }
-
-func (p *Provider) UserManagement(action, username, password string) {}
-
-func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {}
-
-func (p *Provider) EventDump(action, args string) {}
-
-func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {}
-
-func (p *Provider) DBManagement(action, instanceID string) {}

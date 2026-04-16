@@ -3,9 +3,11 @@ package payloads
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/inventory"
+	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/audit"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -29,6 +31,11 @@ func (p ExecuteCloudVMCommand) Run(ctx context.Context, config map[string]string
 		logger.Error(err)
 		return
 	}
+	execer, ok := i.Providers.(schema.VMExecutor)
+	if !ok {
+		logger.Error(fmt.Sprintf("%s does not support exec-command", i.Providers.Name()))
+		return
+	}
 	record := audit.Record{
 		Provider:  config[utils.Provider],
 		Operation: "exec-command",
@@ -40,7 +47,7 @@ func (p ExecuteCloudVMCommand) Run(ctx context.Context, config map[string]string
 		record.Args = cmd
 	}
 	audit.Log(record)
-	i.Providers.ExecuteCloudVMCommand(instanceId, cmd)
+	execer.ExecuteCloudVMCommand(instanceId, cmd)
 }
 
 func (p ExecuteCloudVMCommand) Desc() string {
