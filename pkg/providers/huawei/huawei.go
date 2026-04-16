@@ -2,6 +2,7 @@ package huawei
 
 import (
 	"context"
+	"fmt"
 
 	_bss "github.com/404tk/cloudtoolkit/pkg/providers/huawei/bss"
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/ecs"
@@ -28,7 +29,7 @@ type Provider struct {
 var defaultRegion = "cn-north-4"
 
 // New creates a new provider client for huawei API
-func New(options schema.Options) (*Provider, error) {
+func New(options schema.Options) (p *Provider, err error) {
 	accessKey, ok := options.GetMetadata(utils.AccessKey)
 	if !ok {
 		return nil, &schema.ErrNoSuchKey{Name: utils.AccessKey}
@@ -68,8 +69,9 @@ func New(options schema.Options) (*Provider, error) {
 		Build()
 
 	defer func() {
-		if err := recover(); err != nil {
-			logger.Error(err)
+		if rec := recover(); rec != nil {
+			err = fmt.Errorf("huawei SDK panic during init: %v", rec)
+			p = nil
 		}
 	}()
 

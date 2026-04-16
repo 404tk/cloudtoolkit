@@ -80,7 +80,7 @@ func getUuid(s string) string {
 func loadCred() {
 	creds = []credential{}
 	cred_ids = make(map[int]string)
-	for i, v := range cache.Cfg.Creds {
+	for i, v := range cache.Cfg.Snapshot() {
 		creds = append(creds, credential{
 			Id:        i + 1,
 			User:      v.User,
@@ -113,7 +113,7 @@ func internation(uuid string) {
 }
 
 func checkCred(uuid string) {
-	for _, cred := range cache.Cfg.Creds {
+	for _, cred := range cache.Cfg.Snapshot() {
 		if uuid != "all" && cred.UUID != uuid {
 			continue
 		}

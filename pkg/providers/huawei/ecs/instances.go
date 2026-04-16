@@ -3,6 +3,7 @@ package ecs
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -24,9 +25,11 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	logger.Info("List ECS instances ...")
 	flag := false
 	prevLength := 0
+	var regionErrs []string
 	for _, r := range d.Regions {
-		client := newClient(r, d.Auth)
-		if client == nil {
+		client, err := newClient(r, d.Auth)
+		if err != nil {
+			regionErrs = append(regionErrs, err.Error())
 			continue
 		}
 
@@ -38,6 +41,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 			request.Offset = &page
 			response, err := client.ListServersDetails(request)
 			if err != nil {
+				regionErrs = append(regionErrs, fmt.Sprintf("%s: %s", r, err))
 				break
 			}
 
@@ -81,18 +85,22 @@ done:
 		fmt.Printf("\n\033[F\033[K")
 	}
 
+	if len(regionErrs) > 0 {
+		return list, fmt.Errorf("%s", strings.Join(regionErrs, "; "))
+	}
 	return list, nil
 }
 
-func newClient(r string, auth *basic.Credentials) *ecs.EcsClient {
+func newClient(r string, auth *basic.Credentials) (client *ecs.EcsClient, err error) {
 	defer func() {
-		if err := recover(); err != nil {
-			return
+		if rec := recover(); rec != nil {
+			err = fmt.Errorf("unsupported ECS region %q: %v", r, rec)
+			client = nil
 		}
 	}()
-	client := ecs.NewEcsClient(ecs.EcsClientBuilder().
+	client = ecs.NewEcsClient(ecs.EcsClientBuilder().
 		WithRegion(region.ValueOf(r)).
 		WithCredential(auth).
 		Build())
-	return client
+	return client, nil
 }

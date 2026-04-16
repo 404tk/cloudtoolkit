@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"sync"
 
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
@@ -14,6 +15,16 @@ var Cfg *InitCfg
 type InitCfg struct {
 	Path  string
 	Creds []Credential
+	mu    sync.RWMutex
+}
+
+// Snapshot returns a shallow copy of Creds safe for iteration outside the package.
+func (cfg *InitCfg) Snapshot() []Credential {
+	cfg.mu.RLock()
+	defer cfg.mu.RUnlock()
+	out := make([]Credential, len(cfg.Creds))
+	copy(out, cfg.Creds)
+	return out
 }
 
 func init() {
@@ -54,12 +65,18 @@ func getCreds(path string) (creds []Credential) {
 }
 
 func SaveFile() {
-	data, err := json.MarshalIndent(Cfg.Creds, "", "\t")
+	Cfg.mu.RLock()
+	snapshot := make([]Credential, len(Cfg.Creds))
+	copy(snapshot, Cfg.Creds)
+	path := Cfg.Path
+	Cfg.mu.RUnlock()
+
+	data, err := json.MarshalIndent(snapshot, "", "\t")
 	if err != nil {
 		logger.Error("Failed to marshal credentials:", err.Error())
 		return
 	}
-	err = os.WriteFile(Cfg.Path, data, 0600)
+	err = os.WriteFile(path, data, 0600)
 	if err != nil {
 		logger.Error("Failed to write the config file:", err.Error())
 	}

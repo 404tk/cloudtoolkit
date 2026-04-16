@@ -27,14 +27,17 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 	default:
 		logger.Info("List RDS instances ...")
 	}
+	var regionErrs []string
 	for _, r := range d.Regions {
-		client := newClient(r, d.Auth)
-		if client == nil {
+		client, err := newClient(r, d.Auth)
+		if err != nil {
+			regionErrs = append(regionErrs, err.Error())
 			continue
 		}
 		request := &model.ListInstancesRequest{}
 		resp, err := client.ListInstances(request)
 		if err != nil {
+			regionErrs = append(regionErrs, fmt.Sprintf("%s: %s", r, err))
 			continue
 		}
 
@@ -66,19 +69,23 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 		break
 	}
 
+	if len(regionErrs) > 0 {
+		return list, fmt.Errorf("%s", strings.Join(regionErrs, "; "))
+	}
 	return list, nil
 }
 
-func newClient(r string, auth *basic.Credentials) *rds.RdsClient {
+func newClient(r string, auth *basic.Credentials) (client *rds.RdsClient, err error) {
 	defer func() {
-		if err := recover(); err != nil {
-			return
+		if rec := recover(); rec != nil {
+			err = fmt.Errorf("unsupported RDS region %q: %v", r, rec)
+			client = nil
 		}
 	}()
 
-	client := rds.NewRdsClient(rds.RdsClientBuilder().
+	client = rds.NewRdsClient(rds.RdsClientBuilder().
 		WithRegion(region.ValueOf(r)).
 		WithCredential(auth).
 		Build())
-	return client
+	return client, nil
 }

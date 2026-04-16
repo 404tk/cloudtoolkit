@@ -2,9 +2,12 @@ package payloads
 
 import (
 	"context"
+	"encoding/base64"
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/inventory"
+	"github.com/404tk/cloudtoolkit/utils"
+	"github.com/404tk/cloudtoolkit/utils/audit"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
@@ -26,6 +29,17 @@ func (p ExecuteCloudVMCommand) Run(ctx context.Context, config map[string]string
 		logger.Error(err)
 		return
 	}
+	record := audit.Record{
+		Provider:  config[utils.Provider],
+		Operation: "exec-command",
+		Target:    instanceId,
+	}
+	if decoded, err := base64.StdEncoding.DecodeString(cmd); err == nil {
+		record.Args = string(decoded)
+	} else {
+		record.Args = cmd
+	}
+	audit.Log(record)
 	i.Providers.ExecuteCloudVMCommand(instanceId, cmd)
 }
 

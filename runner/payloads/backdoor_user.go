@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/inventory"
+	"github.com/404tk/cloudtoolkit/utils"
+	"github.com/404tk/cloudtoolkit/utils/audit"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
@@ -30,6 +32,11 @@ func (p BackdoorUser) Run(ctx context.Context, config map[string]string) {
 		logger.Error(err)
 		return
 	}
+	audit.Log(audit.Record{
+		Provider:  config[utils.Provider],
+		Operation: "backdoor-user." + action,
+		Target:    args_1,
+	})
 	i.Providers.UserManagement(action, args_1, args_2)
 }
 

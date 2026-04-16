@@ -35,20 +35,26 @@ func (cfg *InitCfg) CredInsert(user string, data map[string]string) {
 		return
 	}
 
-	if Cfg.CredSelect(uuid) != "" {
-		Cfg.CredUpdate(uuid, string(b))
-	} else {
-		cfg.Creds = append(cfg.Creds, Credential{
-			UUID:      uuid,
-			User:      truncateString(user, 20),
-			AccessKey: truncateString(accessKey, 35),
-			Provider:  provider,
-			JsonData:  string(b),
-		})
+	cfg.mu.Lock()
+	defer cfg.mu.Unlock()
+	for k, v := range cfg.Creds {
+		if v.UUID == uuid {
+			cfg.Creds[k].JsonData = string(b)
+			return
+		}
 	}
+	cfg.Creds = append(cfg.Creds, Credential{
+		UUID:      uuid,
+		User:      truncateString(user, 20),
+		AccessKey: truncateString(accessKey, 35),
+		Provider:  provider,
+		JsonData:  string(b),
+	})
 }
 
 func (cfg *InitCfg) CredSelect(uuid string) string {
+	cfg.mu.RLock()
+	defer cfg.mu.RUnlock()
 	for _, v := range cfg.Creds {
 		if v.UUID == uuid {
 			return v.JsonData
@@ -58,6 +64,8 @@ func (cfg *InitCfg) CredSelect(uuid string) string {
 }
 
 func (cfg *InitCfg) CredUpdate(uuid, data string) {
+	cfg.mu.Lock()
+	defer cfg.mu.Unlock()
 	for k, v := range cfg.Creds {
 		if v.UUID == uuid {
 			cfg.Creds[k].JsonData = data
@@ -67,6 +75,8 @@ func (cfg *InitCfg) CredUpdate(uuid, data string) {
 }
 
 func (cfg *InitCfg) CredNote(uuid, data string) {
+	cfg.mu.Lock()
+	defer cfg.mu.Unlock()
 	for k, v := range cfg.Creds {
 		if v.UUID == uuid {
 			cfg.Creds[k].Note = data
@@ -76,6 +86,8 @@ func (cfg *InitCfg) CredNote(uuid, data string) {
 }
 
 func (cfg *InitCfg) CredDelete(uuid string) {
+	cfg.mu.Lock()
+	defer cfg.mu.Unlock()
 	for index, v := range cfg.Creds {
 		if v.UUID == uuid {
 			if index == len(cfg.Creds)-1 {
