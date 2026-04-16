@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/404tk/cloudtoolkit/utils"
+	"github.com/404tk/cloudtoolkit/utils/confirm"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/go-prompt"
 )
@@ -18,6 +19,10 @@ var instanceId string
 func shell(args []string) {
 	if len(args) < 1 {
 		logger.Error("Usage: shell instance-id")
+		return
+	}
+	if !confirm.Ask("shell session", config[utils.Provider], args[0]) {
+		logger.Info("Cancelled.")
 		return
 	}
 	instanceId = args[0]

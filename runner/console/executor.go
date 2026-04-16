@@ -6,10 +6,12 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"strings"
 
 	"github.com/404tk/cloudtoolkit/runner/payloads"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
+	"github.com/404tk/cloudtoolkit/utils/confirm"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
@@ -38,6 +40,10 @@ func Executor(s string) {
 	case "set":
 		set(args)
 	case "run":
+		if !confirmIfSensitive(config) {
+			logger.Info("Cancelled.")
+			return
+		}
 		go func() { defer cancel(); run(ctx) }()
 	case "shell":
 		shell(args)
@@ -63,6 +69,41 @@ func Executor(s string) {
 	case <-ctx.Done():
 		return
 	}
+}
+
+// confirmIfSensitive prompts the user before dispatching payloads that mutate
+// cloud state. Read-only payloads (cloudlist, bucket-dump, event-dump.dump)
+// bypass the prompt. exec-command is intentionally skipped here so the shell
+// REPL, which enters a single confirmation at session start, does not prompt
+// on every keystroke.
+func confirmIfSensitive(config map[string]string) bool {
+	payload := config[utils.Payload]
+	metadata := config[utils.Metadata]
+	parts := strings.Fields(metadata)
+	provider := config[utils.Provider]
+
+	switch payload {
+	case "backdoor-user":
+		if len(parts) < 2 {
+			return true
+		}
+		return confirm.Ask("backdoor-user."+parts[0], provider, parts[1])
+	case "database-account":
+		if len(parts) < 2 {
+			return true
+		}
+		return confirm.Ask("database-account."+parts[0], provider, parts[1])
+	case "event-dump":
+		if len(parts) < 1 || parts[0] != "whitelist" {
+			return true
+		}
+		target := ""
+		if len(parts) >= 2 {
+			target = parts[1]
+		}
+		return confirm.Ask("event-dump.whitelist", provider, target)
+	}
+	return true
 }
 
 func show(args []string) {
