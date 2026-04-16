@@ -24,11 +24,13 @@ func NewConfig() *InitCfg {
 	cfg := &InitCfg{}
 	path := filepath.Join(userHomeDir(), ".config/cloudtoolkit/config.json")
 	if v, _ := filepath.Glob(path); len(v) == 0 {
-		err := os.MkdirAll(filepath.Dir(path), os.ModePerm)
+		err := os.MkdirAll(filepath.Dir(path), 0700)
 		if err != nil {
 			logger.Error("Could not mkdir:", err.Error())
 			return cfg
 		}
+	} else {
+		_ = os.Chmod(path, 0600)
 	}
 	cfg.Path = path
 	cfg.Creds = getCreds(path)
@@ -52,8 +54,12 @@ func getCreds(path string) (creds []Credential) {
 }
 
 func SaveFile() {
-	data, _ := json.MarshalIndent(Cfg.Creds, "", "\t")
-	err := os.WriteFile(Cfg.Path, data, 0644)
+	data, err := json.MarshalIndent(Cfg.Creds, "", "\t")
+	if err != nil {
+		logger.Error("Failed to marshal credentials:", err.Error())
+		return
+	}
+	err = os.WriteFile(Cfg.Path, data, 0600)
 	if err != nil {
 		logger.Error("Failed to write the config file:", err.Error())
 	}

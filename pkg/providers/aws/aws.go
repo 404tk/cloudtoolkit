@@ -132,7 +132,11 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
 	case "list":
 		var infos = make(map[string]string)
 		if bucketName == "all" {
-			buckets, _ := s3provider.GetBuckets(context.Background())
+			buckets, err := s3provider.GetBuckets(context.Background())
+			if err != nil {
+				logger.Error("List buckets failed:", err)
+				return
+			}
 			for _, b := range buckets {
 				infos[b.BucketName] = b.Region
 			}
@@ -143,7 +147,11 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
 	case "total":
 		var infos = make(map[string]string)
 		if bucketName == "all" {
-			buckets, _ := s3provider.GetBuckets(context.Background())
+			buckets, err := s3provider.GetBuckets(context.Background())
+			if err != nil {
+				logger.Error("List buckets failed:", err)
+				return
+			}
 			for _, b := range buckets {
 				infos[b.BucketName] = b.Region
 			}

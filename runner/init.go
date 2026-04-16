@@ -3,13 +3,14 @@ package runner
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"gopkg.in/yaml.v3"
 )
 
-var filename = "config.yaml"
+const legacyFilename = "config.yaml"
 
 type Config struct {
 	Common struct {
@@ -29,20 +30,49 @@ type Config struct {
 	} `yaml:"database-account"`
 }
 
-func InitConfig() {
-	_, err := os.Stat(filename)
-	if os.IsNotExist(err) || err != nil {
-		_ = os.WriteFile(filename, []byte(defaultConfigFile), os.ModePerm)
+// resolveConfigPath picks the effective config file location and ensures it
+// exists. Precedence: CTK_CONFIG env > legacy ./config.yaml in CWD (only if
+// already present) > ~/.config/cloudtoolkit/config.yaml (created if missing).
+func resolveConfigPath() string {
+	if p := os.Getenv("CTK_CONFIG"); p != "" {
+		return p
 	}
+	if _, err := os.Stat(legacyFilename); err == nil {
+		return legacyFilename
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		logger.Error("Could not resolve home directory:", err)
+		return legacyFilename
+	}
+	path := filepath.Join(home, ".config", "cloudtoolkit", "config.yaml")
+	if _, err := os.Stat(path); err == nil {
+		return path
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		logger.Error("Could not create config directory:", err)
+		return path
+	}
+	if err := os.WriteFile(path, []byte(defaultConfigFile), 0600); err != nil {
+		logger.Error("Could not seed default config:", err)
+	}
+	return path
+}
+
+func InitConfig() {
+	filename := resolveConfigPath()
 
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		logger.Fatalf("Read config failed: %v\n", err)
+		logger.Error(fmt.Sprintf("Read config failed (%s): %v — falling back to defaults", filename, err))
+		data = []byte(defaultConfigFile)
 	}
 
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		logger.Fatalf("Parse config failed: %v\n", err)
+		logger.Error(fmt.Sprintf("Parse config failed (%s): %v — falling back to defaults", filename, err))
+		_ = yaml.Unmarshal([]byte(defaultConfigFile), &cfg)
 	}
 
 	utils.DoSave = cfg.Common.LogEnable
