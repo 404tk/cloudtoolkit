@@ -44,7 +44,8 @@ func (d *Driver) ListObjects(ctx context.Context, buckets map[string]string) {
 }
 
 func (d *Driver) TotalObjects(ctx context.Context, buckets map[string]string) {
-	prevLength := 0
+	tracker := processbar.NewCountTracker()
+	defer tracker.Finish()
 	for b, r := range buckets {
 		var token *string
 		count := 0
@@ -71,7 +72,7 @@ func (d *Driver) TotalObjects(ctx context.Context, buckets map[string]string) {
 			case <-ctx.Done():
 				return
 			default:
-				prevLength = processbar.CountPrint(b, count, prevLength)
+				tracker.Update(b, count)
 			}
 		}
 		fmt.Printf("\r")
