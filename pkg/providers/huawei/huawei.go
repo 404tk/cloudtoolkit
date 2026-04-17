@@ -2,10 +2,10 @@ package huawei
 
 import (
 	"context"
-	"fmt"
 
 	_bss "github.com/404tk/cloudtoolkit/pkg/providers/huawei/bss"
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/ecs"
+	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/endpoint"
 	_iam "github.com/404tk/cloudtoolkit/pkg/providers/huawei/iam"
 	_obs "github.com/404tk/cloudtoolkit/pkg/providers/huawei/obs"
 	_rds "github.com/404tk/cloudtoolkit/pkg/providers/huawei/rds"
@@ -16,7 +16,6 @@ import (
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
 	iam "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3/model"
-	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3/region"
 )
 
 // Provider is a data provider for huawei API
@@ -29,7 +28,7 @@ type Provider struct {
 var defaultRegion = "cn-north-4"
 
 // New creates a new provider client for huawei API
-func New(options schema.Options) (p *Provider, err error) {
+func New(options schema.Options) (*Provider, error) {
 	accessKey, ok := options.GetMetadata(utils.AccessKey)
 	if !ok {
 		return nil, &schema.ErrNoSuchKey{Name: utils.AccessKey}
@@ -68,22 +67,14 @@ func New(options schema.Options) (p *Provider, err error) {
 		WithSk(secretKey).
 		Build()
 
-	defer func() {
-		if rec := recover(); rec != nil {
-			err = fmt.Errorf("huawei SDK panic during init: %v", rec)
-			p = nil
-		}
-	}()
-
 	var regions []string
 	if regionId == "all" && payload == "cloudlist" {
 		client := iam.NewIamClient(
 			iam.IamClientBuilder().
-				WithRegion(region.ValueOf(defaultRegion)).
+				WithEndpoint(endpoint.For("iam", defaultRegion, intl)).
 				WithCredential(auth).
 				Build())
-		req := &model.KeystoneListRegionsRequest{}
-		resp, err := client.KeystoneListRegions(req)
+		resp, err := client.KeystoneListRegions(&model.KeystoneListRegionsRequest{})
 		if err != nil {
 			logger.Error("List regions failed.")
 			return nil, err

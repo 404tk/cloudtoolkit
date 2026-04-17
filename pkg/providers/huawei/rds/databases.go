@@ -6,12 +6,12 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/endpoint"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
 	rds "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/rds/v3"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/rds/v3/model"
-	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/rds/v3/region"
 )
 
 type Driver struct {
@@ -29,11 +29,7 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 	}
 	var regionErrs []string
 	for _, r := range d.Regions {
-		client, err := newClient(r, d.Auth)
-		if err != nil {
-			regionErrs = append(regionErrs, err.Error())
-			continue
-		}
+		client := newClient(r, d.Auth)
 		request := &model.ListInstancesRequest{}
 		resp, err := client.ListInstances(request)
 		if err != nil {
@@ -75,17 +71,9 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 	return list, nil
 }
 
-func newClient(r string, auth *basic.Credentials) (client *rds.RdsClient, err error) {
-	defer func() {
-		if rec := recover(); rec != nil {
-			err = fmt.Errorf("unsupported RDS region %q: %v", r, rec)
-			client = nil
-		}
-	}()
-
-	client = rds.NewRdsClient(rds.RdsClientBuilder().
-		WithRegion(region.ValueOf(r)).
+func newClient(r string, auth *basic.Credentials) *rds.RdsClient {
+	return rds.NewRdsClient(rds.RdsClientBuilder().
+		WithEndpoint(endpoint.For("rds", r, false)).
 		WithCredential(auth).
 		Build())
-	return client, nil
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/endpoint"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/paginate"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
@@ -14,7 +15,6 @@ import (
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
 	ecs "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
-	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/region"
 )
 
 type Driver struct {
@@ -31,13 +31,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	var regionErrs []string
 	var errMu sync.Mutex
 	got, _ := regionrun.ForEach(ctx, d.Regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
-		client, err := newClient(r, d.Auth)
-		if err != nil {
-			errMu.Lock()
-			regionErrs = append(regionErrs, err.Error())
-			errMu.Unlock()
-			return nil, nil
-		}
+		client := newClient(r, d.Auth)
 		const limit = int32(100)
 		items, err := paginate.Fetch(ctx, func(ctx context.Context, page int32) (paginate.Page[schema.Host, int32], error) {
 			if page == 0 {
@@ -92,16 +86,9 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	return list, nil
 }
 
-func newClient(r string, auth *basic.Credentials) (client *ecs.EcsClient, err error) {
-	defer func() {
-		if rec := recover(); rec != nil {
-			err = fmt.Errorf("unsupported ECS region %q: %v", r, rec)
-			client = nil
-		}
-	}()
-	client = ecs.NewEcsClient(ecs.EcsClientBuilder().
-		WithRegion(region.ValueOf(r)).
+func newClient(r string, auth *basic.Credentials) *ecs.EcsClient {
+	return ecs.NewEcsClient(ecs.EcsClientBuilder().
+		WithEndpoint(endpoint.For("ecs", r, false)).
 		WithCredential(auth).
 		Build())
-	return client, nil
 }
