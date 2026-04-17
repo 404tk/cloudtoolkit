@@ -6,6 +6,9 @@ on:
       - 'v*'
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   goreleaser:
     runs-on: ubuntu-latest
@@ -36,6 +39,6 @@ jobs:
         with:
           distribution: goreleaser
           version: '~> v2'
-          args: release -f .github/conf/.goreleaser.yml --clean
+          args: release -f .github/conf/.goreleaser.yml --clean --parallelism 1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
