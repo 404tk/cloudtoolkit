@@ -8,6 +8,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  DIAG_DIR: /tmp/ctk-diagnostics
 
 jobs:
   goreleaser:
@@ -26,19 +27,127 @@ jobs:
           cache: true
           cache-dependency-path: go.sum
 
+      - name: Collect context
+        run: |
+          set -euxo pipefail
+          mkdir -p "$DIAG_DIR"
+          {
+            echo "date=$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            echo "github_ref=${GITHUB_REF}"
+            echo "github_ref_name=${GITHUB_REF_NAME}"
+            echo "github_sha=${GITHUB_SHA}"
+            echo "runner_os=${RUNNER_OS}"
+            echo "runner_arch=${RUNNER_ARCH}"
+            echo "pwd=$(pwd)"
+          } | tee "$DIAG_DIR/context.txt"
+          git status --short | tee "$DIAG_DIR/git-status.txt"
+          git rev-parse HEAD | tee "$DIAG_DIR/git-head.txt"
+          git show --stat --summary --decorate=fuller HEAD | tee "$DIAG_DIR/git-head-summary.txt"
+          go version | tee "$DIAG_DIR/go-version.txt"
+          go env | tee "$DIAG_DIR/go-env.txt"
+          sha256sum go.mod go.sum | tee "$DIAG_DIR/go-files.sha256"
+          sed -n '1,220p' go.mod | tee "$DIAG_DIR/go.mod.txt"
+          sed -n '1,220p' .github/conf/.goreleaser.yml | tee "$DIAG_DIR/goreleaser.yml.txt"
+
       - name: Warm module cache
         run: |
+          set -euxo pipefail
           go mod download
           go mod verify
+          go list -m all | tee "$DIAG_DIR/go-list-m-all.txt"
+          go list -m -json all > "$DIAG_DIR/go-list-m-all.json"
+          go mod graph | tee "$DIAG_DIR/go-mod-graph.txt"
+          go list -deps -f '{{if not .Standard}}{{.ImportPath}}{{end}}' ./cmd/main.go | sort | tee "$DIAG_DIR/go-list-deps-main.txt"
+          go list -deps -json ./cmd/main.go > "$DIAG_DIR/go-list-deps-main.json"
 
       - name: Warm build cache
-        run: go build -trimpath -ldflags "-s -w" -o /tmp/ctk ./cmd/main.go
+        run: |
+          set -euxo pipefail
+          go build -trimpath -ldflags "-s -w" -o /tmp/ctk ./cmd/main.go
+          ls -lh /tmp/ctk | tee "$DIAG_DIR/warm-build-ls.txt"
+          file /tmp/ctk | tee "$DIAG_DIR/warm-build-file.txt"
+          sha256sum /tmp/ctk | tee "$DIAG_DIR/warm-build.sha256"
+          go version -m /tmp/ctk | tee "$DIAG_DIR/warm-build-go-version-m.txt"
+          go tool buildid /tmp/ctk | tee "$DIAG_DIR/warm-build-buildid.txt"
+          (size /tmp/ctk || true) | tee "$DIAG_DIR/warm-build-size.txt"
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: '~> v2'
-          args: release -f .github/conf/.goreleaser.yml --clean --parallelism 1
+          args: release -f .github/conf/.goreleaser.yml --clean --parallelism 1 --verbose
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Inspect dist
+        if: always()
+        run: |
+          set -euxo pipefail
+          ls -la dist/ | tee "$DIAG_DIR/dist-root.txt"
+          find dist -maxdepth 2 -type f | sort | tee "$DIAG_DIR/dist-files.txt"
+          find dist -maxdepth 2 -type f -exec ls -lh {} + | tee "$DIAG_DIR/dist-ls.txt"
+          find dist -maxdepth 2 -type f -exec file {} + | tee "$DIAG_DIR/dist-file.txt"
+          find dist -maxdepth 2 -type f -exec sha256sum {} + | tee "$DIAG_DIR/dist.sha256"
+          for f in $(find dist -maxdepth 2 -type f -name 'ctk*' 2>/dev/null | sort); do
+            echo "=== $f ===" | tee -a "$DIAG_DIR/dist-binaries.txt"
+            ls -lh "$f" | tee -a "$DIAG_DIR/dist-binaries.txt"
+            file "$f" | tee -a "$DIAG_DIR/dist-binaries.txt"
+            go tool buildid "$f" | tee -a "$DIAG_DIR/dist-binaries.txt" || true
+            go version -m "$f" | tee -a "$DIAG_DIR/dist-binaries.txt" || true
+            (size "$f" || true) | tee -a "$DIAG_DIR/dist-binaries.txt"
+          done
+          du -sh dist | tee "$DIAG_DIR/dist-size.txt"
+          sed -n '1,240p' dist/artifacts.json | tee "$DIAG_DIR/dist-artifacts.json.txt" || true
+          sed -n '1,240p' dist/checksums.txt | tee "$DIAG_DIR/dist-checksums.txt" || true
+
+      - name: Compare linux amd64 output
+        if: always()
+        run: |
+          set -euxo pipefail
+          TARGET="dist/ctk_linux_amd64_v1/ctk"
+          if [ -f /tmp/ctk ] && [ -f "$TARGET" ]; then
+            ls -lh /tmp/ctk "$TARGET" | tee "$DIAG_DIR/compare-linux-amd64-ls.txt"
+            sha256sum /tmp/ctk "$TARGET" | tee "$DIAG_DIR/compare-linux-amd64.sha256"
+            cmp -s /tmp/ctk "$TARGET" && echo "identical=true" | tee "$DIAG_DIR/compare-linux-amd64-cmp.txt" || echo "identical=false" | tee "$DIAG_DIR/compare-linux-amd64-cmp.txt"
+          else
+            echo "linux amd64 artifact missing" | tee "$DIAG_DIR/compare-linux-amd64-cmp.txt"
+          fi
+
+      - name: Inspect GitHub release assets
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euxo pipefail
+          gh release view "${GITHUB_REF_NAME}" --json tagName,name,isDraft,isImmutable,isPrerelease,assets > "$DIAG_DIR/release-assets.json"
+          cat "$DIAG_DIR/release-assets.json"
+          jq -r '
+            [
+              .tagName,
+              .name,
+              (.isDraft|tostring),
+              (.isPrerelease|tostring),
+              (.isImmutable|tostring)
+            ] | @tsv
+          ' "$DIAG_DIR/release-assets.json" | tee "$DIAG_DIR/release-summary.tsv"
+          jq -r '
+            .assets[]
+            | [
+                .name,
+                (.size|tostring),
+                .contentType,
+                .state,
+                .updatedAt,
+                (.downloadCount|tostring),
+                .url
+              ] | @tsv
+          ' "$DIAG_DIR/release-assets.json" | tee "$DIAG_DIR/release-assets.tsv"
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-diagnostics-${{ github.ref_name }}
+          path: /tmp/ctk-diagnostics
+          if-no-files-found: warn
