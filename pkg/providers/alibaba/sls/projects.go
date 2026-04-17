@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/404tk/cloudtoolkit/pkg/runtime/paginate"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -44,36 +45,28 @@ func (d *Driver) ListProjects(ctx context.Context) ([]schema.Log, error) {
 	tracker := processbar.NewRegionTracker()
 	defer tracker.Finish()
 	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Log, error) {
-		var regionList []schema.Log
 		client := d.newClient(r)
-		var offset int32 = 0
-		for {
-			req := ListProjectRequest{Offset: offset, Size: 500}
-			resp, err := client.ListProjects(req)
+		return paginate.Fetch(ctx, func(ctx context.Context, offset int32) (paginate.Page[schema.Log, int32], error) {
+			resp, err := client.ListProjects(ListProjectRequest{Offset: offset, Size: 500})
 			if err != nil {
-				return regionList, err
+				return paginate.Page[schema.Log, int32]{}, err
 			}
+			items := make([]schema.Log, 0, len(resp.Projects))
 			for _, project := range resp.Projects {
-				_log := schema.Log{
-					ProjectName: *project.ProjectName,
-					Region:      *project.Region,
-					Description: *project.Description,
-				}
 				timestamp, _ := strconv.ParseInt(*project.LastModifyTime, 10, 64)
-				_log.LastModifyTime = time.Unix(timestamp, 0).Format("2006-01-02 15:04:05")
-				regionList = append(regionList, _log)
+				items = append(items, schema.Log{
+					ProjectName:    *project.ProjectName,
+					Region:         *project.Region,
+					Description:    *project.Description,
+					LastModifyTime: time.Unix(timestamp, 0).Format("2006-01-02 15:04:05"),
+				})
 			}
-			if len(resp.Projects) < 500 {
-				break
-			}
-			offset += 500
-			select {
-			case <-ctx.Done():
-				return regionList, nil
-			default:
-			}
-		}
-		return regionList, nil
+			return paginate.Page[schema.Log, int32]{
+				Items: items,
+				Next:  offset + 500,
+				Done:  len(resp.Projects) < 500,
+			}, nil
+		})
 	})
 	list = append(list, got...)
 	return list, nil

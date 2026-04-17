@@ -3,6 +3,7 @@ package ec2
 import (
 	"context"
 
+	"github.com/404tk/cloudtoolkit/pkg/runtime/paginate"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -29,14 +30,14 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	tracker := processbar.NewRegionTracker()
 	defer tracker.Finish()
 	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, region string) ([]schema.Host, error) {
-		var regionList []schema.Host
-		req := &ec2.DescribeInstancesInput{MaxResults: aws.Int64(1000)}
 		ec2Client := ec2.New(d.Session, aws.NewConfig().WithRegion(region))
-		for {
+		return paginate.Fetch(ctx, func(ctx context.Context, token *string) (paginate.Page[schema.Host, *string], error) {
+			req := &ec2.DescribeInstancesInput{MaxResults: aws.Int64(1000), NextToken: token}
 			resp, err := ec2Client.DescribeInstancesWithContext(ctx, req)
 			if err != nil {
-				return regionList, err
+				return paginate.Page[schema.Host, *string]{}, err
 			}
+			var items []schema.Host
 			for _, reservation := range resp.Reservations {
 				for _, instance := range reservation.Instances {
 					ip4 := aws.StringValue(instance.PublicIpAddress)
@@ -54,15 +55,15 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 							break
 						}
 					}
-					regionList = append(regionList, host)
+					items = append(items, host)
 				}
 			}
-			if aws.StringValue(resp.NextToken) == "" {
-				break
-			}
-			req.SetNextToken(aws.StringValue(resp.NextToken))
-		}
-		return regionList, nil
+			return paginate.Page[schema.Host, *string]{
+				Items: items,
+				Next:  resp.NextToken,
+				Done:  aws.StringValue(resp.NextToken) == "",
+			}, nil
+		})
 	})
 	list = append(list, got...)
 	return list, nil

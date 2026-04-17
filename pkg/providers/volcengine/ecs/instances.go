@@ -3,6 +3,7 @@ package ecs
 import (
 	"context"
 
+	"github.com/404tk/cloudtoolkit/pkg/runtime/paginate"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -53,28 +54,29 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	tracker := processbar.NewRegionTracker()
 	defer tracker.Finish()
 	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
-		var regionList []schema.Host
 		svc, err := d.NewClient(r)
 		if err != nil {
-			return regionList, err
+			return nil, err
 		}
-		token := volcengine.String("")
-		for {
-			request := &ecs.DescribeInstancesInput{
+		return paginate.Fetch(ctx, func(ctx context.Context, token *string) (paginate.Page[schema.Host, *string], error) {
+			if token == nil {
+				token = volcengine.String("")
+			}
+			resp, err := svc.DescribeInstances(&ecs.DescribeInstancesInput{
 				MaxResults: volcengine.Int32(100),
 				NextToken:  token,
-			}
-			resp, err := svc.DescribeInstances(request)
+			})
 			if err != nil {
-				return regionList, err
+				return paginate.Page[schema.Host, *string]{}, err
 			}
+			items := make([]schema.Host, 0, len(resp.Instances))
 			for _, i := range resp.Instances {
 				ipv4 := volcengine.StringValue(i.EipAddress.IpAddress)
 				var privateIPv4 string
 				if len(i.NetworkInterfaces) > 0 {
 					privateIPv4 = volcengine.StringValue(i.NetworkInterfaces[0].PrimaryIpAddress)
 				}
-				regionList = append(regionList, schema.Host{
+				items = append(items, schema.Host{
 					HostName:    volcengine.StringValue(i.Hostname),
 					ID:          volcengine.StringValue(i.InstanceId),
 					State:       volcengine.StringValue(i.Status),
@@ -85,17 +87,13 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 					Region:      r,
 				})
 			}
-			if len(resp.Instances) < 100 || volcengine.StringValue(resp.NextToken) == "" {
-				break
-			}
-			token = resp.NextToken
-			select {
-			case <-ctx.Done():
-				return regionList, nil
-			default:
-			}
-		}
-		return regionList, nil
+			done := len(resp.Instances) < 100 || volcengine.StringValue(resp.NextToken) == ""
+			return paginate.Page[schema.Host, *string]{
+				Items: items,
+				Next:  resp.NextToken,
+				Done:  done,
+			}, nil
+		})
 	})
 	list = append(list, got...)
 	return list, nil

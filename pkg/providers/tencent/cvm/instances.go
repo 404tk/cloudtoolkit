@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/404tk/cloudtoolkit/pkg/runtime/paginate"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -51,20 +52,19 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	tracker := processbar.NewRegionTracker()
 	defer tracker.Finish()
 	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
-		var regionList []schema.Host
 		client, err := cvm.NewClient(d.Credential, r, profile.NewClientProfile())
 		if err != nil {
-			return regionList, err
+			return nil, err
 		}
-		request := cvm.NewDescribeInstancesRequest()
-		request.Limit = common.Int64Ptr(100)
-		var offset int64 = 0
-		for {
+		return paginate.Fetch(ctx, func(ctx context.Context, offset int64) (paginate.Page[schema.Host, int64], error) {
+			request := cvm.NewDescribeInstancesRequest()
+			request.Limit = common.Int64Ptr(100)
 			request.Offset = common.Int64Ptr(offset)
 			response, err := client.DescribeInstances(request)
 			if err != nil {
-				return regionList, err
+				return paginate.Page[schema.Host, int64]{}, err
 			}
+			items := make([]schema.Host, 0, len(response.Response.InstanceSet))
 			for _, instance := range response.Response.InstanceSet {
 				var ipv4, privateIPv4 string
 				if len(instance.PublicIpAddresses) > 0 {
@@ -82,25 +82,19 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 					Public:      ipv4 != "",
 					Region:      r,
 				}
-				os_name := strings.Split(*instance.OsName, " ")[0]
-				if os_name == "Windows" {
+				if strings.Split(*instance.OsName, " ")[0] == "Windows" {
 					host.OSType = "WINDOWS"
 				} else {
 					host.OSType = "LINUX_UNIX"
 				}
-				regionList = append(regionList, host)
+				items = append(items, host)
 			}
-			if len(response.Response.InstanceSet) < 100 {
-				break
-			}
-			offset += 100
-			select {
-			case <-ctx.Done():
-				return regionList, nil
-			default:
-			}
-		}
-		return regionList, nil
+			return paginate.Page[schema.Host, int64]{
+				Items: items,
+				Next:  offset + 100,
+				Done:  len(response.Response.InstanceSet) < 100,
+			}, nil
+		})
 	})
 	list = append(list, got...)
 

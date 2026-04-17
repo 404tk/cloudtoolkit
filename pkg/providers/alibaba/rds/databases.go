@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/404tk/cloudtoolkit/pkg/runtime/paginate"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -69,9 +70,10 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 	tracker := processbar.NewRegionTracker()
 	defer tracker.Finish()
 	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Database, error) {
-		var regionList []schema.Database
-		page := 1
-		for {
+		return paginate.Fetch(ctx, func(ctx context.Context, page int) (paginate.Page[schema.Database, int], error) {
+			if page == 0 {
+				page = 1
+			}
 			request := rds.CreateDescribeDBInstancesRequest()
 			request.PageSize = requests.NewInteger(100)
 			request.PageNumber = requests.NewInteger(page)
@@ -80,32 +82,27 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 			}
 			response, err := client.DescribeDBInstances(request)
 			if err != nil {
-				return regionList, err
+				return paginate.Page[schema.Database, int]{}, err
 			}
-			pageCount := int(math.Ceil(float64(response.TotalRecordCount) / 100))
+			items := make([]schema.Database, 0, len(response.Items.DBInstance))
 			for _, dbInstance := range response.Items.DBInstance {
-				_db := schema.Database{
+				items = append(items, schema.Database{
 					InstanceId:    dbInstance.DBInstanceId,
 					Engine:        dbInstance.Engine,
 					EngineVersion: dbInstance.EngineVersion,
 					Region:        dbInstance.RegionId,
 					Address:       dbInstance.ConnectionString,
 					NetworkType:   dbInstance.InstanceNetworkType,
-				}
-				_db.DBNames = describeDatabases(client, dbInstance.DBInstanceId)
-				regionList = append(regionList, _db)
+					DBNames:       describeDatabases(client, dbInstance.DBInstanceId),
+				})
 			}
-			if page == pageCount || pageCount == 0 {
-				break
-			}
-			page++
-			select {
-			case <-ctx.Done():
-				return regionList, nil
-			default:
-			}
-		}
-		return regionList, nil
+			pageCount := int(math.Ceil(float64(response.TotalRecordCount) / 100))
+			return paginate.Page[schema.Database, int]{
+				Items: items,
+				Next:  page + 1,
+				Done:  page >= pageCount,
+			}, nil
+		})
 	})
 	list = append(list, got...)
 	return list, nil

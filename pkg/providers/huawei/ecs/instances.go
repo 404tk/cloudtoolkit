@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/404tk/cloudtoolkit/pkg/runtime/paginate"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -30,26 +31,25 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	var regionErrs []string
 	var errMu sync.Mutex
 	got, _ := regionrun.ForEach(ctx, d.Regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
-		var regionList []schema.Host
 		client, err := newClient(r, d.Auth)
 		if err != nil {
 			errMu.Lock()
 			regionErrs = append(regionErrs, err.Error())
 			errMu.Unlock()
-			return regionList, nil
+			return nil, nil
 		}
-		limitRequest := int32(100)
-		page := int32(1)
-		request := &model.ListServersDetailsRequest{Limit: &limitRequest}
-		for {
-			request.Offset = &page
-			response, err := client.ListServersDetails(request)
-			if err != nil {
-				errMu.Lock()
-				regionErrs = append(regionErrs, fmt.Sprintf("%s: %s", r, err))
-				errMu.Unlock()
-				break
+		const limit = int32(100)
+		items, err := paginate.Fetch(ctx, func(ctx context.Context, page int32) (paginate.Page[schema.Host, int32], error) {
+			if page == 0 {
+				page = 1
 			}
+			pagePtr := page
+			limitPtr := limit
+			response, err := client.ListServersDetails(&model.ListServersDetailsRequest{Limit: &limitPtr, Offset: &pagePtr})
+			if err != nil {
+				return paginate.Page[schema.Host, int32]{}, err
+			}
+			var items []schema.Host
 			for _, instance := range *response.Servers {
 				var ipv4, privateIPv4 string
 				for _, instance := range instance.Addresses {
@@ -62,7 +62,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 						}
 					}
 				}
-				regionList = append(regionList, schema.Host{
+				items = append(items, schema.Host{
 					State:       instance.Status,
 					HostName:    instance.Name,
 					PublicIPv4:  ipv4,
@@ -71,17 +71,18 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 					Region:      r,
 				})
 			}
-			if page*limitRequest >= *response.Count {
-				break
-			}
-			page++
-			select {
-			case <-ctx.Done():
-				return regionList, nil
-			default:
-			}
+			return paginate.Page[schema.Host, int32]{
+				Items: items,
+				Next:  page + 1,
+				Done:  page*limit >= *response.Count,
+			}, nil
+		})
+		if err != nil {
+			errMu.Lock()
+			regionErrs = append(regionErrs, fmt.Sprintf("%s: %s", r, err))
+			errMu.Unlock()
 		}
-		return regionList, nil
+		return items, nil
 	})
 	list = append(list, got...)
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 
+	"github.com/404tk/cloudtoolkit/pkg/runtime/paginate"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -65,18 +66,19 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	tracker := processbar.NewRegionTracker()
 	defer tracker.Finish()
 	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
-		var regionList []schema.Host
-		page := 1
-		for {
+		return paginate.Fetch(ctx, func(ctx context.Context, page int) (paginate.Page[schema.Host, int], error) {
+			if page == 0 {
+				page = 1
+			}
 			request := ecs.CreateDescribeInstancesRequest()
 			request.PageSize = requests.NewInteger(100)
 			request.PageNumber = requests.NewInteger(page)
 			request.RegionId = r
 			response, err := client.DescribeInstances(request)
 			if err != nil {
-				return regionList, err
+				return paginate.Page[schema.Host, int]{}, err
 			}
-			pageCount := int(math.Ceil(float64(response.TotalCount) / 100))
+			items := make([]schema.Host, 0, len(response.Instances.Instance))
 			for _, instance := range response.Instances.Instance {
 				var ipv4, privateIPv4 string
 				if len(instance.PublicIpAddress.IpAddress) > 0 {
@@ -95,7 +97,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 				if ipv4 == "" {
 					ipv4 = instance.EipAddress.IpAddress
 				}
-				regionList = append(regionList, schema.Host{
+				items = append(items, schema.Host{
 					HostName:    instance.HostName,
 					ID:          instance.InstanceId,
 					PublicIPv4:  ipv4,
@@ -105,17 +107,13 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 					Region:      r,
 				})
 			}
-			if page == pageCount || pageCount == 0 {
-				break
-			}
-			page++
-			select {
-			case <-ctx.Done():
-				return regionList, nil
-			default:
-			}
-		}
-		return regionList, nil
+			pageCount := int(math.Ceil(float64(response.TotalCount) / 100))
+			return paginate.Page[schema.Host, int]{
+				Items: items,
+				Next:  page + 1,
+				Done:  page >= pageCount,
+			}, nil
+		})
 	})
 	list = append(list, got...)
 
