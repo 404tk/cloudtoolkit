@@ -2,8 +2,8 @@ package lighthouse
 
 import (
 	"context"
-	"fmt"
 
+	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
@@ -53,14 +53,13 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		regions = append(regions, d.Region)
 	}
 
-	flag := false
-	prevLength := 0
-	count := 0
-	for _, r := range regions {
-		d.Region = r
-		client, err := d.NewClient()
+	tracker := processbar.NewRegionTracker()
+	defer tracker.Finish()
+	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
+		var regionList []schema.Host
+		client, err := lighthouse.NewClient(d.Credential, r, profile.NewClientProfile())
 		if err != nil {
-			continue
+			return regionList, err
 		}
 		request := lighthouse.NewDescribeInstancesRequest()
 		request.Limit = common.Int64Ptr(100)
@@ -69,10 +68,8 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 			request.Offset = common.Int64Ptr(offset)
 			response, err := client.DescribeInstances(request)
 			if err != nil {
-				logger.Error("DescribeInstances failed.")
-				return list, err
+				return regionList, err
 			}
-
 			for _, instance := range response.Response.InstanceSet {
 				var ipv4, privateIPv4 string
 				if len(instance.PublicAddresses) > 0 {
@@ -81,35 +78,29 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 				if len(instance.PrivateAddresses) > 0 {
 					privateIPv4 = *instance.PrivateAddresses[0]
 				}
-				_host := schema.Host{
+				regionList = append(regionList, schema.Host{
 					HostName:    *instance.InstanceName,
 					ID:          *instance.InstanceId,
 					State:       *instance.InstanceState,
 					PublicIPv4:  ipv4,
 					PrivateIpv4: privateIPv4,
-					OSType:      *instance.PlatformType, // LINUX_UNIX or WINDOWS
+					OSType:      *instance.PlatformType,
 					Public:      ipv4 != "",
 					Region:      r,
-				}
-				list = append(list, _host)
+				})
 			}
-
 			if len(response.Response.InstanceSet) < 100 {
 				break
 			}
 			offset += 100
+			select {
+			case <-ctx.Done():
+				return regionList, nil
+			default:
+			}
 		}
-		select {
-		case <-ctx.Done():
-			goto done
-		default:
-			prevLength, flag = processbar.RegionPrint(r, len(list)-count, prevLength, flag)
-			count = len(list)
-		}
-	}
-done:
-	if !flag {
-		fmt.Printf("\n\033[F\033[K")
-	}
+		return regionList, nil
+	})
+	list = append(list, got...)
 	return list, nil
 }

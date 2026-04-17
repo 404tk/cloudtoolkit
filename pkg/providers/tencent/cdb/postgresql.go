@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
@@ -41,21 +42,19 @@ func (d *Driver) ListPostgreSQL(ctx context.Context) ([]schema.Database, error) 
 		regions = append(regions, d.Region)
 	}
 
-	flag := false
-	prevLength := 0
-	for _, r := range regions {
+	tracker := processbar.NewRegionTracker()
+	defer tracker.Finish()
+	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Database, error) {
+		var regionList []schema.Database
 		client, err := postgres.NewClient(d.Credential, r, cpf)
 		if err != nil {
-			continue
+			return regionList, err
 		}
 		request := postgres.NewDescribeDBInstancesRequest()
 		response, err := client.DescribeDBInstances(request)
 		if err != nil {
-			fmt.Println()
-			logger.Error("DescribeDBInstances failed:", err)
-			return list, err
+			return regionList, err
 		}
-
 		for _, instance := range response.Response.DBInstanceSet {
 			_db := schema.Database{
 				InstanceId:    *instance.DBInstanceId,
@@ -71,18 +70,10 @@ func (d *Driver) ListPostgreSQL(ctx context.Context) ([]schema.Database, error) 
 					_db.Address = fmt.Sprintf("%s:%d", *info.Ip, *info.Port)
 				}
 			}
-			list = append(list, _db)
+			regionList = append(regionList, _db)
 		}
-		select {
-		case <-ctx.Done():
-			goto done
-		default:
-			prevLength, flag = processbar.RegionPrint(r, len(response.Response.DBInstanceSet), prevLength, flag)
-		}
-	}
-done:
-	if !flag {
-		fmt.Printf("\n\033[F\033[K")
-	}
+		return regionList, nil
+	})
+	list = append(list, got...)
 	return list, nil
 }

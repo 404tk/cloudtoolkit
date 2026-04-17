@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
@@ -49,11 +50,11 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	}
 	tracker := processbar.NewRegionTracker()
 	defer tracker.Finish()
-	for _, r := range regions {
-		d.Region = r
-		client, err := d.NewClient()
+	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
+		var regionList []schema.Host
+		client, err := cvm.NewClient(d.Credential, r, profile.NewClientProfile())
 		if err != nil {
-			continue
+			return regionList, err
 		}
 		request := cvm.NewDescribeInstancesRequest()
 		request.Limit = common.Int64Ptr(100)
@@ -62,10 +63,8 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 			request.Offset = common.Int64Ptr(offset)
 			response, err := client.DescribeInstances(request)
 			if err != nil {
-				logger.Error("DescribeInstances failed.")
-				return list, err
+				return regionList, err
 			}
-
 			for _, instance := range response.Response.InstanceSet {
 				var ipv4, privateIPv4 string
 				if len(instance.PublicIpAddresses) > 0 {
@@ -89,21 +88,21 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 				} else {
 					host.OSType = "LINUX_UNIX"
 				}
-				list = append(list, host)
+				regionList = append(regionList, host)
 			}
-
 			if len(response.Response.InstanceSet) < 100 {
 				break
 			}
 			offset += 100
+			select {
+			case <-ctx.Done():
+				return regionList, nil
+			default:
+			}
 		}
-		select {
-		case <-ctx.Done():
-			return list, nil
-		default:
-			tracker.Update(r, len(list)-tracker.Count())
-		}
-	}
+		return regionList, nil
+	})
+	list = append(list, got...)
 
 	return list, nil
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
@@ -46,23 +47,22 @@ func (d *Driver) ListMySQL(ctx context.Context) ([]schema.Database, error) {
 		regions = append(regions, d.Region)
 	}
 
-	flag := false
-	prevLength := 0
-	for _, r := range regions {
+	tracker := processbar.NewRegionTracker()
+	defer tracker.Finish()
+	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Database, error) {
+		var regionList []schema.Database
 		client, err := cdb.NewClient(d.Credential, r, cpf)
 		if err != nil {
-			continue
+			return regionList, err
 		}
 		request := cdb.NewDescribeDBInstancesRequest()
 		response, err := client.DescribeDBInstances(request)
 		if err != nil {
 			if strings.Contains(err.Error(), "UnsupportedRegion") {
-				continue
+				return regionList, nil
 			}
-			logger.Error("DescribeDBInstances failed.")
-			return list, err
+			return regionList, err
 		}
-
 		for _, instance := range response.Response.Items {
 			_db := schema.Database{
 				InstanceId:    *instance.InstanceId,
@@ -75,18 +75,10 @@ func (d *Driver) ListMySQL(ctx context.Context) ([]schema.Database, error) {
 			} else {
 				_db.Address = fmt.Sprintf("%s:%d", *instance.Vip, *instance.Vport)
 			}
-			list = append(list, _db)
+			regionList = append(regionList, _db)
 		}
-		select {
-		case <-ctx.Done():
-			goto done
-		default:
-			prevLength, flag = processbar.RegionPrint(r, len(response.Response.Items), prevLength, flag)
-		}
-	}
-done:
-	if !flag {
-		fmt.Printf("\n\033[F\033[K")
-	}
+		return regionList, nil
+	})
+	list = append(list, got...)
 	return list, nil
 }

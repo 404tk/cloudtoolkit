@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
+	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
@@ -23,17 +25,19 @@ type Driver struct {
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := []schema.Host{}
 	logger.Info("List ECS instances ...")
-	flag := false
-	prevLength := 0
+	tracker := processbar.NewRegionTracker()
+	defer tracker.Finish()
 	var regionErrs []string
-	for _, r := range d.Regions {
+	var errMu sync.Mutex
+	got, _ := regionrun.ForEach(ctx, d.Regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
+		var regionList []schema.Host
 		client, err := newClient(r, d.Auth)
 		if err != nil {
+			errMu.Lock()
 			regionErrs = append(regionErrs, err.Error())
-			continue
+			errMu.Unlock()
+			return regionList, nil
 		}
-
-		count := 0
 		limitRequest := int32(100)
 		page := int32(1)
 		request := &model.ListServersDetailsRequest{Limit: &limitRequest}
@@ -41,10 +45,11 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 			request.Offset = &page
 			response, err := client.ListServersDetails(request)
 			if err != nil {
+				errMu.Lock()
 				regionErrs = append(regionErrs, fmt.Sprintf("%s: %s", r, err))
+				errMu.Unlock()
 				break
 			}
-
 			for _, instance := range *response.Servers {
 				var ipv4, privateIPv4 string
 				for _, instance := range instance.Addresses {
@@ -57,33 +62,28 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 						}
 					}
 				}
-				host := schema.Host{
+				regionList = append(regionList, schema.Host{
 					State:       instance.Status,
 					HostName:    instance.Name,
 					PublicIPv4:  ipv4,
 					PrivateIpv4: privateIPv4,
 					Public:      ipv4 != "",
 					Region:      r,
-				}
-				list = append(list, host)
+				})
 			}
 			if page*limitRequest >= *response.Count {
-				count = int(*response.Count)
 				break
 			}
 			page++
+			select {
+			case <-ctx.Done():
+				return regionList, nil
+			default:
+			}
 		}
-		select {
-		case <-ctx.Done():
-			goto done
-		default:
-			prevLength, flag = processbar.RegionPrint(r, count, prevLength, flag)
-		}
-	}
-done:
-	if !flag {
-		fmt.Printf("\n\033[F\033[K")
-	}
+		return regionList, nil
+	})
+	list = append(list, got...)
 
 	if len(regionErrs) > 0 {
 		return list, fmt.Errorf("%s", strings.Join(regionErrs, "; "))

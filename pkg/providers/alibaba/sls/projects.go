@@ -2,10 +2,10 @@ package sls
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"time"
 
+	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
@@ -17,9 +17,9 @@ type Driver struct {
 	Region string
 }
 
-func (d *Driver) NewClient() *Client {
+func (d *Driver) newClient(region string) *Client {
 	return NewClient(
-		false, d.Region, d.Cred.AccessKeyId, d.Cred.AccessKeySecret, d.Cred.AccessKeyStsToken)
+		false, region, d.Cred.AccessKeyId, d.Cred.AccessKeySecret, d.Cred.AccessKeyStsToken)
 }
 
 // Reference https://api.aliyun.com/product/Sls
@@ -41,24 +41,17 @@ func (d *Driver) ListProjects(ctx context.Context) ([]schema.Log, error) {
 		regions = append(regions, d.Region)
 	}
 
-	flag := false
-	prevLength := 0
-	count := 0
-	var err error
-	for _, r := range regions {
-		d.Region = r
-		client := d.NewClient()
+	tracker := processbar.NewRegionTracker()
+	defer tracker.Finish()
+	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Log, error) {
+		var regionList []schema.Log
+		client := d.newClient(r)
 		var offset int32 = 0
 		for {
-			req := ListProjectRequest{
-				Offset: offset,
-				Size:   500,
-			}
-			var resp *ListProjectResponse
-			resp, err = client.ListProjects(req)
+			req := ListProjectRequest{Offset: offset, Size: 500}
+			resp, err := client.ListProjects(req)
 			if err != nil {
-				logger.Error("ListProjects failed.")
-				goto done
+				return regionList, err
 			}
 			for _, project := range resp.Projects {
 				_log := schema.Log{
@@ -68,24 +61,20 @@ func (d *Driver) ListProjects(ctx context.Context) ([]schema.Log, error) {
 				}
 				timestamp, _ := strconv.ParseInt(*project.LastModifyTime, 10, 64)
 				_log.LastModifyTime = time.Unix(timestamp, 0).Format("2006-01-02 15:04:05")
-				list = append(list, _log)
+				regionList = append(regionList, _log)
 			}
 			if len(resp.Projects) < 500 {
 				break
 			}
 			offset += 500
+			select {
+			case <-ctx.Done():
+				return regionList, nil
+			default:
+			}
 		}
-		select {
-		case <-ctx.Done():
-			goto done
-		default:
-			prevLength, flag = processbar.RegionPrint(r, len(list)-count, prevLength, flag)
-			count = len(list)
-		}
-	}
-done:
-	if !flag {
-		fmt.Printf("\n\033[F\033[K")
-	}
-	return list, err
+		return regionList, nil
+	})
+	list = append(list, got...)
+	return list, nil
 }

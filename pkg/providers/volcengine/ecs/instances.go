@@ -2,8 +2,8 @@ package ecs
 
 import (
 	"context"
-	"fmt"
 
+	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
@@ -21,7 +21,7 @@ func (d *Driver) NewClient(region string) (*ecs.ECS, error) {
 	if region == "all" || region == "" {
 		region = "cn-beijing"
 	}
-	sess, err := session.NewSession(d.Conf.WithRegion(region))
+	sess, err := session.NewSession(d.Conf.Copy().WithRegion(region))
 	if err != nil {
 		return nil, err
 	}
@@ -50,13 +50,13 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	} else {
 		regions = append(regions, d.Region)
 	}
-	flag := false
-	prevLength := 0
-	count := 0
-	for _, r := range regions {
-		svc, err = d.NewClient(r)
+	tracker := processbar.NewRegionTracker()
+	defer tracker.Finish()
+	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
+		var regionList []schema.Host
+		svc, err := d.NewClient(r)
 		if err != nil {
-			continue
+			return regionList, err
 		}
 		token := volcengine.String("")
 		for {
@@ -66,46 +66,37 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 			}
 			resp, err := svc.DescribeInstances(request)
 			if err != nil {
-				return list, err
+				return regionList, err
 			}
 			for _, i := range resp.Instances {
-				// Getting Host Information
 				ipv4 := volcengine.StringValue(i.EipAddress.IpAddress)
 				var privateIPv4 string
 				if len(i.NetworkInterfaces) > 0 {
 					privateIPv4 = volcengine.StringValue(i.NetworkInterfaces[0].PrimaryIpAddress)
 				}
-
-				_host := schema.Host{
+				regionList = append(regionList, schema.Host{
 					HostName:    volcengine.StringValue(i.Hostname),
 					ID:          volcengine.StringValue(i.InstanceId),
 					State:       volcengine.StringValue(i.Status),
 					PublicIPv4:  ipv4,
 					PrivateIpv4: privateIPv4,
-					OSType:      volcengine.StringValue(i.OsType), // Windows or Linux
+					OSType:      volcengine.StringValue(i.OsType),
 					Public:      ipv4 != "",
 					Region:      r,
-				}
-				list = append(list, _host)
+				})
 			}
-			if len(resp.Instances) < 100 ||
-				volcengine.StringValue(resp.NextToken) == "" {
+			if len(resp.Instances) < 100 || volcengine.StringValue(resp.NextToken) == "" {
 				break
 			}
 			token = resp.NextToken
+			select {
+			case <-ctx.Done():
+				return regionList, nil
+			default:
+			}
 		}
-		select {
-		case <-ctx.Done():
-			goto done
-		default:
-			prevLength, flag = processbar.RegionPrint(r, len(list)-count, prevLength, flag)
-			count = len(list)
-		}
-	}
-done:
-	if !flag {
-		fmt.Printf("\n\033[F\033[K")
-	}
-
+		return regionList, nil
+	})
+	list = append(list, got...)
 	return list, nil
 }

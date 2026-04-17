@@ -2,11 +2,11 @@ package rds
 
 import (
 	"context"
-	"fmt"
 	"math"
 	"strings"
 	"sync"
 
+	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
@@ -66,10 +66,10 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 			return list, nil
 		}
 	}
-	flag := false
-	prevLength := 0
-	count := 0
-	for _, r := range regions {
+	tracker := processbar.NewRegionTracker()
+	defer tracker.Finish()
+	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Database, error) {
+		var regionList []schema.Database
 		page := 1
 		for {
 			request := rds.CreateDescribeDBInstancesRequest()
@@ -78,10 +78,9 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 			if r != "all" {
 				request.RegionId = r
 			}
-
 			response, err := client.DescribeDBInstances(request)
 			if err != nil {
-				break
+				return regionList, err
 			}
 			pageCount := int(math.Ceil(float64(response.TotalRecordCount) / 100))
 			for _, dbInstance := range response.Items.DBInstance {
@@ -93,29 +92,22 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 					Address:       dbInstance.ConnectionString,
 					NetworkType:   dbInstance.InstanceNetworkType,
 				}
-				// if dbInstance.DBInstanceNetType == "Internet" {
-				// _db.Address = dbInstance.ConnectionString
-				// }
 				_db.DBNames = describeDatabases(client, dbInstance.DBInstanceId)
-				list = append(list, _db)
+				regionList = append(regionList, _db)
 			}
 			if page == pageCount || pageCount == 0 {
 				break
 			}
 			page++
+			select {
+			case <-ctx.Done():
+				return regionList, nil
+			default:
+			}
 		}
-		select {
-		case <-ctx.Done():
-			goto done
-		default:
-			prevLength, flag = processbar.RegionPrint(r, len(list)-count, prevLength, flag)
-			count = len(list)
-		}
-	}
-done:
-	if !flag {
-		fmt.Printf("\n\033[F\033[K")
-	}
+		return regionList, nil
+	})
+	list = append(list, got...)
 	return list, nil
 }
 

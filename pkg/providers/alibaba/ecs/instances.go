@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 
+	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
@@ -63,21 +64,20 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	}
 	tracker := processbar.NewRegionTracker()
 	defer tracker.Finish()
-	for _, r := range regions {
+	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
+		var regionList []schema.Host
 		page := 1
 		for {
 			request := ecs.CreateDescribeInstancesRequest()
 			request.PageSize = requests.NewInteger(100)
 			request.PageNumber = requests.NewInteger(page)
 			request.RegionId = r
-			// Getting a list of instances
 			response, err := client.DescribeInstances(request)
 			if err != nil {
-				break
+				return regionList, err
 			}
 			pageCount := int(math.Ceil(float64(response.TotalCount) / 100))
 			for _, instance := range response.Instances.Instance {
-				// Getting Host Information
 				var ipv4, privateIPv4 string
 				if len(instance.PublicIpAddress.IpAddress) > 0 {
 					ipv4 = instance.PublicIpAddress.IpAddress[0]
@@ -86,7 +86,6 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 					privateIPv4 = instance.NetworkInterfaces.NetworkInterface[0].PrivateIpSets.PrivateIpSet[0].PrivateIpAddress
 				}
 				if privateIPv4 == "" {
-					// Get the primary and private IP addresses from the network adapter configuration
 					for _, net := range instance.NetworkInterfaces.NetworkInterface {
 						if net.PrimaryIpAddress != "" {
 							privateIPv4 = net.PrimaryIpAddress
@@ -94,33 +93,31 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 					}
 				}
 				if ipv4 == "" {
-					// Get the public IP address from the Eip
 					ipv4 = instance.EipAddress.IpAddress
 				}
-
-				_host := schema.Host{
+				regionList = append(regionList, schema.Host{
 					HostName:    instance.HostName,
 					ID:          instance.InstanceId,
 					PublicIPv4:  ipv4,
 					PrivateIpv4: privateIPv4,
-					OSType:      instance.OSType, // windows or linux
+					OSType:      instance.OSType,
 					Public:      ipv4 != "",
 					Region:      r,
-				}
-				list = append(list, _host)
+				})
 			}
 			if page == pageCount || pageCount == 0 {
 				break
 			}
 			page++
+			select {
+			case <-ctx.Done():
+				return regionList, nil
+			default:
+			}
 		}
-		select {
-		case <-ctx.Done():
-			return list, nil
-		default:
-			tracker.Update(r, len(list)-tracker.Count())
-		}
-	}
+		return regionList, nil
+	})
+	list = append(list, got...)
 
 	return list, nil
 }

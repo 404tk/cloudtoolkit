@@ -2,8 +2,8 @@ package ec2
 
 import (
 	"context"
-	"fmt"
 
+	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
@@ -21,28 +21,21 @@ type Driver struct {
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := []schema.Host{}
 	logger.Info("List EC2 instances ...")
-	flag := false
-	prevLength := 0
-	count := 0
 	regions, err := d.GetEC2Regions()
 	if err != nil {
 		logger.Error("GetEC2Regions failed.")
 		return list, err
 	}
-	for _, region := range regions {
-		req := &ec2.DescribeInstancesInput{
-			MaxResults: aws.Int64(1000),
-		}
-
-		ec2Client := ec2.New(
-			d.Session,
-			aws.NewConfig().WithRegion(region),
-		)
+	tracker := processbar.NewRegionTracker()
+	defer tracker.Finish()
+	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, region string) ([]schema.Host, error) {
+		var regionList []schema.Host
+		req := &ec2.DescribeInstancesInput{MaxResults: aws.Int64(1000)}
+		ec2Client := ec2.New(d.Session, aws.NewConfig().WithRegion(region))
 		for {
-			resp, err := ec2Client.DescribeInstances(req)
+			resp, err := ec2Client.DescribeInstancesWithContext(ctx, req)
 			if err != nil {
-				logger.Error("DescribeInstances failed.")
-				return list, err
+				return regionList, err
 			}
 			for _, reservation := range resp.Reservations {
 				for _, instance := range reservation.Instances {
@@ -61,7 +54,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 							break
 						}
 					}
-					list = append(list, host)
+					regionList = append(regionList, host)
 				}
 			}
 			if aws.StringValue(resp.NextToken) == "" {
@@ -69,18 +62,9 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 			}
 			req.SetNextToken(aws.StringValue(resp.NextToken))
 		}
-		select {
-		case <-ctx.Done():
-			goto done
-		default:
-			prevLength, flag = processbar.RegionPrint(region, len(list)-count, prevLength, flag)
-			count = len(list)
-		}
-	}
-done:
-	if !flag {
-		fmt.Printf("\n\033[F\033[K")
-	}
+		return regionList, nil
+	})
+	list = append(list, got...)
 	return list, nil
 }
 
