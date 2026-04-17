@@ -6,11 +6,11 @@ import (
 	"os"
 	"os/signal"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/404tk/cloudtoolkit/runner/payloads"
 	"github.com/404tk/cloudtoolkit/utils"
+	"github.com/404tk/cloudtoolkit/utils/argparse"
 	"github.com/404tk/cloudtoolkit/utils/cache"
 	"github.com/404tk/cloudtoolkit/utils/confirm"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -95,7 +95,7 @@ func Executor(s string) {
 func confirmIfSensitive(config map[string]string) bool {
 	payload := config[utils.Payload]
 	metadata := config[utils.Metadata]
-	parts := strings.Fields(metadata)
+	parts := argparse.Split(metadata)
 	provider := config[utils.Provider]
 
 	switch payload {

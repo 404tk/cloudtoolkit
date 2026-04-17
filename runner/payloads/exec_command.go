@@ -4,11 +4,11 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/inventory"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
+	"github.com/404tk/cloudtoolkit/utils/argparse"
 	"github.com/404tk/cloudtoolkit/utils/audit"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
@@ -18,7 +18,7 @@ type ExecuteCloudVMCommand struct{}
 func (p ExecuteCloudVMCommand) Run(ctx context.Context, config map[string]string) {
 	var instanceId, cmd string
 	if metadata, ok := config["metadata"]; ok {
-		data := strings.SplitN(metadata, " ", 2)
+		data := argparse.SplitN(metadata, 2)
 		if len(data) < 2 {
 			logger.Error("Execute `set metadata <instance-id> <cmd>`")
 			return
