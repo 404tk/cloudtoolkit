@@ -1,44 +1,28 @@
 version: 2
 
-before:
-  hooks:
-    - go mod tidy
-
 builds:
-  - id: "with-upx"
+  - id: ctk
     main: ./cmd/main.go
     binary: ctk
     env:
       - CGO_ENABLED=0
     goos:
       - linux
+      - darwin
       - windows
     goarch:
       - amd64
-    flags:
-      - -trimpath
-      - -buildmode
-      - exe
-    ldflags:
-      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{ .CommitDate }} -X main.builtBy=goreleaser
-
-  - id: "without-upx"
-    main: ./cmd/main.go
-    binary: ctk
-    env:
-      - CGO_ENABLED=0
-    goos:
-      - darwin
-    goarch:
-      - amd64
       - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
     flags:
       - -trimpath
     ldflags:
-      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{ .CommitDate }} -X main.builtBy=goreleaser
+      - -s -w
 
 archives:
-  - name_template: "{{ .Binary }}_{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}"
+  - name_template: "{{ .Binary }}_{{ .Os }}_{{ .Arch }}"
     formats:
       - binary
     files:
@@ -56,3 +40,4 @@ changelog:
     exclude:
       - '^docs:'
       - '^test:'
+      - '^ci:'
