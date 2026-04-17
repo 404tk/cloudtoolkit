@@ -1,6 +1,5 @@
 .DS_Store
 .vscode/
-go.sum
 temp/
 logs/
 config.yaml
