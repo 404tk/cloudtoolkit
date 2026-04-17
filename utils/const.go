@@ -1,5 +1,7 @@
 package utils
 
+import "time"
+
 const (
 	Provider      = "provider"
 	Payload       = "payload"
@@ -34,4 +36,5 @@ var (
 	Cloudlist    []string
 	BackdoorUser string
 	DBAccount    string
+	RunTimeout   time.Duration
 )

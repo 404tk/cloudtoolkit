@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -14,9 +15,10 @@ const legacyFilename = "config.yaml"
 
 type Config struct {
 	Common struct {
-		LogEnable    bool   `yaml:"log_enable"`
-		ListPolicies bool   `yaml:"list_policies"`
-		LogDir       string `yaml:"log_dir"`
+		LogEnable      bool   `yaml:"log_enable"`
+		ListPolicies   bool   `yaml:"list_policies"`
+		LogDir         string `yaml:"log_dir"`
+		TimeoutMinutes int    `yaml:"timeout_minutes"`
 	} `yaml:"common"`
 	Cloudlist    []string `yaml:"cloudlist"`
 	BackdoorUser struct {
@@ -79,6 +81,11 @@ func InitConfig() {
 	utils.ListPolicies = cfg.Common.ListPolicies
 	utils.LogDir = cfg.Common.LogDir
 	utils.Cloudlist = cfg.Cloudlist
+	if cfg.Common.TimeoutMinutes > 0 {
+		utils.RunTimeout = time.Duration(cfg.Common.TimeoutMinutes) * time.Minute
+	} else {
+		utils.RunTimeout = 10 * time.Minute
+	}
 
 	utils.BackdoorUser = fmt.Sprintf("%s %s %s",
 		cfg.BackdoorUser.Action,
@@ -96,6 +103,7 @@ const defaultConfigFile = `common:
   log_enable: false
   list_policies: false
   log_dir: logs
+  timeout_minutes: 10
 
 cloudlist:
   - balance

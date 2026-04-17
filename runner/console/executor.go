@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/404tk/cloudtoolkit/runner/payloads"
 	"github.com/404tk/cloudtoolkit/utils"
@@ -16,58 +17,73 @@ import (
 )
 
 func Executor(s string) {
-	// allow ctrl-c to generate signal
-	ctx, cancel := context.WithCancel(context.Background())
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-
-	go func() {
-		select {
-		case <-c:
-			cancel()
-		}
-	}()
-
 	if s == "" {
 		return
 	}
 	cmd, args := utils.ParseCmd(s)
-	switch cmd {
-	case "use":
-		use(args)
-	case "show":
-		show(args)
-	case "set":
-		set(args)
-	case "run":
-		if !confirmIfSensitive(config) {
-			logger.Info("Cancelled.")
-			return
+
+	// Only payload `run` needs a cancellable context with timeout + SIGINT wiring.
+	// Other commands return quickly and don't benefit from the plumbing.
+	if cmd != "run" {
+		switch cmd {
+		case "use":
+			use(args)
+		case "show":
+			show(args)
+		case "set":
+			set(args)
+		case "shell":
+			shell(args)
+		case "sessions":
+			sessions(args)
+		case "note":
+			note(args)
+		case "help":
+			help()
+		case "clear":
+			os.Stdout.Write([]byte("\033[2J\033[H"))
+		case "exit", "quit":
+			cache.SaveFile()
+			os.Exit(0)
+		default:
+			logger.Error("Unsupported command:", cmd)
 		}
-		go func() { defer cancel(); run(ctx) }()
-	case "shell":
-		shell(args)
-	case "sessions":
-		sessions(args)
-	case "note":
-		note(args)
-	case "help":
-		help()
-	case "clear":
-		os.Stdout.Write([]byte("\033[2J\033[H"))
-	case "exit", "quit":
-		cache.SaveFile()
-		os.Exit(0)
-	default:
-		logger.Error("Unsupported command:", cmd)
+		return
 	}
 
-	if cmd != "run" {
+	if !confirmIfSensitive(config) {
+		logger.Info("Cancelled.")
 		return
 	}
+
+	timeout := utils.RunTimeout
+	if timeout <= 0 {
+		timeout = 10 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	defer signal.Stop(c)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		run(ctx)
+	}()
+
 	select {
+	case <-done:
+	case <-c:
+		logger.Info("Interrupted, cancelling...")
+		cancel()
+		<-done
 	case <-ctx.Done():
-		return
+		if ctx.Err() == context.DeadlineExceeded {
+			logger.Error(fmt.Sprintf("Run timed out after %s", timeout))
+		}
+		<-done
 	}
 }
 
