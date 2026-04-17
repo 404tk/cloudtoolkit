@@ -32,13 +32,7 @@ type Config struct {
 	} `yaml:"database-account"`
 }
 
-// resolveConfigPath picks the effective config file location and ensures it
-// exists. Precedence: CTK_CONFIG env > legacy ./config.yaml in CWD (only if
-// already present) > ~/.config/cloudtoolkit/config.yaml (created if missing).
 func resolveConfigPath() string {
-	if p := os.Getenv("CTK_CONFIG"); p != "" {
-		return p
-	}
 	if _, err := os.Stat(legacyFilename); err == nil {
 		return legacyFilename
 	}
@@ -48,7 +42,7 @@ func resolveConfigPath() string {
 		logger.Error("Could not resolve home directory:", err)
 		return legacyFilename
 	}
-	path := filepath.Join(home, ".config", "cloudtoolkit", "config.yaml")
+	path := filepath.Join(home, ".config", "cloudtoolkit", legacyFilename)
 	if _, err := os.Stat(path); err == nil {
 		return path
 	}

@@ -9,12 +9,8 @@ import (
 
 // Ask prints a summary of a pending sensitive operation and blocks until the
 // user responds. Returns true only on explicit y/yes. Empty input, EOF, or
-// anything else counts as a rejection. Setting CTK_YES=1 bypasses the prompt
-// entirely for scripting / CI contexts.
+// anything else counts as a rejection.
 func Ask(op, provider, target string) bool {
-	if os.Getenv("CTK_YES") == "1" {
-		return true
-	}
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintf(os.Stderr, "[!] About to run: %s\n", op)
 	if provider != "" {
