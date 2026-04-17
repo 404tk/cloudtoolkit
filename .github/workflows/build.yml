@@ -42,7 +42,8 @@ jobs:
           } | tee "$DIAG_DIR/context.txt"
           git status --short | tee "$DIAG_DIR/git-status.txt"
           git rev-parse HEAD | tee "$DIAG_DIR/git-head.txt"
-          git show --stat --summary --decorate=fuller HEAD | tee "$DIAG_DIR/git-head-summary.txt"
+          git tag --points-at HEAD | tee "$DIAG_DIR/git-head-tags.txt"
+          git show --stat --summary --pretty=fuller HEAD | tee "$DIAG_DIR/git-head-summary.txt"
           go version | tee "$DIAG_DIR/go-version.txt"
           go env | tee "$DIAG_DIR/go-env.txt"
           sha256sum go.mod go.sum | tee "$DIAG_DIR/go-files.sha256"
@@ -84,22 +85,26 @@ jobs:
         if: always()
         run: |
           set -euxo pipefail
-          ls -la dist/ | tee "$DIAG_DIR/dist-root.txt"
-          find dist -maxdepth 2 -type f | sort | tee "$DIAG_DIR/dist-files.txt"
-          find dist -maxdepth 2 -type f -exec ls -lh {} + | tee "$DIAG_DIR/dist-ls.txt"
-          find dist -maxdepth 2 -type f -exec file {} + | tee "$DIAG_DIR/dist-file.txt"
-          find dist -maxdepth 2 -type f -exec sha256sum {} + | tee "$DIAG_DIR/dist.sha256"
-          for f in $(find dist -maxdepth 2 -type f -name 'ctk*' 2>/dev/null | sort); do
-            echo "=== $f ===" | tee -a "$DIAG_DIR/dist-binaries.txt"
-            ls -lh "$f" | tee -a "$DIAG_DIR/dist-binaries.txt"
-            file "$f" | tee -a "$DIAG_DIR/dist-binaries.txt"
-            go tool buildid "$f" | tee -a "$DIAG_DIR/dist-binaries.txt" || true
-            go version -m "$f" | tee -a "$DIAG_DIR/dist-binaries.txt" || true
-            (size "$f" || true) | tee -a "$DIAG_DIR/dist-binaries.txt"
-          done
-          du -sh dist | tee "$DIAG_DIR/dist-size.txt"
-          sed -n '1,240p' dist/artifacts.json | tee "$DIAG_DIR/dist-artifacts.json.txt" || true
-          sed -n '1,240p' dist/checksums.txt | tee "$DIAG_DIR/dist-checksums.txt" || true
+          if [ -d dist ]; then
+            ls -la dist/ | tee "$DIAG_DIR/dist-root.txt"
+            find dist -maxdepth 2 -type f | sort | tee "$DIAG_DIR/dist-files.txt"
+            find dist -maxdepth 2 -type f -exec ls -lh {} + | tee "$DIAG_DIR/dist-ls.txt"
+            find dist -maxdepth 2 -type f -exec file {} + | tee "$DIAG_DIR/dist-file.txt"
+            find dist -maxdepth 2 -type f -exec sha256sum {} + | tee "$DIAG_DIR/dist.sha256"
+            for f in $(find dist -maxdepth 2 -type f -name 'ctk*' 2>/dev/null | sort); do
+              echo "=== $f ===" | tee -a "$DIAG_DIR/dist-binaries.txt"
+              ls -lh "$f" | tee -a "$DIAG_DIR/dist-binaries.txt"
+              file "$f" | tee -a "$DIAG_DIR/dist-binaries.txt"
+              go tool buildid "$f" | tee -a "$DIAG_DIR/dist-binaries.txt" || true
+              go version -m "$f" | tee -a "$DIAG_DIR/dist-binaries.txt" || true
+              (size "$f" || true) | tee -a "$DIAG_DIR/dist-binaries.txt"
+            done
+            du -sh dist | tee "$DIAG_DIR/dist-size.txt"
+            sed -n '1,240p' dist/artifacts.json | tee "$DIAG_DIR/dist-artifacts.json.txt" || true
+            sed -n '1,240p' dist/checksums.txt | tee "$DIAG_DIR/dist-checksums.txt" || true
+          else
+            echo "dist directory missing" | tee "$DIAG_DIR/dist-missing.txt"
+          fi
 
       - name: Compare linux amd64 output
         if: always()
@@ -120,31 +125,46 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euxo pipefail
-          gh release view "${GITHUB_REF_NAME}" --json tagName,name,isDraft,isImmutable,isPrerelease,assets > "$DIAG_DIR/release-assets.json"
-          cat "$DIAG_DIR/release-assets.json"
-          jq -r '
-            [
-              .tagName,
-              .name,
-              (.isDraft|tostring),
-              (.isPrerelease|tostring),
-              (.isImmutable|tostring)
-            ] | @tsv
-          ' "$DIAG_DIR/release-assets.json" | tee "$DIAG_DIR/release-summary.tsv"
-          jq -r '
-            .assets[]
-            | [
+          if gh release view "${GITHUB_REF_NAME}" --json tagName,name,isDraft,isImmutable,isPrerelease,assets > "$DIAG_DIR/release-assets.json"; then
+            cat "$DIAG_DIR/release-assets.json"
+            jq -r '
+              [
+                .tagName,
                 .name,
-                (.size|tostring),
-                .contentType,
-                .state,
-                .updatedAt,
-                (.downloadCount|tostring),
-                .url
+                (.isDraft|tostring),
+                (.isPrerelease|tostring),
+                (.isImmutable|tostring)
               ] | @tsv
-          ' "$DIAG_DIR/release-assets.json" | tee "$DIAG_DIR/release-assets.tsv"
+            ' "$DIAG_DIR/release-assets.json" | tee "$DIAG_DIR/release-summary.tsv"
+            jq -r '
+              .assets[]
+              | [
+                  .name,
+                  (.size|tostring),
+                  .contentType,
+                  .state,
+                  .updatedAt,
+                  (.downloadCount|tostring),
+                  .url
+                ] | @tsv
+            ' "$DIAG_DIR/release-assets.json" | tee "$DIAG_DIR/release-assets.tsv"
+          else
+            echo "release assets unavailable" | tee "$DIAG_DIR/release-assets-missing.txt"
+          fi
 
       - name: Upload diagnostics
+        if: always()
+        run: |
+          set -euxo pipefail
+          if [ -d "$DIAG_DIR" ]; then
+            find "$DIAG_DIR" -maxdepth 1 -type f | sort | tee "$DIAG_DIR/diag-files.txt"
+            find "$DIAG_DIR" -maxdepth 1 -type f -exec ls -lh {} + | tee "$DIAG_DIR/diag-files-ls.txt"
+            find "$DIAG_DIR" -maxdepth 1 -type f | wc -l | tee "$DIAG_DIR/diag-file-count.txt"
+            du -sh "$DIAG_DIR" | tee "$DIAG_DIR/diag-dir-size.txt"
+          else
+            echo "diagnostics directory missing"
+          fi
+      - name: Upload diagnostics artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
