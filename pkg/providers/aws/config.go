@@ -1,30 +1,28 @@
 package aws
 
 import (
-	"context"
 	"strings"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/aws/auth"
 	"github.com/404tk/cloudtoolkit/pkg/providers/aws/internal/arnutil"
 	awsv2 "github.com/aws/aws-sdk-go-v2/aws"
-	awsv2config "github.com/aws/aws-sdk-go-v2/config"
-	awsv2credentials "github.com/aws/aws-sdk-go-v2/credentials"
 )
 
 func newConfig(
-	ctx context.Context,
 	accessKey string,
 	secretKey string,
 	token string,
 	region string,
 	version string,
 ) (awsv2.Config, error) {
-	return awsv2config.LoadDefaultConfig(
-		ctx,
-		awsv2config.WithRegion(resolveBootstrapRegion(region, version)),
-		awsv2config.WithCredentialsProvider(
-			awsv2credentials.NewStaticCredentialsProvider(accessKey, secretKey, token),
-		),
-	)
+	credential := auth.New(accessKey, secretKey, token)
+	if err := credential.Validate(); err != nil {
+		return awsv2.Config{}, err
+	}
+	return awsv2.Config{
+		Region:      resolveBootstrapRegion(region, version),
+		Credentials: awsv2.NewCredentialsCache(credential),
+	}, nil
 }
 
 func resolveBootstrapRegion(region string, version string) string {

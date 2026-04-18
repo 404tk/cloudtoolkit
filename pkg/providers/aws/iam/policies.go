@@ -4,23 +4,28 @@ import (
 	"context"
 	"strings"
 
-	awsv2 "github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/404tk/cloudtoolkit/pkg/providers/aws/api"
+	"github.com/404tk/cloudtoolkit/pkg/runtime/paginate"
 )
 
-func listAttachedUserPolicies(ctx context.Context, client *iam.Client, name string) string {
-	paginator := iam.NewListAttachedUserPoliciesPaginator(client, &iam.ListAttachedUserPoliciesInput{
-		UserName: &name,
-	})
-	policies := []string{}
-	for paginator.HasMorePages() {
-		resp, err := paginator.NextPage(ctx)
+func listAttachedUserPolicies(ctx context.Context, client *api.Client, region, name string) string {
+	policies, err := paginate.Fetch[api.AttachedUserPolicy, string](ctx, func(ctx context.Context, marker string) (paginate.Page[api.AttachedUserPolicy, string], error) {
+		resp, err := client.ListAttachedUserPolicies(ctx, region, name, marker)
 		if err != nil {
-			return ""
+			return paginate.Page[api.AttachedUserPolicy, string]{}, err
 		}
-		for _, p := range resp.AttachedPolicies {
-			policies = append(policies, awsv2.ToString(p.PolicyName))
-		}
+		return paginate.Page[api.AttachedUserPolicy, string]{
+			Items: resp.Policies,
+			Next:  resp.Marker,
+			Done:  !resp.IsTruncated || strings.TrimSpace(resp.Marker) == "",
+		}, nil
+	})
+	if err != nil {
+		return ""
 	}
-	return strings.Join(policies, "\n")
+	names := make([]string, 0, len(policies))
+	for _, policy := range policies {
+		names = append(names, policy.PolicyName)
+	}
+	return strings.Join(names, "\n")
 }

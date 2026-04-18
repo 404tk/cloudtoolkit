@@ -2,32 +2,36 @@ package iam
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/aws/api"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/aws/aws-sdk-go-v2/service/iam"
-	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 )
 
 func (d *Driver) DelUser() {
 	ctx := context.Background()
-	client := iam.NewFromConfig(d.Config)
-	err := deleteLoginProfile(ctx, client, d.Username)
+	client, err := d.requireClient()
+	if err != nil {
+		logger.Error(err)
+		return
+	}
+	region := d.requestRegion()
+
+	err = deleteLoginProfile(ctx, client, region, d.Username)
 	if err != nil {
 		if !isNoSuchEntity(err) {
 			logger.Error(fmt.Sprintf("Delete login profile failed: %s", err))
 			return
 		}
 	}
-	err = detachUserPolicy(ctx, client, d.Username)
+	err = detachUserPolicy(ctx, client, region, d.Username)
 	if err != nil {
 		if !isNoSuchEntity(err) {
 			logger.Error(fmt.Sprintf("Remove policy from %s failed: %s", d.Username, err))
 			return
 		}
 	}
-	err = deleteUser(ctx, client, d.Username)
+	err = deleteUser(ctx, client, region, d.Username)
 	if err != nil {
 		logger.Error(fmt.Sprintf("Delete user failed: %s", err))
 		return
@@ -35,30 +39,18 @@ func (d *Driver) DelUser() {
 	logger.Warning(fmt.Sprintf("Delete user %s success!", d.Username))
 }
 
-func detachUserPolicy(ctx context.Context, client *iam.Client, userName string) error {
-	request := &iam.DetachUserPolicyInput{}
-	request.UserName = &userName
-	policyArn := "arn:aws:iam::aws:policy/AdministratorAccess"
-	request.PolicyArn = &policyArn
-	_, err := client.DetachUserPolicy(ctx, request)
-	return err
+func detachUserPolicy(ctx context.Context, client *api.Client, region, userName string) error {
+	return client.DetachUserPolicy(ctx, region, userName, adminPolicyARN)
 }
 
-func deleteLoginProfile(ctx context.Context, client *iam.Client, userName string) error {
-	request := &iam.DeleteLoginProfileInput{}
-	request.UserName = &userName
-	_, err := client.DeleteLoginProfile(ctx, request)
-	return err
+func deleteLoginProfile(ctx context.Context, client *api.Client, region, userName string) error {
+	return client.DeleteLoginProfile(ctx, region, userName)
 }
 
-func deleteUser(ctx context.Context, client *iam.Client, userName string) error {
-	request := &iam.DeleteUserInput{}
-	request.UserName = &userName
-	_, err := client.DeleteUser(ctx, request)
-	return err
+func deleteUser(ctx context.Context, client *api.Client, region, userName string) error {
+	return client.DeleteUser(ctx, region, userName)
 }
 
 func isNoSuchEntity(err error) bool {
-	var target *iamtypes.NoSuchEntityException
-	return errors.As(err, &target)
+	return api.ErrorCode(err) == "NoSuchEntity"
 }

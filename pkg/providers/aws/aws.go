@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	_api "github.com/404tk/cloudtoolkit/pkg/providers/aws/api"
+	_auth "github.com/404tk/cloudtoolkit/pkg/providers/aws/auth"
 	_ec2 "github.com/404tk/cloudtoolkit/pkg/providers/aws/ec2"
 	_iam "github.com/404tk/cloudtoolkit/pkg/providers/aws/iam"
 	_s3 "github.com/404tk/cloudtoolkit/pkg/providers/aws/s3"
@@ -12,49 +14,54 @@ import (
 	"github.com/404tk/cloudtoolkit/utils/cache"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	awsv2 "github.com/aws/aws-sdk-go-v2/aws"
-	sts "github.com/aws/aws-sdk-go-v2/service/sts"
 )
 
 // Provider is a data provider for aws API
 type Provider struct {
-	region string
-	cfg    awsv2.Config
+	region    string
+	cfg       awsv2.Config
+	apiClient *_api.Client
 }
 
 // New creates a new provider client for aws API
 func New(options schema.Options) (*Provider, error) {
-	accessKey, ok := options.GetMetadata(utils.AccessKey)
-	if !ok {
-		return nil, &schema.ErrNoSuchKey{Name: utils.AccessKey}
-	}
-	secretKey, ok := options.GetMetadata(utils.SecretKey)
-	if !ok {
-		return nil, &schema.ErrNoSuchKey{Name: utils.SecretKey}
-	}
-	token, _ := options.GetMetadata(utils.SecurityToken)
-	region, _ := options.GetMetadata(utils.Region)
-	version, _ := options.GetMetadata(utils.Version)
-	cfg, err := newConfig(context.Background(), accessKey, secretKey, token, region, version)
+	credential, err := _auth.FromOptions(options)
 	if err != nil {
 		return nil, err
 	}
+	region, _ := options.GetMetadata(utils.Region)
+	version, _ := options.GetMetadata(utils.Version)
+	cfg, err := newConfig(
+		credential.AccessKeyID,
+		credential.SecretAccessKey,
+		credential.SessionToken,
+		region,
+		version,
+	)
+	if err != nil {
+		return nil, err
+	}
+	apiClient := _api.NewClient(credential)
 
 	payload, _ := options.GetMetadata(utils.Payload)
 	if payload == "cloudlist" {
-		stsclient := sts.NewFromConfig(cfg)
-		resp, err := stsclient.GetCallerIdentity(context.Background(), &sts.GetCallerIdentityInput{})
+		resp, err := apiClient.GetCallerIdentity(
+			context.Background(),
+			resolveBootstrapRegion(region, version),
+		)
 		if err != nil {
 			return nil, err
 		}
-		accountArn := awsv2.ToString(resp.Arn)
+		accountArn := resp.Arn
 		userName := currentUserNameFromARN(accountArn)
 		logger.Warning(fmt.Sprintf("Current user: %s", userName))
 		cache.Cfg.CredInsert(userName, options)
 	}
 
 	return &Provider{
-		region: region,
-		cfg:    cfg,
+		region:    region,
+		cfg:       cfg,
+		apiClient: apiClient,
 	}, nil
 }
 
@@ -70,17 +77,25 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	for _, product := range utils.Cloudlist {
 		switch product {
 		case "host":
-			ec2provider := &_ec2.Driver{Config: p.cfg, Region: p.region}
+			ec2provider := &_ec2.Driver{
+				Client:        p.apiClient,
+				Region:        p.region,
+				DefaultRegion: p.cfg.Region,
+			}
 			hosts, err := ec2provider.GetResource(ctx)
 			schema.AppendAssets(&list, hosts)
 			list.AddError("host", err)
 		case "account":
-			iamprovider := &_iam.Driver{Config: p.cfg}
+			iamprovider := &_iam.Driver{
+				Client:        p.apiClient,
+				Region:        p.region,
+				DefaultRegion: p.cfg.Region,
+			}
 			users, err := iamprovider.ListUsers(ctx)
 			schema.AppendAssets(&list, users)
 			list.AddError("account", err)
 		case "bucket":
-			s3provider := &_s3.Driver{Config: p.cfg}
+			s3provider := &_s3.Driver{Client: p.apiClient, DefaultRegion: p.cfg.Region}
 			storages, err := s3provider.GetBuckets(ctx)
 			schema.AppendAssets(&list, storages)
 			list.AddError("bucket", err)
@@ -93,7 +108,12 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 
 func (p *Provider) UserManagement(action, username, password string) {
 	ramprovider := &_iam.Driver{
-		Config: p.cfg, Username: username, Password: password}
+		Client:        p.apiClient,
+		Region:        p.region,
+		DefaultRegion: p.cfg.Region,
+		Username:      username,
+		Password:      password,
+	}
 	switch action {
 	case "add":
 		ramprovider.AddUser()
@@ -105,7 +125,7 @@ func (p *Provider) UserManagement(action, username, password string) {
 }
 
 func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
-	s3provider := &_s3.Driver{Config: p.cfg}
+	s3provider := &_s3.Driver{Client: p.apiClient, DefaultRegion: p.cfg.Region}
 	switch action {
 	case "list":
 		var infos = make(map[string]string)
