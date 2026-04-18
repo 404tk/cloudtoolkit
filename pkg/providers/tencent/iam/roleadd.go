@@ -1,49 +1,36 @@
 package iam
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/api"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	cam "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cam/v20190116"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 )
 
 func (d *Driver) AddRole() {
-	cpf := profile.NewClientProfile()
-	client, err := cam.NewClient(d.Credential, "", cpf)
-	if err != nil {
-		logger.Error("Create CAM client failed:", err.Error())
-		return
-	}
-	err = createRole(client, d.RoleName, d.Uin)
+	ctx := context.Background()
+	client := d.newClient()
+	err := createRole(ctx, client, d.RoleName, d.Uin)
 	if err != nil {
 		logger.Error("Create role failed:", err.Error())
 		return
 	}
-	_ = attachPolicyToRole(client, d.RoleName)
-	OwnerID := getOwnerUin(client)
+	_ = attachPolicyToRole(ctx, client, d.RoleName)
+	OwnerID := getOwnerUin(ctx, client)
 	logger.Warning(fmt.Sprintf(
 		"Switch URL: https://cloud.tencent.com/cam/switchrole?ownerUin=%s&roleName=%s\n",
 		OwnerID, d.RoleName))
 }
 
-func createRole(client *cam.Client, roleName, uin string) error {
-	request := cam.NewCreateRoleRequest()
-	request.RoleName = common.StringPtr(roleName)
-	request.ConsoleLogin = common.Uint64Ptr(1)
-	request.SessionDuration = common.Uint64Ptr(10000)
+func createRole(ctx context.Context, client *api.Client, roleName, uin string) error {
 	policy := fmt.Sprintf(
 		`{"version":"2.0","statement":[{"action":"name/sts:AssumeRole","effect":"allow","principal":{"qcs":["qcs::cam::uin/%s:root"]}}]}`, uin)
-	request.PolicyDocument = common.StringPtr(policy)
-	_, err := client.CreateRole(request)
+	_, err := client.CreateRole(ctx, roleName, policy, 1, 10000)
 	return err
 }
 
-func attachPolicyToRole(client *cam.Client, roleName string) error {
-	request := cam.NewAttachRolePolicyRequest()
-	request.PolicyId = common.Uint64Ptr(1)
-	request.AttachRoleName = common.StringPtr(roleName)
-	_, err := client.AttachRolePolicy(request)
+func attachPolicyToRole(ctx context.Context, client *api.Client, roleName string) error {
+	_, err := client.AttachRolePolicy(ctx, roleName, 1)
 	return err
 }

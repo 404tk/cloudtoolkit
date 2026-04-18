@@ -3,26 +3,24 @@ package ec2
 import (
 	"context"
 
-	"github.com/404tk/cloudtoolkit/pkg/runtime/paginate"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/ec2"
+	awsv2 "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
 )
 
 type Driver struct {
-	Session *session.Session
-	Region  string
+	Config awsv2.Config
+	Region string
 }
 
 // GetResource returns all the resources in the store for a provider.
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := []schema.Host{}
 	logger.Info("List EC2 instances ...")
-	regions, err := d.GetEC2Regions()
+	regions, err := d.GetEC2Regions(ctx)
 	if err != nil {
 		logger.Error("GetEC2Regions failed.")
 		return list, err
@@ -30,58 +28,73 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	tracker := processbar.NewRegionTracker()
 	defer tracker.Finish()
 	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, region string) ([]schema.Host, error) {
-		ec2Client := ec2.New(d.Session, aws.NewConfig().WithRegion(region))
-		return paginate.Fetch(ctx, func(ctx context.Context, token *string) (paginate.Page[schema.Host, *string], error) {
-			req := &ec2.DescribeInstancesInput{MaxResults: aws.Int64(1000), NextToken: token}
-			resp, err := ec2Client.DescribeInstancesWithContext(ctx, req)
+		cfg := d.Config.Copy()
+		if region != "" {
+			cfg.Region = region
+		}
+		ec2Client := ec2.NewFromConfig(cfg)
+		paginator := ec2.NewDescribeInstancesPaginator(ec2Client, &ec2.DescribeInstancesInput{
+			MaxResults: awsv2.Int32(1000),
+		})
+		var items []schema.Host
+		for paginator.HasMorePages() {
+			resp, err := paginator.NextPage(ctx)
 			if err != nil {
-				return paginate.Page[schema.Host, *string]{}, err
+				return nil, err
 			}
-			var items []schema.Host
 			for _, reservation := range resp.Reservations {
 				for _, instance := range reservation.Instances {
-					ip4 := aws.StringValue(instance.PublicIpAddress)
+					ip4 := awsv2.ToString(instance.PublicIpAddress)
+					state := ""
+					if instance.State != nil {
+						state = string(instance.State.Name)
+					}
 					host := schema.Host{
-						State:       instance.State.String(),
+						HostName:    "",
+						ID:          awsv2.ToString(instance.InstanceId),
+						State:       state,
 						PublicIPv4:  ip4,
-						PrivateIpv4: aws.StringValue(instance.PrivateIpAddress),
-						DNSName:     aws.StringValue(instance.PublicDnsName),
+						PrivateIpv4: awsv2.ToString(instance.PrivateIpAddress),
+						DNSName:     awsv2.ToString(instance.PublicDnsName),
 						Public:      ip4 != "",
 						Region:      region,
 					}
 					for _, tag := range instance.Tags {
-						if *tag.Key == "aws:cloudformation:stack-name" || *tag.Key == "Name" {
-							host.HostName = *tag.Value
+						key := awsv2.ToString(tag.Key)
+						if key == "aws:cloudformation:stack-name" || key == "Name" {
+							host.HostName = awsv2.ToString(tag.Value)
 							break
 						}
 					}
 					items = append(items, host)
 				}
 			}
-			return paginate.Page[schema.Host, *string]{
-				Items: items,
-				Next:  resp.NextToken,
-				Done:  aws.StringValue(resp.NextToken) == "",
-			}, nil
-		})
+		}
+		return items, nil
 	})
 	list = append(list, got...)
 	return list, nil
 }
 
-func (d *Driver) GetEC2Regions() ([]string, error) {
+func (d *Driver) GetEC2Regions(ctx context.Context) ([]string, error) {
 	var regions []string
-	ec2Client := ec2.New(d.Session)
 	if d.Region == "all" {
-		resp, err := ec2Client.DescribeRegions(&ec2.DescribeRegionsInput{})
+		ec2Client := ec2.NewFromConfig(d.Config)
+		resp, err := ec2Client.DescribeRegions(ctx, &ec2.DescribeRegionsInput{})
 		if err != nil {
 			return nil, err
 		}
 		for _, region := range resp.Regions {
-			regions = append(regions, aws.StringValue(region.RegionName))
+			if name := awsv2.ToString(region.RegionName); name != "" {
+				regions = append(regions, name)
+			}
 		}
 	} else {
-		regions = append(regions, d.Region)
+		region := d.Region
+		if region == "" {
+			region = d.Config.Region
+		}
+		regions = append(regions, region)
 	}
 	return regions, nil
 }

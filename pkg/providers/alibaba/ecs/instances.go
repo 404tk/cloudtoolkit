@@ -2,66 +2,49 @@ package ecs
 
 import (
 	"context"
-	"math"
+	"time"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/api"
+	aliauth "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/auth"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/paginate"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/ecs"
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/vpc"
 )
 
 type Driver struct {
-	Cred   *credentials.StsTokenCredential
-	Region string
-}
-
-func (d *Driver) NewClient() (*ecs.Client, error) {
-	region := d.Region
-	if region == "all" || region == "" {
-		region = "cn-hangzhou"
-	}
-	return ecs.NewClientWithOptions(region, sdk.NewConfig(), d.Cred)
+	Cred          aliauth.Credential
+	Region        string
+	clientOptions []api.Option
+	pollInterval  time.Duration
+	maxPolls      int
+	sleep         func(time.Duration)
 }
 
 // GetResource returns all the resources in the store for a provider.
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := []schema.Host{}
+	select {
+	case <-ctx.Done():
+		return list, nil
+	default:
+	}
 	logger.Info("List ECS instances...")
 	defer func() { SetCacheHostList(list) }()
-	client, err := d.NewClient()
-	if err != nil {
-		return list, err
-	}
-	// check permission
-	vpc_client, err := vpc.NewClientWithOptions("cn-hangzhou", sdk.NewConfig(), d.Cred)
-	if err != nil {
-		return list, err
-	}
-	req_vpc := vpc.CreateDescribeVpcsRequest()
-	_, err = vpc_client.DescribeVpcs(req_vpc)
-	if err != nil {
-		logger.Error("Describe vpcs failed.")
-		return list, err
-	}
+	client := d.newClient()
 	var regions []string
 	if d.Region == "all" {
-		req := ecs.CreateDescribeRegionsRequest()
-		resp, err := client.DescribeRegions(req)
+		resp, err := client.DescribeECSRegions(ctx, api.DefaultRegion)
 		if err != nil {
 			logger.Error("Describe regions failed.")
 			return list, err
 		}
 		for _, r := range resp.Regions.Region {
-			regions = append(regions, r.RegionId)
+			regions = append(regions, r.RegionID)
 		}
 	} else {
-		regions = append(regions, d.Region)
+		regions = append(regions, api.NormalizeRegion(d.Region))
 	}
 	tracker := processbar.NewRegionTracker()
 	defer tracker.Finish()
@@ -70,52 +53,72 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 			if page == 0 {
 				page = 1
 			}
-			request := ecs.CreateDescribeInstancesRequest()
-			request.PageSize = requests.NewInteger(100)
-			request.PageNumber = requests.NewInteger(page)
-			request.RegionId = r
-			response, err := client.DescribeInstances(request)
+			response, err := client.DescribeECSInstances(ctx, r, page, 100)
 			if err != nil {
 				return paginate.Page[schema.Host, int]{}, err
 			}
-			items := make([]schema.Host, 0, len(response.Instances.Instance))
-			for _, instance := range response.Instances.Instance {
-				var ipv4, privateIPv4 string
-				if len(instance.PublicIpAddress.IpAddress) > 0 {
-					ipv4 = instance.PublicIpAddress.IpAddress[0]
-				}
-				if len(instance.NetworkInterfaces.NetworkInterface) > 0 && len(instance.NetworkInterfaces.NetworkInterface[0].PrivateIpSets.PrivateIpSet) > 0 {
-					privateIPv4 = instance.NetworkInterfaces.NetworkInterface[0].PrivateIpSets.PrivateIpSet[0].PrivateIpAddress
-				}
-				if privateIPv4 == "" {
-					for _, net := range instance.NetworkInterfaces.NetworkInterface {
-						if net.PrimaryIpAddress != "" {
-							privateIPv4 = net.PrimaryIpAddress
-						}
-					}
-				}
-				if ipv4 == "" {
-					ipv4 = instance.EipAddress.IpAddress
-				}
-				items = append(items, schema.Host{
-					HostName:    instance.HostName,
-					ID:          instance.InstanceId,
-					PublicIPv4:  ipv4,
-					PrivateIpv4: privateIPv4,
-					OSType:      instance.OSType,
-					Public:      ipv4 != "",
-					Region:      r,
-				})
-			}
-			pageCount := int(math.Ceil(float64(response.TotalCount) / 100))
+			items := mapInstances(r, response.Instances.Instance)
 			return paginate.Page[schema.Host, int]{
 				Items: items,
 				Next:  page + 1,
-				Done:  page >= pageCount,
+				Done:  isLastPage(page, response.PageSize, response.TotalCount, len(response.Instances.Instance)),
 			}, nil
 		})
 	})
 	list = append(list, got...)
 
 	return list, nil
+}
+
+func mapInstances(region string, instances []api.ECSInstance) []schema.Host {
+	items := make([]schema.Host, 0, len(instances))
+	for _, instance := range instances {
+		ipv4 := resolvePublicIPv4(instance)
+		privateIPv4 := resolvePrivateIPv4(instance)
+		items = append(items, schema.Host{
+			HostName:    instance.HostName,
+			ID:          instance.InstanceID,
+			PublicIPv4:  ipv4,
+			PrivateIpv4: privateIPv4,
+			OSType:      instance.OSType,
+			Public:      ipv4 != "",
+			Region:      region,
+		})
+	}
+	return items
+}
+
+func resolvePublicIPv4(instance api.ECSInstance) string {
+	if len(instance.PublicIP.IPAddress) > 0 {
+		return instance.PublicIP.IPAddress[0]
+	}
+	return instance.EIPAddress.IPAddress
+}
+
+func resolvePrivateIPv4(instance api.ECSInstance) string {
+	if len(instance.NetworkInterfaces.NetworkInterface) > 0 {
+		first := instance.NetworkInterfaces.NetworkInterface[0]
+		if len(first.PrivateIPSets.PrivateIPSet) > 0 {
+			return first.PrivateIPSets.PrivateIPSet[0].PrivateIPAddress
+		}
+	}
+	for _, netif := range instance.NetworkInterfaces.NetworkInterface {
+		if netif.PrimaryIPAddress != "" {
+			return netif.PrimaryIPAddress
+		}
+	}
+	return ""
+}
+
+func isLastPage(page, pageSize, totalCount, items int) bool {
+	if items == 0 {
+		return true
+	}
+	if pageSize <= 0 {
+		pageSize = items
+	}
+	if totalCount <= 0 {
+		return items < pageSize
+	}
+	return page*pageSize >= totalCount
 }

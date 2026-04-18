@@ -1,27 +1,26 @@
 package iam
 
 import (
+	"context"
 	"fmt"
-	"strings"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/api"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/ram"
 )
 
 func (d *Driver) DelUser() {
-	client, err := d.NewClient()
+	ctx := context.Background()
+	client := d.newClient()
+	region := api.NormalizeRegion(d.Region)
+
+	err := detachPolicyFromUser(ctx, client, region, d.UserName)
 	if err != nil {
-		logger.Error("Create RAM client failed:", err.Error())
-		return
-	}
-	err = detachPolicyFromUser(client, d.UserName)
-	if err != nil {
-		if !strings.Contains(err.Error(), "EntityNotExist") {
+		if !isEntityNotExistError(err) {
 			logger.Error(fmt.Sprintf("Remove policy from %s failed: %s", d.UserName, err))
 			return
 		}
 	}
-	err = deleteUser(client, d.UserName)
+	err = deleteUser(ctx, client, region, d.UserName)
 	if err != nil {
 		logger.Error(fmt.Sprintf("Delete user %s failed: %s", d.UserName, err))
 		return
@@ -29,20 +28,12 @@ func (d *Driver) DelUser() {
 	logger.Warning(d.UserName + " user delete completed.")
 }
 
-func detachPolicyFromUser(client *ram.Client, userName string) error {
-	request := ram.CreateDetachPolicyFromUserRequest()
-	request.Scheme = "https"
-	request.PolicyType = "System"
-	request.PolicyName = "AdministratorAccess"
-	request.UserName = userName
-	_, err := client.DetachPolicyFromUser(request)
+func detachPolicyFromUser(ctx context.Context, client *api.Client, region, userName string) error {
+	_, err := client.DetachRAMPolicyFromUser(ctx, region, userName, "AdministratorAccess", "System")
 	return err
 }
 
-func deleteUser(client *ram.Client, userName string) error {
-	request := ram.CreateDeleteUserRequest()
-	request.Scheme = "https"
-	request.UserName = userName
-	_, err := client.DeleteUser(request)
+func deleteUser(ctx context.Context, client *api.Client, region, userName string) error {
+	_, err := client.DeleteRAMUser(ctx, region, userName)
 	return err
 }

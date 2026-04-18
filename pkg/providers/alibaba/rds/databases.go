@@ -2,24 +2,22 @@ package rds
 
 import (
 	"context"
-	"math"
 	"strings"
 	"sync"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/api"
+	aliauth "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/auth"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/paginate"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/rds"
 )
 
 type Driver struct {
-	Cred   *credentials.StsTokenCredential
-	Region string
+	Cred          aliauth.Credential
+	Region        string
+	clientOptions []api.Option
 }
 
 var (
@@ -39,12 +37,8 @@ func GetCacheDBList() []schema.Database {
 	return CacheDBList
 }
 
-func (d *Driver) NewClient() (*rds.Client, error) {
-	region := d.Region
-	if region == "all" {
-		region = "cn-hangzhou"
-	}
-	return rds.NewClientWithOptions(region, sdk.NewConfig(), d.Cred)
+func (d *Driver) newClient() *api.Client {
+	return api.NewClient(d.Cred, d.clientOptions...)
 }
 
 func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
@@ -56,13 +50,15 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 		logger.Info("List RDS instances ...")
 	}
 	defer func() { SetCacheDBList(list) }()
-	client, err := d.NewClient()
-	if err != nil {
-		return list, err
-	}
-	var regions = []string{d.Region}
+	client := d.newClient()
+	regions := []string{api.NormalizeRegion(d.Region)}
 	if d.Region == "all" {
-		regions = describeRegions(client)
+		var err error
+		regions, err = describeRegions(ctx, client)
+		if err != nil {
+			logger.Error("Describe regions failed.")
+			return list, err
+		}
 		if len(regions) == 0 {
 			return list, nil
 		}
@@ -74,33 +70,26 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 			if page == 0 {
 				page = 1
 			}
-			request := rds.CreateDescribeDBInstancesRequest()
-			request.PageSize = requests.NewInteger(100)
-			request.PageNumber = requests.NewInteger(page)
-			if r != "all" {
-				request.RegionId = r
-			}
-			response, err := client.DescribeDBInstances(request)
+			response, err := client.DescribeRDSInstances(ctx, r, page, 100)
 			if err != nil {
 				return paginate.Page[schema.Database, int]{}, err
 			}
 			items := make([]schema.Database, 0, len(response.Items.DBInstance))
 			for _, dbInstance := range response.Items.DBInstance {
 				items = append(items, schema.Database{
-					InstanceId:    dbInstance.DBInstanceId,
+					InstanceId:    dbInstance.DBInstanceID,
 					Engine:        dbInstance.Engine,
 					EngineVersion: dbInstance.EngineVersion,
-					Region:        dbInstance.RegionId,
+					Region:        dbInstance.RegionID,
 					Address:       dbInstance.ConnectionString,
 					NetworkType:   dbInstance.InstanceNetworkType,
-					DBNames:       describeDatabases(client, dbInstance.DBInstanceId),
+					DBNames:       describeDatabases(ctx, client, r, dbInstance.DBInstanceID),
 				})
 			}
-			pageCount := int(math.Ceil(float64(response.TotalRecordCount) / 100))
 			return paginate.Page[schema.Database, int]{
 				Items: items,
 				Next:  page + 1,
-				Done:  page >= pageCount,
+				Done:  isLastPage(page, response.PageRecordCount, response.TotalRecordCount, len(response.Items.DBInstance)),
 			}, nil
 		})
 	})
@@ -108,41 +97,45 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 	return list, nil
 }
 
-func describeRegions(client *rds.Client) []string {
-	request := rds.CreateDescribeRegionsRequest()
-	request.Scheme = "https"
-	request.AcceptLanguage = "en-US"
-	response, err := client.DescribeRegions(request)
+func describeRegions(ctx context.Context, client *api.Client) ([]string, error) {
+	response, err := client.DescribeRDSRegions(ctx, api.DefaultRegion)
 	if err != nil {
-		logger.Error(err)
-		return []string{}
+		return nil, err
 	}
-	temp := make(map[string]string)
+	seen := make(map[string]struct{}, len(response.Regions.RDSRegion))
+	regions := make([]string, 0, len(response.Regions.RDSRegion))
 	for _, region := range response.Regions.RDSRegion {
-		temp[region.RegionId] = ""
+		if _, ok := seen[region.RegionID]; ok {
+			continue
+		}
+		seen[region.RegionID] = struct{}{}
+		regions = append(regions, region.RegionID)
 	}
-	regions := []string{}
-	for region := range temp {
-		regions = append(regions, region)
-	}
-	return regions
+	return regions, nil
 }
 
-func describeDatabases(client *rds.Client, instanceId string) string {
-	request := rds.CreateDescribeDatabasesRequest()
-	request.Scheme = "https"
-	request.DBInstanceId = instanceId
-	request.PageSize = requests.NewInteger(30)
-	request.PageNumber = requests.NewInteger(1)
-	request.DBStatus = "Running"
-	response, err := client.DescribeDatabases(request)
+func describeDatabases(ctx context.Context, client *api.Client, region, instanceID string) string {
+	response, err := client.DescribeRDSDatabases(ctx, region, instanceID)
 	if err != nil {
 		logger.Error(err)
 		return ""
 	}
-	dbs := []string{}
+	dbs := make([]string, 0, len(response.Databases.Database))
 	for _, db := range response.Databases.Database {
 		dbs = append(dbs, db.DBName)
 	}
 	return strings.Join(dbs, ",")
+}
+
+func isLastPage(page, pageSize, totalCount, items int) bool {
+	if items == 0 {
+		return true
+	}
+	if pageSize <= 0 {
+		pageSize = items
+	}
+	if totalCount <= 0 {
+		return items < pageSize
+	}
+	return page*pageSize >= totalCount
 }

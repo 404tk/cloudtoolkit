@@ -1,13 +1,14 @@
 package ecs
 
 import (
+	"context"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/api"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/ecs"
 )
 
 var (
@@ -27,62 +28,102 @@ func GetCacheHostList() []schema.Host {
 	return CacheHostList
 }
 
-func RunCommand(client *ecs.Client, instanceId, region, ostype, cmd string) string {
-	request := ecs.CreateRunCommandRequest()
-	request.Scheme = "https"
-	request.RegionId = region
-	switch ostype {
-	case "linux":
-		request.Type = "RunShellScript"
-	case "windows":
-		request.Type = "RunBatScript"
-	default:
-		logger.Error("Unknown ostype", ostype)
+func (d *Driver) RunCommand(instanceID, osType, cmd string) string {
+	ctx := context.Background()
+	client := d.newClient()
+	commandType, ok := resolveCommandType(osType)
+	if !ok {
+		logger.Error("Unknown ostype", osType)
 		return ""
 	}
-	request.InstanceId = &[]string{instanceId}
-	request.CommandContent = cmd
+
+	contentEncoding := ""
+	commandContent := cmd
 	if strings.HasPrefix(cmd, "base64 ") {
-		request.CommandContent = strings.Split(cmd, " ")[1]
-		request.ContentEncoding = "Base64"
+		commandContent = strings.TrimSpace(strings.TrimPrefix(cmd, "base64 "))
+		contentEncoding = "Base64"
 	}
-	response, err := client.RunCommand(request)
+
+	response, err := client.RunECSCommand(ctx, d.Region, commandType, commandContent, contentEncoding, []string{instanceID})
 	if err != nil {
 		logger.Error(err)
 		return ""
 	}
-	cid := response.CommandId
-	return describeInvocationResults(client, region, cid)
+	if response.CommandID == "" {
+		logger.Error("Missing command id.")
+		return ""
+	}
+	return d.describeInvocationResults(ctx, client, response.CommandID)
 }
 
-func describeInvocationResults(client *ecs.Client, region, cid string) string {
-	t := 0
+func (d *Driver) describeInvocationResults(ctx context.Context, client interface {
+	DescribeECSInvocationResults(context.Context, string, string) (api.DescribeECSInvocationResultsResponse, error)
+}, commandID string) string {
+	attempts := 0
 	for {
-		time.Sleep(1 * time.Second)
-		t += 1
-		request := ecs.CreateDescribeInvocationResultsRequest()
-		request.Scheme = "https"
-		request.RegionId = region
-		request.CommandId = cid
-		request.ContentEncoding = "PlainText"
-		response, err := client.DescribeInvocationResults(request)
+		d.sleepFor(d.pollDelay())
+		attempts++
+
+		response, err := client.DescribeECSInvocationResults(ctx, d.Region, commandID)
 		if err != nil {
 			logger.Error(err)
 			return ""
 		}
-		status := response.Invocation.InvocationResults.InvocationResult[0].InvokeRecordStatus
-		switch status {
+		if len(response.Invocation.InvocationResults.InvocationResult) == 0 {
+			logger.Error("Missing invocation result.")
+			return ""
+		}
+
+		result := response.Invocation.InvocationResults.InvocationResult[0]
+		switch status := result.InvokeRecordStatus; status {
 		case "Running":
-			if t < 5 {
+			if attempts < d.pollLimit() {
 				continue
 			}
 			logger.Error("Timeout: Wait 5s by default.")
 			return ""
 		case "Finished":
-			return response.Invocation.InvocationResults.InvocationResult[0].Output
+			return result.Output
 		default:
+			if result.ErrorInfo != "" {
+				logger.Error("Exception status: " + status + " - " + result.ErrorInfo)
+				return ""
+			}
 			logger.Error("Exception status: " + status)
 			return ""
 		}
 	}
+}
+
+func resolveCommandType(osType string) (string, bool) {
+	switch osType {
+	case "linux":
+		return "RunShellScript", true
+	case "windows":
+		return "RunBatScript", true
+	default:
+		return "", false
+	}
+}
+
+func (d *Driver) pollDelay() time.Duration {
+	if d.pollInterval > 0 {
+		return d.pollInterval
+	}
+	return time.Second
+}
+
+func (d *Driver) pollLimit() int {
+	if d.maxPolls > 0 {
+		return d.maxPolls
+	}
+	return 5
+}
+
+func (d *Driver) sleepFor(delay time.Duration) {
+	if d.sleep != nil {
+		d.sleep(delay)
+		return
+	}
+	time.Sleep(delay)
 }

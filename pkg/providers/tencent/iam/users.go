@@ -4,20 +4,28 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/api"
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/auth"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	cam "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cam/v20190116"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 )
 
 type Driver struct {
-	Credential *common.Credential
-	UserName   string
-	Password   string
-	RoleName   string
-	Uin        string
+	Credential    auth.Credential
+	UserName      string
+	Password      string
+	RoleName      string
+	Uin           string
+	clientOptions []api.Option
+}
+
+func (d *Driver) newClient() *api.Client {
+	return api.NewClient(d.Credential, d.clientOptions...)
+}
+
+func (d *Driver) SetClientOptions(opts ...api.Option) {
+	d.clientOptions = append([]api.Option(nil), opts...)
 }
 
 func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
@@ -28,14 +36,8 @@ func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 	default:
 		logger.Info("List CAM users ...")
 	}
-	cpf := profile.NewClientProfile()
-	// cpf.HttpProfile.Endpoint = "cam.tencentcloudapi.com"
-	client, err := cam.NewClient(d.Credential, "", cpf)
-	if err != nil {
-		return list, err
-	}
-	listUsersRequest := cam.NewListUsersRequest()
-	listUsersResponse, err := client.ListUsers(listUsersRequest)
+	client := d.newClient()
+	listUsersResponse, err := client.ListUsers(ctx)
 	if err != nil {
 		logger.Error("List users failed.")
 		return list, err
@@ -43,18 +45,32 @@ func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 	policy_infos = make(map[string]string)
 	for _, user := range listUsersResponse.Response.Data {
 		_user := schema.User{
-			UserName:   *user.Name,
-			UserId:     fmt.Sprintf("%v", *user.Uin),
-			CreateTime: *user.CreateTime,
+			UserName:   derefString(user.Name),
+			UserId:     fmt.Sprintf("%v", derefUint64(user.Uin)),
+			CreateTime: derefString(user.CreateTime),
 		}
-		if *user.ConsoleLogin == 1 {
+		if derefUint64(user.ConsoleLogin) == 1 {
 			_user.EnableLogin = true
 		}
 		if utils.ListPolicies {
-			_user.Policies = listAttachedUserAllPolicies(client, user.Uin)
+			_user.Policies = listAttachedUserAllPolicies(ctx, client, derefUint64(user.Uin))
 		}
 
 		list = append(list, _user)
 	}
 	return list, nil
+}
+
+func derefString(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
+}
+
+func derefUint64(v *uint64) uint64 {
+	if v == nil {
+		return 0
+	}
+	return *v
 }

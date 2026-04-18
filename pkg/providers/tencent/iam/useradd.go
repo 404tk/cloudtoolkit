@@ -1,28 +1,23 @@
 package iam
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/api"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	cam "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cam/v20190116"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 )
 
 func (d *Driver) AddUser() {
-	cpf := profile.NewClientProfile()
-	client, err := cam.NewClient(d.Credential, "", cpf)
-	if err != nil {
-		logger.Error("Create CAM client failed:", err.Error())
-		return
-	}
-	err = createUser(client, d.UserName, d.Password)
+	ctx := context.Background()
+	client := d.newClient()
+	err := createUser(ctx, client, d.UserName, d.Password)
 	if err != nil {
 		logger.Error("Create user failed:", err.Error())
 		return
 	}
-	_ = attachPolicyToUser(client, d.UserName)
-	OwnerID := getOwnerUin(client)
+	_ = attachPolicyToUser(ctx, client, d.UserName)
+	OwnerID := getOwnerUin(ctx, client)
 	fmt.Printf("\n%-10s\t%-10s\t%-60s\n", "Username", "Password", "Login URL")
 	fmt.Printf("%-10s\t%-10s\t%-60s\n", "--------", "--------", "---------")
 	fmt.Printf("%-10s\t%-10s\t%-60s\n\n",
@@ -30,40 +25,29 @@ func (d *Driver) AddUser() {
 		d.Password, "https://cloud.tencent.com/login/subAccount/"+OwnerID)
 }
 
-func createUser(client *cam.Client, userName, password string) error {
-	request := cam.NewAddUserRequest()
-	request.Name = common.StringPtr(userName)
-	request.ConsoleLogin = common.Uint64Ptr(1)
-	request.Password = common.StringPtr(password)
-	request.NeedResetPassword = common.Uint64Ptr(0)
-	_, err := client.AddUser(request)
+func createUser(ctx context.Context, client *api.Client, userName, password string) error {
+	_, err := client.AddUser(ctx, userName, password)
 	return err
 }
 
-func attachPolicyToUser(client *cam.Client, userName string) error {
-	resp, err := getUserInfo(client, userName)
+func attachPolicyToUser(ctx context.Context, client *api.Client, userName string) error {
+	resp, err := getUserInfo(ctx, client, userName)
 	if err != nil {
 		return err
 	}
-	request := cam.NewAttachUserPolicyRequest()
-	request.PolicyId = common.Uint64Ptr(1)
-	request.AttachUin = resp.Response.Uin
-	_, err = client.AttachUserPolicy(request)
+	_, err = client.AttachUserPolicy(ctx, derefUint64(resp.Response.Uin), 1)
 	return err
 }
 
-func getUserInfo(client *cam.Client, userName string) (*cam.GetUserResponse, error) {
-	request := cam.NewGetUserRequest()
-	request.Name = common.StringPtr(userName)
-	return client.GetUser(request)
+func getUserInfo(ctx context.Context, client *api.Client, userName string) (api.GetUserResponse, error) {
+	return client.GetUser(ctx, userName)
 }
 
-func getOwnerUin(client *cam.Client) string {
-	request := cam.NewGetUserAppIdRequest()
-	response, err := client.GetUserAppId(request)
+func getOwnerUin(ctx context.Context, client *api.Client) string {
+	response, err := client.GetUserAppID(ctx)
 	if err != nil {
 		logger.Error("Get user appid failed.")
 		return ""
 	}
-	return *response.Response.OwnerUin
+	return derefString(response.Response.OwnerUin)
 }

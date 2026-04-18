@@ -1,20 +1,18 @@
 package iam
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/api"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/ram"
 )
 
-var policy_infos map[string]string
+var policyInfos map[string]string
 
-func listPoliciesForUser(client *ram.Client, name string) string {
-	req_perm := ram.CreateListPoliciesForUserRequest()
-	req_perm.Scheme = "https"
-	req_perm.UserName = name
-	resp, err := client.ListPoliciesForUser(req_perm)
+func listPoliciesForUser(ctx context.Context, client *api.Client, region, name string) string {
+	resp, err := client.ListRAMPoliciesForUser(ctx, region, name)
 	if err != nil {
 		return ""
 	}
@@ -22,9 +20,9 @@ func listPoliciesForUser(client *ram.Client, name string) string {
 	for _, p := range resp.Policies.Policy {
 		policies = append(policies, p.PolicyName)
 		if p.PolicyType == "Custom" {
-			if _, ok := policy_infos[p.PolicyName]; !ok {
-				details := getPolicy(client, p.PolicyName)
-				policy_infos[p.PolicyName] = details
+			if _, ok := policyInfos[p.PolicyName]; !ok {
+				details := getPolicy(ctx, client, region, p.PolicyName)
+				policyInfos[p.PolicyName] = details
 				msg := fmt.Sprintf("Found Custom Policy %s: %s", p.PolicyName, details)
 				logger.Warning(msg)
 			}
@@ -33,12 +31,8 @@ func listPoliciesForUser(client *ram.Client, name string) string {
 	return strings.Join(policies, "\n")
 }
 
-func getPolicy(client *ram.Client, name string) string {
-	request := ram.CreateGetPolicyRequest()
-	request.Scheme = "https"
-	request.PolicyName = name
-	request.PolicyType = "Custom"
-	response, err := client.GetPolicy(request)
+func getPolicy(ctx context.Context, client *api.Client, region, name string) string {
+	response, err := client.GetRAMPolicy(ctx, region, name, "Custom")
 	if err != nil {
 		return err.Error()
 	}

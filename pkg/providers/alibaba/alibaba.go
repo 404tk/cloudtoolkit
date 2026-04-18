@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	_api "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/api"
+	_auth "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/auth"
 	_bss "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/bss"
 	_dns "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/dns"
 	_ecs "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/ecs"
@@ -21,38 +23,26 @@ import (
 	"github.com/404tk/cloudtoolkit/utils/cache"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/table"
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
 )
 
 // Provider is a data provider for alibaba API
 type Provider struct {
-	cred   *credentials.StsTokenCredential
-	region string
+	apiCred _auth.Credential
+	region  string
 }
 
 // New creates a new provider client for alibaba API
 func New(options schema.Options) (*Provider, error) {
-	accessKey, ok := options.GetMetadata(utils.AccessKey)
-	if !ok {
-		return nil, &schema.ErrNoSuchKey{Name: utils.AccessKey}
-	}
-	secretKey, ok := options.GetMetadata(utils.SecretKey)
-	if !ok {
-		return nil, &schema.ErrNoSuchKey{Name: utils.SecretKey}
+	apiCred, err := _auth.FromOptions(options)
+	if err != nil {
+		return nil, err
 	}
 	region, _ := options.GetMetadata(utils.Region)
-	token, _ := options.GetMetadata(utils.SecurityToken)
-	cred := credentials.NewStsTokenCredential(accessKey, secretKey, token)
 
 	payload, _ := options.GetMetadata(utils.Payload)
 	if payload == "cloudlist" {
 		// Get current username
-		stsclient, err := sts.NewClientWithOptions("cn-hangzhou", sdk.NewConfig(), cred)
-		request := sts.CreateGetCallerIdentityRequest()
-		request.Scheme = "https"
-		response, err := stsclient.GetCallerIdentity(request)
+		response, err := _api.NewClient(apiCred).GetCallerIdentity(context.Background(), region)
 		if err != nil {
 			return nil, err
 		}
@@ -71,8 +61,8 @@ func New(options schema.Options) (*Provider, error) {
 	}
 
 	return &Provider{
-		cred:   cred,
-		region: region,
+		apiCred: apiCred,
+		region:  region,
 	}, nil
 }
 
@@ -88,40 +78,40 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	for _, product := range utils.Cloudlist {
 		switch product {
 		case "balance":
-			d := &_bss.Driver{Cred: p.cred, Region: p.region}
+			d := &_bss.Driver{Cred: p.apiCred, Region: p.region}
 			d.QueryAccountBalance(ctx)
 		case "host":
-			ecsprovider := &_ecs.Driver{Cred: p.cred, Region: p.region}
+			ecsprovider := &_ecs.Driver{Cred: p.apiCred, Region: p.region}
 			hosts, err := ecsprovider.GetResource(ctx)
 			schema.AppendAssets(&list, hosts)
 			list.AddError("host", err)
 		case "domain":
-			dnsprovider := &_dns.Driver{Cred: p.cred, Region: p.region}
+			dnsprovider := &_dns.Driver{Cred: p.apiCred, Region: p.region}
 			domains, err := dnsprovider.GetDomains(ctx)
 			schema.AppendAssets(&list, domains)
 			list.AddError("domain", err)
 		case "account":
-			ramprovider := &_iam.Driver{Cred: p.cred, Region: p.region}
+			ramprovider := &_iam.Driver{Cred: p.apiCred, Region: p.region}
 			users, err := ramprovider.ListUsers(ctx)
 			schema.AppendAssets(&list, users)
 			list.AddError("account", err)
 		case "database":
-			rdsprovider := &_rds.Driver{Cred: p.cred, Region: p.region}
+			rdsprovider := &_rds.Driver{Cred: p.apiCred, Region: p.region}
 			databases, err := rdsprovider.GetDatabases(ctx)
 			schema.AppendAssets(&list, databases)
 			list.AddError("database", err)
 		case "bucket":
-			ossprovider := &_oss.Driver{Cred: p.cred, Region: p.region}
+			ossprovider := &_oss.Driver{Cred: p.apiCred, Region: p.region}
 			storages, err := ossprovider.GetBuckets(ctx)
 			schema.AppendAssets(&list, storages)
 			list.AddError("bucket", err)
 		case "sms":
-			smsprovider := &_sms.Driver{Cred: p.cred, Region: p.region}
+			smsprovider := &_sms.Driver{Cred: p.apiCred, Region: p.region}
 			sms, err := smsprovider.GetResource(ctx)
 			list.Sms = sms
 			list.AddError("sms", err)
 		case "log":
-			slsprovider := &sls.Driver{Cred: p.cred, Region: p.region}
+			slsprovider := &sls.Driver{Cred: p.apiCred, Region: p.region}
 			logs, err := slsprovider.ListProjects(ctx)
 			schema.AppendAssets(&list, logs)
 			list.AddError("log", err)
@@ -133,7 +123,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 }
 
 func (p *Provider) UserManagement(action, username, password string) {
-	r := &_iam.Driver{Cred: p.cred, Region: p.region}
+	r := &_iam.Driver{Cred: p.apiCred, Region: p.region}
 	switch action {
 	case "add":
 		r.UserName = username
@@ -155,7 +145,7 @@ func (p *Provider) UserManagement(action, username, password string) {
 }
 
 func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
-	ossdrvier := &_oss.Driver{Cred: p.cred, Region: p.region}
+	ossdrvier := &_oss.Driver{Cred: p.apiCred, Region: p.region}
 	switch action {
 	case "list":
 		var infos = make(map[string]string)
@@ -193,7 +183,7 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
 }
 
 func (p *Provider) EventDump(action, args string) {
-	d := _sas.Driver{Cred: p.cred}
+	d := _sas.Driver{Cred: p.apiCred}
 	switch action {
 	case "dump":
 		events, err := d.DumpEvents()
@@ -225,25 +215,20 @@ func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {
 		logger.Error("Unable to resolve instance metadata.")
 		return
 	}
-	d := _ecs.Driver{Cred: p.cred, Region: host.Region}
-	client, err := d.NewClient()
-	if err != nil {
-		logger.Error(err)
-		return
-	}
+	d := _ecs.Driver{Cred: p.apiCred, Region: host.Region}
 	command, err := base64.StdEncoding.DecodeString(cmd)
 	if err != nil {
 		logger.Error(err.Error())
 		return
 	}
-	output := _ecs.RunCommand(client, instanceID, host.Region, host.OSType, string(command))
+	output := d.RunCommand(instanceID, host.OSType, string(command))
 	if output != "" {
 		fmt.Println(output)
 	}
 }
 
 func (p *Provider) DBManagement(action, instanceID string) {
-	r := &_rds.Driver{Cred: p.cred, Region: p.region}
+	r := &_rds.Driver{Cred: p.apiCred, Region: p.region}
 	switch action {
 	case "useradd":
 		db, ok := p.lookupDatabase(instanceID)
@@ -267,7 +252,7 @@ func (p *Provider) lookupHost(instanceID string) (schema.Host, bool) {
 		}
 	}
 	logger.Info("Host metadata cache miss, refreshing instances ...")
-	driver := &_ecs.Driver{Cred: p.cred, Region: p.region}
+	driver := &_ecs.Driver{Cred: p.apiCred, Region: p.region}
 	hosts, err := driver.GetResource(context.Background())
 	if err != nil {
 		logger.Error(err)
@@ -288,7 +273,7 @@ func (p *Provider) lookupDatabase(instanceID string) (schema.Database, bool) {
 		}
 	}
 	logger.Info("Database metadata cache miss, refreshing instances ...")
-	driver := &_rds.Driver{Cred: p.cred, Region: p.region}
+	driver := &_rds.Driver{Cred: p.apiCred, Region: p.region}
 	databases, err := driver.GetDatabases(context.Background())
 	if err != nil {
 		logger.Error(err)

@@ -1,24 +1,24 @@
 package iam
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/api"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/ram"
 )
 
 func (d *Driver) DelRole() {
-	client, err := d.NewClient()
-	if err != nil {
-		logger.Error("Create RAM client failed:", err.Error())
-		return
-	}
-	err = detachPolicyFromRole(client, d.RoleName)
+	ctx := context.Background()
+	client := d.newClient()
+	region := api.NormalizeRegion(d.Region)
+
+	err := detachPolicyFromRole(ctx, client, region, d.RoleName)
 	if err != nil {
 		logger.Error(fmt.Sprintf("Remove policy from %s failed: %s", d.RoleName, err.Error()))
 		return
 	}
-	err = deleteRole(client, d.RoleName)
+	err = deleteRole(ctx, client, region, d.RoleName)
 	if err != nil {
 		logger.Error(fmt.Sprintf("Delete role %s failed: %s", d.RoleName, err.Error()))
 		return
@@ -26,20 +26,12 @@ func (d *Driver) DelRole() {
 	logger.Warning(d.RoleName + " role delete completed.")
 }
 
-func detachPolicyFromRole(client *ram.Client, roleName string) error {
-	request := ram.CreateDetachPolicyFromRoleRequest()
-	request.Scheme = "https"
-	request.PolicyType = "System"
-	request.PolicyName = "AdministratorAccess"
-	request.RoleName = roleName
-	_, err := client.DetachPolicyFromRole(request)
+func detachPolicyFromRole(ctx context.Context, client *api.Client, region, roleName string) error {
+	_, err := client.DetachRAMPolicyFromRole(ctx, region, roleName, "AdministratorAccess", "System")
 	return err
 }
 
-func deleteRole(client *ram.Client, roleName string) error {
-	request := ram.CreateDeleteRoleRequest()
-	request.Scheme = "https"
-	request.RoleName = roleName
-	_, err := client.DeleteRole(request)
+func deleteRole(ctx context.Context, client *api.Client, region, roleName string) error {
+	_, err := client.DeleteRAMRole(ctx, region, roleName)
 	return err
 }

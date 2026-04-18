@@ -1,27 +1,22 @@
 package iam
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/api"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	cam "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cam/v20190116"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 )
 
 func (d *Driver) DelRole() {
-	cpf := profile.NewClientProfile()
-	client, err := cam.NewClient(d.Credential, "", cpf)
-	if err != nil {
-		logger.Error("Create CAM client failed:", err.Error())
-		return
-	}
-	err = detachPolicyFromRole(client, d.RoleName)
+	ctx := context.Background()
+	client := d.newClient()
+	err := detachPolicyFromRole(ctx, client, d.RoleName)
 	if err != nil {
 		logger.Error(fmt.Sprintf("Remove policy from %s failed: %s", d.RoleName, err.Error()))
 		return
 	}
-	err = deleteRole(client, d.RoleName)
+	err = deleteRole(ctx, client, d.RoleName)
 	if err != nil {
 		logger.Error(fmt.Sprintf("Delete role %s failed: %s", d.RoleName, err.Error()))
 		return
@@ -29,17 +24,12 @@ func (d *Driver) DelRole() {
 	logger.Warning(d.RoleName + " role delete completed.")
 }
 
-func detachPolicyFromRole(client *cam.Client, roleName string) error {
-	request := cam.NewDetachRolePolicyRequest()
-	request.PolicyId = common.Uint64Ptr(1)
-	request.DetachRoleName = common.StringPtr(roleName)
-	_, err := client.DetachRolePolicy(request)
+func detachPolicyFromRole(ctx context.Context, client *api.Client, roleName string) error {
+	_, err := client.DetachRolePolicy(ctx, roleName, 1)
 	return err
 }
 
-func deleteRole(client *cam.Client, roleName string) error {
-	request := cam.NewDeleteRoleRequest()
-	request.RoleName = common.StringPtr(roleName)
-	_, err := client.DeleteRole(request)
+func deleteRole(ctx context.Context, client *api.Client, roleName string) error {
+	_, err := client.DeleteRole(ctx, roleName)
 	return err
 }

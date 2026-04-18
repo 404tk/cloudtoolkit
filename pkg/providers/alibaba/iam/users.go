@@ -2,33 +2,30 @@ package iam
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"time"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/api"
+	aliauth "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/auth"
+	"github.com/404tk/cloudtoolkit/pkg/runtime/paginate"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/errors"
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/ram"
 )
 
 type Driver struct {
-	Cred      *credentials.StsTokenCredential
-	Region    string
-	UserName  string
-	Password  string
-	RoleName  string
-	AccountId string
+	Cred          aliauth.Credential
+	Region        string
+	UserName      string
+	Password      string
+	RoleName      string
+	AccountId     string
+	clientOptions []api.Option
 }
 
-func (d *Driver) NewClient() (*ram.Client, error) {
-	region := d.Region
-	if region == "all" {
-		region = "cn-hangzhou"
-	}
-	return ram.NewClientWithOptions(region, sdk.NewConfig(), d.Cred)
+func (d *Driver) newClient() *api.Client {
+	return api.NewClient(d.Cred, d.clientOptions...)
 }
 
 func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
@@ -39,63 +36,96 @@ func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 	default:
 		logger.Info("List RAM users ...")
 	}
-	client, err := d.NewClient()
+	client := d.newClient()
+	region := api.NormalizeRegion(d.Region)
+	policyInfos = make(map[string]string)
+
+	users, err := paginate.Fetch(ctx, func(ctx context.Context, marker string) (paginate.Page[api.RAMUser, string], error) {
+		response, err := client.ListRAMUsers(ctx, region, marker, 100)
+		if err != nil {
+			logger.Error("List users failed.")
+			return paginate.Page[api.RAMUser, string]{}, err
+		}
+		return paginate.Page[api.RAMUser, string]{
+			Items: response.Users.User,
+			Next:  response.Marker,
+			Done:  !response.IsTruncated,
+		}, nil
+	})
 	if err != nil {
 		return list, err
 	}
-	marker := ""
-	policy_infos = make(map[string]string)
-	for {
-		listUsersRequest := ram.CreateListUsersRequest()
-		listUsersRequest.Scheme = "https"
-		listUsersRequest.MaxItems = requests.NewInteger(100)
-		listUsersRequest.Marker = marker
-		response, err := client.ListUsers(listUsersRequest)
-		if err != nil {
-			logger.Error("List users failed.")
-			return list, err
+
+	for _, user := range users {
+		_user := schema.User{
+			UserName:   user.UserName,
+			UserId:     user.UserID,
+			CreateTime: formatRAMTime(user.CreateDate),
 		}
 
-		for _, user := range response.Users.User {
-			_user := schema.User{
-				UserName: user.UserName,
-				UserId:   user.UserId,
-			}
-			date, _ := time.Parse(time.RFC3339, user.CreateDate)
-			_user.CreateTime = date.String()
+		enableLogin, lastLogin := lookupLoginState(ctx, client, region, user.UserName)
+		_user.EnableLogin = enableLogin
+		_user.LastLogin = lastLogin
 
-			request := ram.CreateGetLoginProfileRequest()
-			request.Scheme = "https"
-			request.UserName = user.UserName
-			_, err := client.GetLoginProfile(request)
-			if err == nil || err.(*errors.ServerError).Message() != "login policy not exists" {
-				_user.EnableLogin = true
-				getUserRequest := ram.CreateGetUserRequest()
-				getUserRequest.Scheme = "https"
-				getUserRequest.UserName = user.UserName
-				getUserResponse, err := client.GetUser(getUserRequest)
-				if err == nil && getUserResponse.User.LastLoginDate != "" {
-					lastLoginDate, _ := time.Parse(time.RFC3339, getUserResponse.User.LastLoginDate)
-					_user.LastLogin = lastLoginDate.String()
-				}
-			}
-
-			if utils.ListPolicies {
-				_user.Policies = listPoliciesForUser(client, _user.UserName)
-			}
-
-			list = append(list, _user)
-			select {
-			case <-ctx.Done():
-				return list, nil
-			default:
-				continue
-			}
+		if utils.ListPolicies {
+			_user.Policies = listPoliciesForUser(ctx, client, region, _user.UserName)
 		}
-		if !response.IsTruncated {
-			break
+
+		list = append(list, _user)
+		select {
+		case <-ctx.Done():
+			return list, nil
+		default:
 		}
-		marker = response.Marker
 	}
+
 	return list, nil
+}
+
+func lookupLoginState(ctx context.Context, client *api.Client, region, userName string) (bool, string) {
+	if _, err := client.GetRAMLoginProfile(ctx, region, userName); err != nil {
+		if isMissingLoginProfileError(err) {
+			return false, ""
+		}
+		logger.Error("Get login profile failed:", err)
+		return false, ""
+	}
+
+	response, err := client.GetRAMUser(ctx, region, userName)
+	if err != nil {
+		logger.Error("Get user failed:", err)
+		return true, ""
+	}
+	return true, formatRAMTime(response.User.LastLoginDate)
+}
+
+func formatRAMTime(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	date, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return value
+	}
+	return date.String()
+}
+
+func isMissingLoginProfileError(err error) bool {
+	var apiErr *api.APIError
+	if errors.As(err, &apiErr) {
+		if strings.EqualFold(apiErr.Code, "EntityNotExist.LoginProfile") {
+			return true
+		}
+		return strings.Contains(strings.ToLower(apiErr.Message), "login policy not exists")
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "login policy not exists")
+}
+
+func isEntityNotExistError(err error) bool {
+	var apiErr *api.APIError
+	if errors.As(err, &apiErr) {
+		return strings.HasPrefix(strings.TrimSpace(apiErr.Code), "EntityNotExist.")
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "entitynotexist")
 }

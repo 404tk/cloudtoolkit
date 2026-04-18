@@ -7,16 +7,16 @@ import (
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
-	"github.com/aws/aws-sdk-go/service/s3"
+	awsv2 "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 func (d *Driver) ListObjects(ctx context.Context, buckets map[string]string) {
 	for b, r := range buckets {
-		d.Session.Config.Region = &r
-		client := s3.New(d.Session)
-		var limit = int64(100) // Do not display more yet.
+		client := d.clientForRegion(r)
+		limit := int32(100) // Do not display more yet.
 		input := &s3.ListObjectsV2Input{Bucket: &b, MaxKeys: &limit}
-		resp, err := client.ListObjectsV2(input)
+		resp, err := client.ListObjectsV2(ctx, input)
 		if err != nil {
 			logger.Error(fmt.Sprintf("List Objects in %s failed: %s", b, err.Error()))
 			continue
@@ -31,8 +31,12 @@ func (d *Driver) ListObjects(ctx context.Context, buckets map[string]string) {
 		fmt.Printf("\n%-70s\t%-10s\n", "Key", "Size")
 		fmt.Printf("%-70s\t%-10s\n", "---", "----")
 		for _, object := range resp.Contents {
+			size := int64(0)
+			if object.Size != nil {
+				size = *object.Size
+			}
 			fmt.Printf("%-70s\t%-10s\n",
-				*object.Key, utils.ParseBytes(*object.Size))
+				awsv2.ToString(object.Key), utils.ParseBytes(size))
 		}
 		fmt.Println()
 		select {
@@ -50,22 +54,21 @@ func (d *Driver) TotalObjects(ctx context.Context, buckets map[string]string) {
 		var token *string
 		count := 0
 		isTruncated := true
+		client := d.clientForRegion(r)
 		for isTruncated {
-			d.Session.Config.Region = &r
-			client := s3.New(d.Session)
-			limit := int64(1000)
+			limit := int32(1000)
 			input := &s3.ListObjectsV2Input{
 				Bucket:            &b,
 				MaxKeys:           &limit,
 				ContinuationToken: token,
 			}
-			resp, err := client.ListObjectsV2(input)
+			resp, err := client.ListObjectsV2(ctx, input)
 			if err != nil {
 				logger.Error(fmt.Sprintf("List Objects in %s failed: %s", b, err))
 				return
 			}
 
-			isTruncated = *resp.IsTruncated
+			isTruncated = awsv2.ToBool(resp.IsTruncated)
 			token = resp.NextContinuationToken
 			count += len(resp.Contents)
 			select {
@@ -78,4 +81,12 @@ func (d *Driver) TotalObjects(ctx context.Context, buckets map[string]string) {
 		fmt.Printf("\r")
 		logger.Warning(fmt.Sprintf("%s has %d objects.", b, count))
 	}
+}
+
+func (d *Driver) clientForRegion(region string) *s3.Client {
+	cfg := d.Config.Copy()
+	if region != "" {
+		cfg.Region = region
+	}
+	return s3.NewFromConfig(cfg)
 }

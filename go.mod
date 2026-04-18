@@ -1,6 +1,6 @@
 module github.com/404tk/cloudtoolkit
 
-go 1.21
+go 1.24
 
 require (
 	github.com/404tk/go-prompt v0.0.1
@@ -8,24 +8,17 @@ require (
 	github.com/Azure/azure-sdk-for-go v68.0.0+incompatible
 	github.com/Azure/go-autorest/autorest v0.11.30
 	github.com/Azure/go-autorest/autorest/azure/auth v0.5.13
-	github.com/aliyun/alibaba-cloud-sdk-go v1.63.107
 	github.com/aliyun/aliyun-oss-go-sdk v3.0.2+incompatible
-	github.com/aws/aws-sdk-go v1.55.8
+	github.com/aws/aws-sdk-go-v2 v1.41.6
+	github.com/aws/aws-sdk-go-v2/config v1.32.16
+	github.com/aws/aws-sdk-go-v2/credentials v1.19.15
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.297.1
+	github.com/aws/aws-sdk-go-v2/service/iam v1.53.8
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.99.1
+	github.com/aws/aws-sdk-go-v2/service/sts v1.42.0
 	github.com/huaweicloud/huaweicloud-sdk-go-obs v3.25.9+incompatible
 	github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.1.192
 	github.com/jdcloud-api/jdcloud-sdk-go v1.64.0
-	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/billing v1.0.759
-	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cam v1.0.759
-	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cdb v1.0.759
-	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.0.759
-	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm v1.0.759
-	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/dnspod v1.0.759
-	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/lighthouse v1.0.759
-	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/mariadb v1.0.759
-	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/postgres v1.0.759
-	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sqlserver v1.0.759
-	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sts v1.0.759
-	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/tat v1.0.759
 	github.com/tencentyun/cos-go-sdk-v5 v0.7.73
 	github.com/volcengine/volcengine-go-sdk v1.0.168
 	golang.org/x/oauth2 v0.12.0
@@ -43,6 +36,19 @@ require (
 	github.com/Azure/go-autorest/autorest/validation v0.3.2 // indirect
 	github.com/Azure/go-autorest/logger v0.2.1 // indirect
 	github.com/Azure/go-autorest/tracing v0.6.0 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.9 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.22 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.22 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.22 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.23 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.8 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.14 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.22 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.22 // indirect
+	github.com/aws/aws-sdk-go-v2/service/signin v1.0.10 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.30.16 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.20 // indirect
+	github.com/aws/smithy-go v1.25.0 // indirect
 	github.com/clbanning/mxj v1.8.4 // indirect
 	github.com/dimchansky/utfbom v1.1.1 // indirect
 	github.com/fatih/color v1.10.0 // indirect
@@ -64,7 +70,6 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/mozillazg/go-httpheader v0.2.1 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
-	github.com/opentracing/opentracing-go v1.2.1-0.20220228012449-10b1cf09e00b // indirect
 	github.com/pkg/term v1.2.0-beta.2 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/stretchr/testify v1.8.3 // indirect

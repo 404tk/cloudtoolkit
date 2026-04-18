@@ -4,27 +4,35 @@ import (
 	"context"
 	"strings"
 
+	aliauth "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/auth"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
 	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 )
 
 type Driver struct {
-	Cred   *credentials.StsTokenCredential
-	Region string
+	Cred          aliauth.Credential
+	Region        string
+	clientOptions []oss.ClientOption
 }
 
 func (d *Driver) NewClient() (*oss.Client, error) {
+	if err := d.Cred.Validate(); err != nil {
+		return nil, err
+	}
 	region := d.Region
 	if region == "all" {
 		region = "cn-hangzhou"
 	}
+	options := append([]oss.ClientOption{}, d.clientOptions...)
+	if d.Cred.SecurityToken != "" {
+		options = append(options, oss.SecurityToken(d.Cred.SecurityToken))
+	}
 	return oss.New(
 		"https://oss-"+region+".aliyuncs.com",
-		d.Cred.AccessKeyId,
+		d.Cred.AccessKeyID,
 		d.Cred.AccessKeySecret,
-		oss.SecurityToken(d.Cred.AccessKeyStsToken))
+		options...)
 }
 
 func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {

@@ -5,12 +5,12 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/s3"
+	awsv2 "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 )
 
 type Driver struct {
-	Session *session.Session
+	Config awsv2.Config
 }
 
 func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
@@ -21,23 +21,26 @@ func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	default:
 		logger.Info("List S3 buckets ...")
 	}
-	client := s3.New(d.Session)
-	buckets, err := client.ListBuckets(&s3.ListBucketsInput{})
+	client := s3.NewFromConfig(d.Config)
+	buckets, err := client.ListBuckets(ctx, &s3.ListBucketsInput{})
 	if err != nil {
 		logger.Error("List buckets failed.")
 		return list, err
 	}
 	for _, bucket := range buckets.Buckets {
-		_bucket := schema.Storage{BucketName: *bucket.Name}
+		_bucket := schema.Storage{BucketName: awsv2.ToString(bucket.Name)}
 
 		locationInput := &s3.GetBucketLocationInput{Bucket: bucket.Name}
-		bucketLocation, err := client.GetBucketLocation(locationInput)
+		bucketLocation, err := client.GetBucketLocation(ctx, locationInput)
 		if err != nil {
 			logger.Error("Get bucket info failed.")
 			return list, err
 		}
-		if bucketLocation.LocationConstraint != nil {
-			_bucket.Region = *bucketLocation.LocationConstraint
+		if bucketLocation.LocationConstraint != "" {
+			_bucket.Region = string(bucketLocation.LocationConstraint)
+		}
+		if _bucket.Region == "" {
+			_bucket.Region = awsv2.ToString(bucket.BucketRegion)
 		}
 		list = append(list, _bucket)
 		select {

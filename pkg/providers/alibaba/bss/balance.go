@@ -3,15 +3,19 @@ package bss
 import (
 	"context"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/api"
+	aliauth "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/auth"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/bssopenapi"
 )
 
 type Driver struct {
-	Cred   *credentials.StsTokenCredential
-	Region string
+	Cred          aliauth.Credential
+	Region        string
+	clientOptions []api.Option
+}
+
+func (d *Driver) newClient() *api.Client {
+	return api.NewClient(d.Cred, d.clientOptions...)
 }
 
 func (d *Driver) QueryAccountBalance(ctx context.Context) {
@@ -20,17 +24,7 @@ func (d *Driver) QueryAccountBalance(ctx context.Context) {
 		return
 	default:
 	}
-	region := d.Region
-	if region == "all" {
-		region = "cn-hangzhou"
-	}
-	bssclient, err := bssopenapi.NewClientWithOptions(region, sdk.NewConfig(), d.Cred)
-	if err != nil {
-		return
-	}
-	req_bss := bssopenapi.CreateQueryAccountBalanceRequest()
-	req_bss.Scheme = "https"
-	resp, err := bssclient.QueryAccountBalance(req_bss)
+	resp, err := d.newClient().QueryAccountBalance(ctx, api.NormalizeRegion(d.Region))
 	if err == nil {
 		if resp.Data.AvailableCashAmount != "" {
 			logger.Warning("Available cash amount:", resp.Data.AvailableCashAmount)

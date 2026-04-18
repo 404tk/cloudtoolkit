@@ -4,14 +4,14 @@ import (
 	"context"
 	"net/http"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/auth"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentyun/cos-go-sdk-v5"
 )
 
 type Driver struct {
-	Credential *common.Credential
+	Credential auth.Credential
 }
 
 func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
@@ -24,7 +24,7 @@ func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	}
 	client := cos.NewClient(nil, &http.Client{
 		Transport: &cos.AuthorizationTransport{
-			SecretID:     d.Credential.SecretId,
+			SecretID:     d.Credential.SecretID,
 			SecretKey:    d.Credential.SecretKey,
 			SessionToken: d.Credential.Token,
 		},

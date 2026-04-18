@@ -4,99 +4,130 @@ import (
 	"context"
 	"strings"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/api"
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/auth"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/paginate"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
-	cvm "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cvm/v20170312"
 )
 
 type Driver struct {
-	Credential *common.Credential
-	Region     string
+	Credential    auth.Credential
+	Region        string
+	clientOptions []api.Option
 }
 
-func (d *Driver) NewClient() (*cvm.Client, error) {
-	cpf := profile.NewClientProfile()
-	region := d.Region
-	if region == "all" || region == "" {
-		region = "ap-guangzhou"
-	}
-	return cvm.NewClient(d.Credential, region, cpf)
+func (d *Driver) newClient() *api.Client {
+	return api.NewClient(d.Credential, d.clientOptions...)
+}
+
+func (d *Driver) SetClientOptions(opts ...api.Option) {
+	d.clientOptions = append([]api.Option(nil), opts...)
 }
 
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := []schema.Host{}
 	logger.Info("List CVM instances ...")
 	var regions []string
+	client := d.newClient()
 	if d.Region == "all" {
-		client, err := d.NewClient()
-		if err != nil {
-			return list, err
-		}
-		req := cvm.NewDescribeRegionsRequest()
-		resp, err := client.DescribeRegions(req)
+		resp, err := client.DescribeCVMRegions(ctx, d.Region)
 		if err != nil {
 			logger.Error("List regions failed.")
 			return list, err
 		}
 		for _, r := range resp.Response.RegionSet {
-			regions = append(regions, *r.Region)
+			region := derefString(r.Region)
+			if region == "" {
+				continue
+			}
+			regions = append(regions, region)
 		}
 	} else {
-		regions = append(regions, d.Region)
+		regions = append(regions, normalizedRegion(d.Region))
 	}
 	tracker := processbar.NewRegionTracker()
 	defer tracker.Finish()
 	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
-		client, err := cvm.NewClient(d.Credential, r, profile.NewClientProfile())
-		if err != nil {
-			return nil, err
-		}
 		return paginate.Fetch(ctx, func(ctx context.Context, offset int64) (paginate.Page[schema.Host, int64], error) {
-			request := cvm.NewDescribeInstancesRequest()
-			request.Limit = common.Int64Ptr(100)
-			request.Offset = common.Int64Ptr(offset)
-			response, err := client.DescribeInstances(request)
+			response, err := client.DescribeCVMInstances(ctx, r, offset, 100)
 			if err != nil {
 				return paginate.Page[schema.Host, int64]{}, err
 			}
 			items := make([]schema.Host, 0, len(response.Response.InstanceSet))
 			for _, instance := range response.Response.InstanceSet {
-				var ipv4, privateIPv4 string
-				if len(instance.PublicIpAddresses) > 0 {
-					ipv4 = *instance.PublicIpAddresses[0]
-				}
-				if len(instance.PrivateIpAddresses) > 0 {
-					privateIPv4 = *instance.PrivateIpAddresses[0]
-				}
-				host := schema.Host{
-					HostName:    *instance.InstanceName,
-					ID:          *instance.InstanceId,
-					State:       *instance.InstanceState,
-					PublicIPv4:  ipv4,
-					PrivateIpv4: privateIPv4,
-					Public:      ipv4 != "",
-					Region:      r,
-				}
-				if strings.Split(*instance.OsName, " ")[0] == "Windows" {
-					host.OSType = "WINDOWS"
-				} else {
-					host.OSType = "LINUX_UNIX"
-				}
-				items = append(items, host)
+				items = append(items, mapHost(instance, r))
 			}
 			return paginate.Page[schema.Host, int64]{
 				Items: items,
-				Next:  offset + 100,
-				Done:  len(response.Response.InstanceSet) < 100,
+				Next:  offset + int64(len(response.Response.InstanceSet)),
+				Done:  doneByTotal(offset, int64(len(response.Response.InstanceSet)), derefInt64(response.Response.TotalCount), 100),
 			}, nil
 		})
 	})
 	list = append(list, got...)
 
 	return list, nil
+}
+
+func mapHost(instance api.CVMInstanceInfo, region string) schema.Host {
+	ipv4 := firstString(instance.PublicIPAddresses)
+	privateIPv4 := firstString(instance.PrivateIPAddresses)
+	host := schema.Host{
+		HostName:    derefString(instance.InstanceName),
+		ID:          derefString(instance.InstanceID),
+		State:       derefString(instance.InstanceState),
+		PublicIPv4:  ipv4,
+		PrivateIpv4: privateIPv4,
+		Public:      ipv4 != "",
+		Region:      region,
+	}
+	if strings.EqualFold(strings.Split(derefString(instance.OSName), " ")[0], "Windows") {
+		host.OSType = "WINDOWS"
+	} else {
+		host.OSType = "LINUX_UNIX"
+	}
+	return host
+}
+
+func firstString(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	return values[0]
+}
+
+func derefString(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
+}
+
+func derefInt64(v *int64) int64 {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
+func doneByTotal(offset, count, total, limit int64) bool {
+	if count == 0 {
+		return true
+	}
+	if total <= 0 {
+		return count < limit
+	}
+	return offset+count >= total
+}
+
+func normalizedRegion(region string) string {
+	switch region {
+	case "", "all":
+		return api.DefaultRegion
+	default:
+		return region
+	}
 }

@@ -3,28 +3,27 @@ package lighthouse
 import (
 	"context"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/api"
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/auth"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/paginate"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
-	lighthouse "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/lighthouse/v20200324"
 )
 
 type Driver struct {
-	Credential *common.Credential
-	Region     string
+	Credential    auth.Credential
+	Region        string
+	clientOptions []api.Option
 }
 
-func (d *Driver) NewClient() (*lighthouse.Client, error) {
-	cpf := profile.NewClientProfile()
-	region := d.Region
-	if region == "all" || region == "" {
-		region = "ap-guangzhou"
-	}
-	return lighthouse.NewClient(d.Credential, region, cpf)
+func (d *Driver) newClient() *api.Client {
+	return api.NewClient(d.Credential, d.clientOptions...)
+}
+
+func (d *Driver) SetClientOptions(opts ...api.Option) {
+	d.clientOptions = append([]api.Option(nil), opts...)
 }
 
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
@@ -36,66 +35,98 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		logger.Info("List Lighthouse instances ...")
 	}
 	var regions []string
+	client := d.newClient()
 	if d.Region == "all" {
-		client, err := d.NewClient()
-		if err != nil {
-			return list, err
-		}
-		req := lighthouse.NewDescribeRegionsRequest()
-		resp, err := client.DescribeRegions(req)
+		resp, err := client.DescribeLighthouseRegions(ctx, d.Region)
 		if err != nil {
 			logger.Error("List regions failed.")
 			return list, err
 		}
 		for _, r := range resp.Response.RegionSet {
-			regions = append(regions, *r.Region)
+			region := derefString(r.Region)
+			if region == "" {
+				continue
+			}
+			regions = append(regions, region)
 		}
 	} else {
-		regions = append(regions, d.Region)
+		regions = append(regions, normalizedRegion(d.Region))
 	}
 
 	tracker := processbar.NewRegionTracker()
 	defer tracker.Finish()
 	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
-		client, err := lighthouse.NewClient(d.Credential, r, profile.NewClientProfile())
-		if err != nil {
-			return nil, err
-		}
 		return paginate.Fetch(ctx, func(ctx context.Context, offset int64) (paginate.Page[schema.Host, int64], error) {
-			request := lighthouse.NewDescribeInstancesRequest()
-			request.Limit = common.Int64Ptr(100)
-			request.Offset = common.Int64Ptr(offset)
-			response, err := client.DescribeInstances(request)
+			response, err := client.DescribeLighthouseInstances(ctx, r, offset, 100)
 			if err != nil {
 				return paginate.Page[schema.Host, int64]{}, err
 			}
 			items := make([]schema.Host, 0, len(response.Response.InstanceSet))
 			for _, instance := range response.Response.InstanceSet {
-				var ipv4, privateIPv4 string
-				if len(instance.PublicAddresses) > 0 {
-					ipv4 = *instance.PublicAddresses[0]
-				}
-				if len(instance.PrivateAddresses) > 0 {
-					privateIPv4 = *instance.PrivateAddresses[0]
-				}
-				items = append(items, schema.Host{
-					HostName:    *instance.InstanceName,
-					ID:          *instance.InstanceId,
-					State:       *instance.InstanceState,
-					PublicIPv4:  ipv4,
-					PrivateIpv4: privateIPv4,
-					OSType:      *instance.PlatformType,
-					Public:      ipv4 != "",
-					Region:      r,
-				})
+				items = append(items, mapHost(instance, r))
 			}
 			return paginate.Page[schema.Host, int64]{
 				Items: items,
-				Next:  offset + 100,
-				Done:  len(response.Response.InstanceSet) < 100,
+				Next:  offset + int64(len(response.Response.InstanceSet)),
+				Done:  doneByTotal(offset, int64(len(response.Response.InstanceSet)), derefInt64(response.Response.TotalCount), 100),
 			}, nil
 		})
 	})
 	list = append(list, got...)
 	return list, nil
+}
+
+func mapHost(instance api.LighthouseInstanceInfo, region string) schema.Host {
+	ipv4 := firstString(instance.PublicAddresses)
+	privateIPv4 := firstString(instance.PrivateAddresses)
+	return schema.Host{
+		HostName:    derefString(instance.InstanceName),
+		ID:          derefString(instance.InstanceID),
+		State:       derefString(instance.InstanceState),
+		PublicIPv4:  ipv4,
+		PrivateIpv4: privateIPv4,
+		OSType:      derefString(instance.PlatformType),
+		Public:      ipv4 != "",
+		Region:      region,
+	}
+}
+
+func firstString(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	return values[0]
+}
+
+func derefString(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
+}
+
+func derefInt64(v *int64) int64 {
+	if v == nil {
+		return 0
+	}
+	return *v
+}
+
+func doneByTotal(offset, count, total, limit int64) bool {
+	if count == 0 {
+		return true
+	}
+	if total <= 0 {
+		return count < limit
+	}
+	return offset+count >= total
+}
+
+func normalizedRegion(region string) string {
+	switch region {
+	case "", "all":
+		return api.DefaultRegion
+	default:
+		return region
+	}
 }

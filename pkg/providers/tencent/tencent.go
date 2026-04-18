@@ -5,6 +5,8 @@ import (
 	"encoding/base64"
 	"fmt"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/api"
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/auth"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/billing"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cdb"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cos"
@@ -17,54 +19,55 @@ import (
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
-	sts "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sts/v20180813"
 )
 
 // Provider is a data provider for tencent API
 type Provider struct {
-	credential *common.Credential
-	region     string
+	apiCredential auth.Credential
+	apiClient     *api.Client
+	clientOptions []api.Option
+	region        string
 }
 
 // New creates a new provider client for tencent API
 func New(options schema.Options) (*Provider, error) {
-	accessKey, ok := options.GetMetadata(utils.AccessKey)
-	if !ok {
-		return nil, &schema.ErrNoSuchKey{Name: utils.AccessKey}
-	}
-	secretKey, ok := options.GetMetadata(utils.SecretKey)
-	if !ok {
-		return nil, &schema.ErrNoSuchKey{Name: utils.SecretKey}
-	}
-	token, _ := options.GetMetadata(utils.SecurityToken)
-	region, _ := options.GetMetadata(utils.Region)
+	return newProvider(options)
+}
 
-	credential := common.NewTokenCredential(accessKey, secretKey, token)
-	cpf := profile.NewClientProfile()
+func newProvider(options schema.Options, clientOptions ...api.Option) (*Provider, error) {
+	credential, err := auth.FromOptions(options)
+	if err != nil {
+		return nil, err
+	}
+	region, _ := options.GetMetadata(utils.Region)
+	opts := append([]api.Option(nil), clientOptions...)
+	apiClient := api.NewClient(credential, opts...)
 
 	payload, _ := options.GetMetadata(utils.Payload)
 	if payload == "cloudlist" {
-		request := sts.NewGetCallerIdentityRequest()
-		// cpf.HttpProfile.Endpoint = "sts.tencentcloudapi.com"
-		stsclient, err := sts.NewClient(credential, "ap-guangzhou", cpf)
+		var response api.GetCallerIdentityResponse
+		err := apiClient.DoJSON(
+			context.Background(),
+			"sts",
+			"2018-08-13",
+			"GetCallerIdentity",
+			"ap-guangzhou",
+			api.GetCallerIdentityRequest{},
+			&response,
+		)
 		if err != nil {
 			return nil, err
 		}
-		response, err := stsclient.GetCallerIdentity(request)
-		if err != nil {
-			return nil, err
-		}
-		msg := "Current account ARN: " + *response.Response.Arn
-		// accountId, _ := strconv.Atoi(*response.Response.UserId)
-		cache.Cfg.CredInsert(*response.Response.Type, options)
+		msg := "Current account ARN: " + response.Response.Arn
+		cache.Cfg.CredInsert(response.Response.Type, options)
 		logger.Warning(msg)
 	}
 
 	return &Provider{
-		credential: credential,
-		region:     region,
+		apiCredential: credential,
+		apiClient:     apiClient,
+		clientOptions: opts,
+		region:        region,
 	}, nil
 }
 
@@ -80,31 +83,37 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	for _, product := range utils.Cloudlist {
 		switch product {
 		case "balance":
-			d := &billing.Driver{Cred: p.credential, Region: p.region}
+			d := &billing.Driver{Cred: p.apiCredential, Region: p.region}
+			d.SetClientOptions(p.clientOptions...)
 			d.QueryAccountBalance(ctx)
 		case "host":
-			cvmprovider := &cvm.Driver{Credential: p.credential, Region: p.region}
+			cvmprovider := &cvm.Driver{Credential: p.apiCredential, Region: p.region}
+			cvmprovider.SetClientOptions(p.clientOptions...)
 			cvms, err := cvmprovider.GetResource(ctx)
 			schema.AppendAssets(&list, cvms)
 			list.AddError("host/cvm", err)
-			light := &lighthouse.Driver{Credential: p.credential, Region: p.region}
+			light := &lighthouse.Driver{Credential: p.apiCredential, Region: p.region}
+			light.SetClientOptions(p.clientOptions...)
 			lights, err := light.GetResource(ctx)
 			schema.AppendAssets(&list, lights)
 			list.AddError("host/lighthouse", err)
 			allHosts := append(cvms, lights...)
 			tat.SetCacheHostList(allHosts)
 		case "domain":
-			dnsprovider := &dns.Driver{Credential: p.credential}
+			dnsprovider := &dns.Driver{Credential: p.apiCredential, Region: p.region}
+			dnsprovider.SetClientOptions(p.clientOptions...)
 			domains, err := dnsprovider.GetDomains(ctx)
 			schema.AppendAssets(&list, domains)
 			list.AddError("domain", err)
 		case "account":
-			camprovider := &iam.Driver{Credential: p.credential}
+			camprovider := &iam.Driver{Credential: p.apiCredential}
+			camprovider.SetClientOptions(p.clientOptions...)
 			users, err := camprovider.ListUsers(ctx)
 			schema.AppendAssets(&list, users)
 			list.AddError("account", err)
 		case "database":
-			cdbprovider := cdb.Driver{Credential: p.credential, Region: p.region}
+			cdbprovider := &cdb.Driver{Credential: p.apiCredential, Region: p.region}
+			cdbprovider.SetClientOptions(p.clientOptions...)
 			mysqls, err := cdbprovider.ListMySQL(ctx)
 			schema.AppendAssets(&list, mysqls)
 			list.AddError("database/mysql", err)
@@ -118,7 +127,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			schema.AppendAssets(&list, mssqls)
 			list.AddError("database/sqlserver", err)
 		case "bucket":
-			cosprovider := &cos.Driver{Credential: p.credential}
+			cosprovider := &cos.Driver{Credential: p.apiCredential}
 			storages, err := cosprovider.GetBuckets(ctx)
 			schema.AppendAssets(&list, storages)
 			list.AddError("bucket", err)
@@ -130,7 +139,8 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 }
 
 func (p *Provider) UserManagement(action, username, password string) {
-	c := &iam.Driver{Credential: p.credential}
+	c := &iam.Driver{Credential: p.apiCredential}
+	c.SetClientOptions(p.clientOptions...)
 	switch action {
 	case "add":
 		c.UserName = username
@@ -157,7 +167,8 @@ func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {
 		logger.Error("Unable to resolve instance metadata.")
 		return
 	}
-	d := tat.Driver{Credential: p.credential, Region: host.Region}
+	d := tat.Driver{Credential: p.apiCredential, Region: host.Region}
+	d.SetClientOptions(p.clientOptions...)
 	command, err := base64.StdEncoding.DecodeString(cmd)
 	if err != nil {
 		logger.Error(err.Error())
@@ -176,12 +187,14 @@ func (p *Provider) lookupHost(instanceID string) (schema.Host, bool) {
 		}
 	}
 	logger.Info("Host metadata cache miss, refreshing instances ...")
-	cvmProvider := &cvm.Driver{Credential: p.credential, Region: p.region}
+	cvmProvider := &cvm.Driver{Credential: p.apiCredential, Region: p.region}
+	cvmProvider.SetClientOptions(p.clientOptions...)
 	hosts, err := cvmProvider.GetResource(context.Background())
 	if err != nil {
 		logger.Error(err)
 	}
-	lightProvider := &lighthouse.Driver{Credential: p.credential, Region: p.region}
+	lightProvider := &lighthouse.Driver{Credential: p.apiCredential, Region: p.region}
+	lightProvider.SetClientOptions(p.clientOptions...)
 	lights, lightErr := lightProvider.GetResource(context.Background())
 	if lightErr != nil {
 		logger.Error(lightErr)

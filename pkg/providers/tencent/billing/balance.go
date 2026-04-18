@@ -4,15 +4,23 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/api"
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/auth"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	billing "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/billing/v20180709"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
-	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 )
 
 type Driver struct {
-	Cred   *common.Credential
-	Region string
+	Cred          auth.Credential
+	Region        string
+	clientOptions []api.Option
+}
+
+func (d *Driver) newClient() *api.Client {
+	return api.NewClient(d.Cred, d.clientOptions...)
+}
+
+func (d *Driver) SetClientOptions(opts ...api.Option) {
+	d.clientOptions = append([]api.Option(nil), opts...)
 }
 
 func (d *Driver) QueryAccountBalance(ctx context.Context) {
@@ -21,20 +29,18 @@ func (d *Driver) QueryAccountBalance(ctx context.Context) {
 		return
 	default:
 	}
-	region := d.Region
-	if region == "all" {
-		region = "ap-guangzhou"
-	}
-	cpf := profile.NewClientProfile()
-	// cpf.HttpProfile.Endpoint = "billing.tencentcloudapi.com"
-	client, err := billing.NewClient(d.Cred, region, cpf)
-	if err != nil {
-		return
-	}
-	req_billing := billing.NewDescribeAccountBalanceRequest()
-	resp_billing, err := client.DescribeAccountBalance(req_billing)
+	resp, err := d.newClient().DescribeAccountBalance(ctx, d.Region)
 	if err == nil {
-		cash := *resp_billing.Response.RealBalance / 100
+		var realBalance float64
+		switch {
+		case resp.Response.RealBalance != nil:
+			realBalance = *resp.Response.RealBalance
+		case resp.Response.Balance != nil:
+			realBalance = float64(*resp.Response.Balance)
+		default:
+			return
+		}
+		cash := realBalance / 100
 		logger.Warning(fmt.Sprintf("Available cash amount: %v", cash))
 	}
 }

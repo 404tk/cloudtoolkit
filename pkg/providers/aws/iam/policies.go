@@ -1,20 +1,26 @@
 package iam
 
 import (
+	"context"
 	"strings"
 
-	"github.com/aws/aws-sdk-go/service/iam"
+	awsv2 "github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
 )
 
-func listAttachedUserPolicies(client *iam.IAM, name string) string {
-	input := &iam.ListAttachedUserPoliciesInput{UserName: &name}
-	resp, err := client.ListAttachedUserPolicies(input)
-	if err != nil {
-		return ""
-	}
+func listAttachedUserPolicies(ctx context.Context, client *iam.Client, name string) string {
+	paginator := iam.NewListAttachedUserPoliciesPaginator(client, &iam.ListAttachedUserPoliciesInput{
+		UserName: &name,
+	})
 	policies := []string{}
-	for _, p := range resp.AttachedPolicies {
-		policies = append(policies, *p.PolicyName)
+	for paginator.HasMorePages() {
+		resp, err := paginator.NextPage(ctx)
+		if err != nil {
+			return ""
+		}
+		for _, p := range resp.AttachedPolicies {
+			policies = append(policies, awsv2.ToString(p.PolicyName))
+		}
 	}
 	return strings.Join(policies, "\n")
 }

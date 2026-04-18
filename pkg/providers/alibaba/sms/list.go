@@ -2,17 +2,19 @@ package sms
 
 import (
 	"context"
+	"time"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/api"
+	aliauth "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/auth"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/dysmsapi"
 )
 
 type Driver struct {
-	Cred   *credentials.StsTokenCredential
-	Region string
+	Cred          aliauth.Credential
+	Region        string
+	clientOptions []api.Option
+	now           func() time.Time
 }
 
 func (d *Driver) GetResource(ctx context.Context) (schema.Sms, error) {
@@ -27,17 +29,16 @@ func (d *Driver) GetResource(ctx context.Context) (schema.Sms, error) {
 	if region == "all" {
 		region = "cn-hangzhou"
 	}
-	client, err := dysmsapi.NewClientWithOptions(region, sdk.NewConfig(), d.Cred)
-	if err != nil {
-		return res, err
-	}
-	res.Signs, err = listSmsSign(client)
+	client := api.NewClient(d.Cred, d.clientOptions...)
+	region = api.NormalizeRegion(region)
+	var err error
+	res.Signs, err = listSmsSign(ctx, client, region)
 	if err != nil {
 		logger.Error("List SMS failed.")
 		return res, err
 	}
-	res.Templates, _ = listSmsTemplate(client)
-	res.DailySize, _ = querySendStatistics(client)
+	res.Templates, _ = listSmsTemplate(ctx, client, region)
+	res.DailySize, _ = d.querySendStatistics(ctx, client, region)
 
 	return res, err
 }
@@ -49,11 +50,9 @@ var status = map[string]string{
 	"AUDIT_STATE_CANCEL":   "取消审核",
 }
 
-func listSmsSign(client *dysmsapi.Client) ([]schema.SmsSign, error) {
+func listSmsSign(ctx context.Context, client *api.Client, region string) ([]schema.SmsSign, error) {
 	signs := []schema.SmsSign{}
-	request := dysmsapi.CreateQuerySmsSignListRequest()
-	request.Scheme = "https"
-	response, err := client.QuerySmsSignList(request)
+	response, err := client.QuerySMSSignList(ctx, region)
 	if err != nil {
 		return signs, err
 	}
@@ -67,11 +66,9 @@ func listSmsSign(client *dysmsapi.Client) ([]schema.SmsSign, error) {
 	return signs, nil
 }
 
-func listSmsTemplate(client *dysmsapi.Client) ([]schema.SmsTemplate, error) {
+func listSmsTemplate(ctx context.Context, client *api.Client, region string) ([]schema.SmsTemplate, error) {
 	temps := []schema.SmsTemplate{}
-	request := dysmsapi.CreateQuerySmsTemplateListRequest()
-	request.Scheme = "https"
-	response, err := client.QuerySmsTemplateList(request)
+	response, err := client.QuerySMSTemplateList(ctx, region)
 	if err != nil {
 		return temps, err
 	}

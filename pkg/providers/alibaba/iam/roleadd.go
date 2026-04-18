@@ -1,29 +1,29 @@
 package iam
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/api"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/ram"
 )
 
 func (d *Driver) AddRole() {
-	client, err := d.NewClient()
-	if err != nil {
-		logger.Error("Create RAM client failed:", err.Error())
-		return
-	}
-	err = createRole(client, d.RoleName, d.AccountId)
+	ctx := context.Background()
+	client := d.newClient()
+	region := api.NormalizeRegion(d.Region)
+
+	err := createRole(ctx, client, region, d.RoleName, d.AccountId)
 	if err != nil {
 		logger.Error("Create role failed:", err.Error())
 		return
 	}
-	err = attachPolicyToRole(client, d.RoleName)
+	err = attachPolicyToRole(ctx, client, region, d.RoleName)
 	if err != nil {
 		logger.Error("Grant AdministratorAccess policy failed.")
 		return
 	}
-	accountAlias := getAccountAlias(client)
+	accountAlias := getAccountAlias(ctx, client, region)
 	fmt.Printf("\n%-20s\t%-10s\t%-60s\n", "AccountAlias", "RoleName", "Switch URL")
 	fmt.Printf("%-20s\t%-10s\t%-60s\n", "------------", "--------", "----------")
 	fmt.Printf("%-20s\t%-10s\t%-60s\n\n",
@@ -31,23 +31,15 @@ func (d *Driver) AddRole() {
 		"https://signin.aliyun.com/switchRole.htm")
 }
 
-func createRole(client *ram.Client, roleName, accountId string) error {
-	request := ram.CreateCreateRoleRequest()
-	request.Scheme = "https"
-	request.RoleName = roleName
-	request.AssumeRolePolicyDocument = fmt.Sprintf(
+func createRole(ctx context.Context, client *api.Client, region, roleName, accountId string) error {
+	assumeRolePolicyDocument := fmt.Sprintf(
 		"{\"Statement\":[{\"Action\":\"sts:AssumeRole\",\"Effect\":\"Allow\",\"Principal\":{\"RAM\":\"acs:ram::%s:root\"}}],\"Version\":\"1\"}",
 		accountId)
-	_, err := client.CreateRole(request)
+	_, err := client.CreateRAMRole(ctx, region, roleName, assumeRolePolicyDocument)
 	return err
 }
 
-func attachPolicyToRole(client *ram.Client, roleName string) error {
-	request := ram.CreateAttachPolicyToRoleRequest()
-	request.Scheme = "https"
-	request.PolicyType = "System"
-	request.PolicyName = "AdministratorAccess"
-	request.RoleName = roleName
-	_, err := client.AttachPolicyToRole(request)
+func attachPolicyToRole(ctx context.Context, client *api.Client, region, roleName string) error {
+	_, err := client.AttachRAMPolicyToRole(ctx, region, roleName, "AdministratorAccess", "System")
 	return err
 }

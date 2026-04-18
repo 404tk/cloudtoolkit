@@ -1,15 +1,15 @@
 package sas
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/api"
+	aliauth "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/auth"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk"
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/auth/credentials"
-	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
-	"github.com/aliyun/alibaba-cloud-sdk-go/services/sas"
 )
 
 var eventStatus = map[int]string{
@@ -23,21 +23,17 @@ var eventStatus = map[int]string{
 }
 
 type Driver struct {
-	Cred *credentials.StsTokenCredential
+	Cred          aliauth.Credential
+	clientOptions []api.Option
 }
 
-func (d *Driver) NewClient() (*sas.Client, error) {
-	return sas.NewClientWithOptions("cn-hangzhou", sdk.NewConfig(), d.Cred)
+func (d *Driver) newClient() *api.Client {
+	return api.NewClient(d.Cred, d.clientOptions...)
 }
 
 func (d *Driver) DumpEvents() ([]schema.Event, error) {
 	var events []schema.Event
-	client, err := d.NewClient()
-	if err != nil {
-		return events, err
-	}
-	request := sas.CreateDescribeSuspEventsRequest()
-	request.Scheme = "https"
+	client := d.newClient()
 	/*
 		// The filtering result of the specified source IP address is invalid
 		switch sourceIp {
@@ -55,13 +51,13 @@ func (d *Driver) DumpEvents() ([]schema.Event, error) {
 		}
 	*/
 
-	response, err := client.DescribeSuspEvents(request)
+	response, err := client.DescribeSASSuspEvents(context.Background(), api.DefaultRegion)
 	if err != nil {
 		return events, err
 	}
 	for _, event := range response.SuspEvents {
 		_event := schema.Event{
-			Id:       event.SecurityEventIds,
+			Id:       event.SecurityEventIDs,
 			Name:     event.AlarmEventNameDisplay,
 			Affected: event.InstanceName,
 			Status:   eventStatus[event.EventStatus],
@@ -85,31 +81,23 @@ func (d *Driver) DumpEvents() ([]schema.Event, error) {
 }
 
 func (d *Driver) HandleEvents(eid string) {
-	client, err := d.NewClient()
-	if err != nil {
-		logger.Error(err)
-		return
-	}
-	request := requests.NewCommonRequest()
-	request.Method = "POST"
-	request.Scheme = "https"
-	request.Domain = "tds.aliyuncs.com"
-	request.Version = "2018-12-03"
-	request.ApiName = "HandleSecurityEvents"
-	request.QueryParams["OperationCode"] = "advance_mark_mis_info"
+	client := d.newClient()
 	ids := strings.Split(eid, ",")
-	for i, id := range ids {
-		k := fmt.Sprintf("SecurityEventIds.%d", i+1)
-		v := strings.TrimSpace(id)
-		request.QueryParams[k] = v
+	cleaned := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if v := strings.TrimSpace(id); v != "" {
+			cleaned = append(cleaned, v)
+		}
 	}
-	// MarkMissParam not work, looks like an api bug
-	// request.QueryParams["MarkMissParam"] = "[{\"uuid\":\"ALL\",\"field\":\"tool_name\",\"operate\":\"strEqual\",\"fieldValue\":\"cloudtoolkit\"}]"
-	request.QueryParams["MarkBatch"] = "true"
-	response, err := client.ProcessCommonRequest(request)
+	response, err := client.HandleSASSecurityEvents(context.Background(), api.DefaultRegion, "advance_mark_mis_info", cleaned)
 	if err != nil {
 		logger.Error(err)
 		return
 	}
-	fmt.Println(response.GetHttpContentString())
+	content, err := json.Marshal(response)
+	if err != nil {
+		logger.Error(err)
+		return
+	}
+	fmt.Println(string(content))
 }
