@@ -8,6 +8,7 @@ Interactive multi-cloud security assessment framework.
 - **Asset Enumeration** - Hosts, databases, storage buckets, domains, IAM users
 - **Security Testing** - Backdoor user creation, command execution, bucket dumping
 - **Interactive CLI** - Tab completion, session management, credential caching
+- **Lightweight Provider Clients** - AWS/Azure/Tencent/Huawei/Alibaba are being gradually decoupled from heavy official SDK paths
 
 ## Quick Start
 
@@ -24,8 +25,8 @@ go build --ldflags "-s -w" -trimpath -o ctk cmd/main.go
 | Provider | Enumeration | Security Testing |
 |:--------:|:-----------:|:----------------:|
 | Alibaba Cloud | ECS, OSS, RAM, RDS, DNS, SLS, SMS | backdoor-user, bucket-dump, exec-command, event-dump, database-account |
-| Tencent Cloud | CVM, Lighthouse, COS, CAM, CDB, DNSPod | backdoor-user, exec-command |
-| Huawei Cloud | ECS, OBS, IAM, RDS | backdoor-user |
+| Tencent Cloud | CVM, Lighthouse, COS, CAM, CDB, DNSPod | backdoor-user, bucket-dump, exec-command |
+| Huawei Cloud | ECS, OBS, IAM, RDS | backdoor-user, bucket-dump |
 | AWS | EC2, S3, IAM | backdoor-user, bucket-dump |
 | Azure | Virtual Machines, Blob Storage | - |
 | GCP | Compute Engine, Cloud DNS, IAM | - |
