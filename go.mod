@@ -6,7 +6,6 @@ require (
 	github.com/404tk/go-prompt v0.0.1
 	github.com/404tk/table v0.0.4
 	github.com/aws/aws-sdk-go-v2 v1.41.6
-	github.com/jdcloud-api/jdcloud-sdk-go v1.64.0
 	golang.org/x/oauth2 v0.12.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -15,7 +14,6 @@ require (
 	cloud.google.com/go/compute v1.20.1 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	github.com/aws/smithy-go v1.25.0 // indirect
-	github.com/gofrs/uuid v4.4.0+incompatible // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
 	github.com/kr/pretty v0.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect

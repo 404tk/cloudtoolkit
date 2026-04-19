@@ -2,37 +2,40 @@ package oss
 
 import (
 	"context"
+	"errors"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/api"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/jdcloud-api/jdcloud-sdk-go/core"
-	"github.com/jdcloud-api/jdcloud-sdk-go/services/oss/apis"
-	"github.com/jdcloud-api/jdcloud-sdk-go/services/oss/client"
 )
 
 type Driver struct {
-	Cred  *core.Credential
-	Token string
-}
-
-func (d *Driver) newClient() *client.OssClient {
-	c := client.NewOssClient(d.Cred)
-	c.SetLogger(core.NewDummyLogger())
-	return c
+	Client *api.Client
 }
 
 func (d *Driver) ListBuckets(ctx context.Context) ([]schema.Storage, error) {
 	list := []schema.Storage{}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	select {
 	case <-ctx.Done():
 		return list, nil
 	default:
 		logger.Info("List OSS buckets ...")
 	}
-	svc := d.newClient()
-	req := apis.NewListBucketsRequest("cn-north-1")
-	req.AddHeader("x-jdcloud-security-token", d.Token)
-	resp, err := svc.ListBuckets(req)
+	if d.Client == nil {
+		return list, errors.New("jdcloud oss: nil api client")
+	}
+
+	var resp api.ListBucketsResponse
+	err := d.Client.DoJSON(ctx, api.Request{
+		Service: "oss",
+		Region:  "cn-north-1",
+		Method:  "GET",
+		Version: "v1",
+		Path:    "/regions/cn-north-1/buckets",
+	}, &resp)
 	if err != nil {
 		logger.Error("List buckets failed.")
 		return list, err

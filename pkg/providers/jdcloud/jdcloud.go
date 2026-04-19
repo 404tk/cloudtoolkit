@@ -4,48 +4,42 @@ import (
 	"context"
 	"fmt"
 
+	_api "github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/api"
+	_auth "github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/auth"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/iam"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/oss"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/vm"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
-	"github.com/jdcloud-api/jdcloud-sdk-go/core"
 )
 
 type Provider struct {
-	cred   *core.Credential
-	token  string
-	region string
+	region    string
+	apiClient *_api.Client
 }
 
-// New creates a new provider client for alibaba API
+// New creates a new provider client for JDCloud API.
 func New(options schema.Options) (*Provider, error) {
-	accessKey, ok := options.GetMetadata(utils.AccessKey)
-	if !ok {
-		return nil, &schema.ErrNoSuchKey{Name: utils.AccessKey}
-	}
-	secretKey, ok := options.GetMetadata(utils.SecretKey)
-	if !ok {
-		return nil, &schema.ErrNoSuchKey{Name: utils.SecretKey}
+	credential, err := _auth.FromOptions(options)
+	if err != nil {
+		return nil, err
 	}
 	region, _ := options.GetMetadata(utils.Region)
-	token, _ := options.GetMetadata(utils.SecurityToken)
-	cred := core.NewCredentials(accessKey, secretKey)
+	apiClient := _api.NewClient(credential)
 	payload, _ := options.GetMetadata(utils.Payload)
 
 	if payload == "cloudlist" {
-		d := &iam.Driver{Cred: cred, Token: token}
-		if !d.Validator(accessKey) {
+		d := &iam.Driver{Client: apiClient}
+		if !d.Validator(credential.AccessKey) {
 			return nil, fmt.Errorf("invalid accesskey")
 		}
 		cache.Cfg.CredInsert("default", options)
 	}
 
 	return &Provider{
-		cred:   cred,
-		token:  token,
-		region: region,
+		region:    region,
+		apiClient: apiClient,
 	}, nil
 }
 
@@ -62,19 +56,19 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 		switch product {
 		case "balance":
 		case "host":
-			d := &vm.Driver{Cred: p.cred, Token: p.token, Region: p.region}
+			d := &vm.Driver{Client: p.apiClient, Region: p.region}
 			hosts, err := d.GetResource(ctx)
 			schema.AppendAssets(&list, hosts)
 			list.AddError("host", err)
 		case "domain":
 		case "account":
-			d := &iam.Driver{Cred: p.cred, Token: p.token}
+			d := &iam.Driver{Client: p.apiClient}
 			users, err := d.ListUsers(ctx)
 			schema.AppendAssets(&list, users)
 			list.AddError("account", err)
 		case "database":
 		case "bucket":
-			d := &oss.Driver{Cred: p.cred, Token: p.token}
+			d := &oss.Driver{Client: p.apiClient}
 			storages, err := d.ListBuckets(ctx)
 			schema.AppendAssets(&list, storages)
 			list.AddError("bucket", err)
