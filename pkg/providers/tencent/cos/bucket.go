@@ -2,16 +2,22 @@ package cos
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/auth"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/tencentyun/cos-go-sdk-v5"
 )
 
 type Driver struct {
 	Credential auth.Credential
+	Client     *Client
+}
+
+func (d *Driver) client() *Client {
+	if d.Client == nil {
+		d.Client = NewClient(d.Credential)
+	}
+	return d.Client
 }
 
 func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
@@ -22,20 +28,13 @@ func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	default:
 		logger.Info("List COS buckets ...")
 	}
-	client := cos.NewClient(nil, &http.Client{
-		Transport: &cos.AuthorizationTransport{
-			SecretID:     d.Credential.SecretID,
-			SecretKey:    d.Credential.SecretKey,
-			SessionToken: d.Credential.Token,
-		},
-	})
-	buckets, _, err := client.Service.Get(ctx)
+	resp, err := d.client().ListBuckets(ctx)
 	if err != nil {
 		logger.Error("List buckets failed.")
 		return nil, err
 	}
 
-	for _, bucket := range buckets.Buckets {
+	for _, bucket := range resp.Buckets {
 		_bucket := schema.Storage{
 			BucketName: bucket.Name,
 			Region:     bucket.Region,
