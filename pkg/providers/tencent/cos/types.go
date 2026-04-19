@@ -13,6 +13,22 @@ type COSBucket struct {
 	CreationDate string `xml:"CreationDate"`
 }
 
+type ListObjectsResponse struct {
+	XMLName     xml.Name    `xml:"ListBucketResult"`
+	Name        string      `xml:"Name"`
+	Prefix      string      `xml:"Prefix"`
+	Marker      string      `xml:"Marker"`
+	NextMarker  string      `xml:"NextMarker"`
+	MaxKeys     int         `xml:"MaxKeys"`
+	IsTruncated bool        `xml:"IsTruncated"`
+	Objects     []COSObject `xml:"Contents"`
+}
+
+type COSObject struct {
+	Key  string `xml:"Key"`
+	Size int64  `xml:"Size"`
+}
+
 type errorResponse struct {
 	XMLName   xml.Name `xml:"Error"`
 	Code      string   `xml:"Code"`
