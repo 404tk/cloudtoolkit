@@ -99,6 +99,54 @@ func TestDriverGetResourceUsesDefaultRegionWhenEmpty(t *testing.T) {
 	}
 }
 
+func TestDriverGetResourceReturnsPartialRegionErrors(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		values, err := url.ParseQuery(r.URL.RawQuery)
+		if err != nil {
+			t.Fatalf("parse query: %v", err)
+		}
+		switch values.Get("Action") {
+		case "DescribeRegions":
+			_, _ = w.Write(mustJSON(t, api.DescribeRegionsResponse{
+				Result: struct {
+					NextToken string          `json:"NextToken"`
+					Regions   []api.ECSRegion `json:"Regions"`
+				}{
+					Regions: []api.ECSRegion{{RegionID: "cn-beijing"}, {RegionID: "cn-shanghai"}},
+				},
+			}))
+		case "DescribeInstances":
+			switch region := scopeRegion(t, r.Header.Get(api.HeaderAuthorization)); region {
+			case "cn-beijing":
+				_, _ = w.Write(mustJSON(t, describeInstancesWithIDs([]string{"bj-001"}, "")))
+			case "cn-shanghai":
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte(`{"ResponseMetadata":{"RequestId":"req-sh","Error":{"Code":"Forbidden","Message":"denied"}}}`))
+			default:
+				t.Fatalf("unexpected region: %s", region)
+			}
+		default:
+			t.Fatalf("unexpected action: %s", values.Get("Action"))
+		}
+	}))
+	defer server.Close()
+
+	driver := &Driver{
+		Client: newTestClient(server.URL),
+		Region: "all",
+	}
+	got, err := driver.GetResource(context.Background())
+	if len(got) != 1 || got[0].ID != "bj-001" {
+		t.Fatalf("unexpected hosts: %+v", got)
+	}
+	if err == nil {
+		t.Fatal("expected partial region error")
+	}
+	if !strings.Contains(err.Error(), "cn-shanghai") || !strings.Contains(err.Error(), "Forbidden") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func newTestClient(baseURL string) *api.Client {
 	return api.NewClient(
 		auth.New("AKID", "SECRET", ""),

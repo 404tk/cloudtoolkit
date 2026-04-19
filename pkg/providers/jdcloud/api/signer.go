@@ -181,7 +181,7 @@ func canonicalQuery(values url.Values) string {
 	if len(values) == 0 {
 		return ""
 	}
-	return values.Encode()
+	return strings.ReplaceAll(values.Encode(), "+", "%20")
 }
 
 func canonicalURI(path string) string {

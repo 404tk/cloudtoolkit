@@ -34,6 +34,9 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		return list, errors.New("jdcloud vm: nil api client")
 	}
 
+	if d.Region == "all" {
+		logger.Warning("JDCloud region=all falls back to cn-north-1")
+	}
 	region := d.requestRegion()
 
 	got, err := paginate.Fetch[schema.Host, pageCursor](ctx, func(ctx context.Context, cursor pageCursor) (paginate.Page[schema.Host, pageCursor], error) {

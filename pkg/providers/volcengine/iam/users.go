@@ -7,7 +7,6 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/api"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
-	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
@@ -30,7 +29,6 @@ func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 	}
 	region := d.requestRegion()
 	var offset int32 = 0
-	//policy_infos = make(map[string]string)
 	for {
 		resp, err := client.ListUsers(ctx, region, 100, offset)
 		if err != nil {
@@ -55,10 +53,6 @@ func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 					_user.LastLogin = lastLoginDate.String()
 				}
 
-			}
-
-			if utils.ListPolicies {
-				// _user.Policies = listPoliciesForUser(client, _user.UserName)
 			}
 
 			list = append(list, _user)

@@ -51,6 +51,8 @@ func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 		var resp api.DescribeSubUsersResponse
 		err := d.Client.DoJSON(ctx, api.Request{
 			Service: "iam",
+			// IAM is global. An empty region makes the signer fall back to the
+			// jdcloud-api scope expected by this endpoint.
 			Region:  "",
 			Method:  "GET",
 			Version: "v1",
@@ -106,6 +108,8 @@ func (d *Driver) Validator(_ string) bool {
 	var resp api.DescribeSubUsersResponse
 	err := d.Client.DoJSON(context.Background(), api.Request{
 		Service: "iam",
+		// IAM is global. An empty region makes the signer fall back to the
+		// jdcloud-api scope expected by this endpoint.
 		Region:  "",
 		Method:  "GET",
 		Version: "v1",

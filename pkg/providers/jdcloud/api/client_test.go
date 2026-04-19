@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"regexp"
 	"strings"
 	"testing"
@@ -110,6 +111,36 @@ func TestClientDoJSONReturnsAPIErrorFromBody(t *testing.T) {
 	}
 	if apiErr.Code != 40301 || apiErr.RequestID != "req-error" {
 		t.Fatalf("unexpected api error: %+v", apiErr)
+	}
+}
+
+func TestClientDoJSONUsesPercent20InQuery(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.RawQuery; got != "name=foo%20bar" {
+			t.Fatalf("unexpected raw query: %s", got)
+		}
+		_, _ = w.Write([]byte(`{"requestId":"req-query","result":{"subUsers":[],"total":0}}`))
+	}))
+	defer server.Close()
+
+	client := newTestClient(server.URL, "", func() string {
+		return "ebf8b26d-c3be-402f-9f10-f8b6573fd823"
+	})
+
+	query := url.Values{}
+	query.Set("name", "foo bar")
+
+	var resp DescribeSubUsersResponse
+	err := client.DoJSON(context.Background(), Request{
+		Service: "iam",
+		Region:  "",
+		Method:  http.MethodGet,
+		Version: "v1",
+		Path:    "/subUsers",
+		Query:   query,
+	}, &resp)
+	if err != nil {
+		t.Fatalf("DoJSON() error = %v", err)
 	}
 }
 

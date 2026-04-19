@@ -3,6 +3,8 @@ package ecs
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/api"
@@ -35,7 +37,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	}
 	tracker := processbar.NewRegionTracker()
 	defer tracker.Finish()
-	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
+	got, regionErrs := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
 		return paginate.Fetch[schema.Host, string](ctx, func(ctx context.Context, token string) (paginate.Page[schema.Host, string], error) {
 			resp, err := client.DescribeInstances(ctx, r, 100, token)
 			if err != nil {
@@ -68,7 +70,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		})
 	})
 	list = append(list, got...)
-	return list, nil
+	return list, flattenRegionErrors(regionErrs)
 }
 
 func (d *Driver) requireClient() (*api.Client, error) {
@@ -101,4 +103,25 @@ func (d *Driver) requestRegion() string {
 		return api.DefaultRegion
 	}
 	return region
+}
+
+func flattenRegionErrors(errs map[string]error) error {
+	if len(errs) == 0 {
+		return nil
+	}
+	regions := make([]string, 0, len(errs))
+	for region := range errs {
+		regions = append(regions, region)
+	}
+	sort.Strings(regions)
+	parts := make([]string, 0, len(regions))
+	for _, region := range regions {
+		if err := errs[region]; err != nil {
+			parts = append(parts, fmt.Sprintf("%s: %v", region, err))
+		}
+	}
+	if len(parts) == 0 {
+		return nil
+	}
+	return fmt.Errorf("partial region errors: %s", strings.Join(parts, "; "))
 }
