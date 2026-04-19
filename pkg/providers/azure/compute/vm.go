@@ -2,20 +2,19 @@ package compute
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
 
+	azapi "github.com/404tk/cloudtoolkit/pkg/providers/azure/api"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/Azure/azure-sdk-for-go/profiles/latest/compute/mgmt/compute"
-	"github.com/Azure/azure-sdk-for-go/profiles/latest/network/mgmt/network"
-
-	"github.com/Azure/azure-sdk-for-go/profiles/latest/resources/mgmt/resources"
-	"github.com/Azure/go-autorest/autorest"
-	"github.com/Azure/go-autorest/autorest/azure"
 )
 
 type Driver struct {
+	Client          *azapi.Client
 	SubscriptionIDs []string
-	Authorizer      autorest.Authorizer
 }
 
 // GetResource returns all the resources in the store for a provider.
@@ -23,119 +22,150 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := []schema.Host{}
 	logger.Info("List VM ...")
 
-	groups_map, err := fetchResouceGroups(ctx, d)
+	groupsMap, err := fetchResourceGroups(ctx, d)
 	if err != nil {
-		logger.Error("Fetch resouce groups failed.")
+		logger.Error("Fetch resource groups failed.")
 		return list, err
 	}
 
-	for subscription, groups := range groups_map {
+	for subscription, groups := range groupsMap {
 		for _, group := range groups {
-			vmList, err := fetchVMList(ctx, group, subscription, d.Authorizer)
+			vmList, err := fetchVMList(ctx, group, subscription, d.Client)
 			if err != nil {
 				logger.Error("Fetch VM list failed.")
 				return nil, err
 			}
 
 			for _, vm := range vmList {
-				_host := schema.Host{
-					State:    vm.Status,
-					HostName: *vm.Name,
-					Region:   *vm.Location,
+				host := schema.Host{
+					ID:       vm.ID,
+					State:    vmState(vm),
+					HostName: vm.Name,
+					Region:   vm.Location,
 				}
-				nics := *vm.NetworkProfile.NetworkInterfaces
-				for _, nic := range nics {
-					res, err := azure.ParseResourceID(*nic.ID)
-					if err != nil {
-						logger.Error("Parse resource ID failed.")
-						return list, err
-					}
+				if vm.Properties.NetworkProfile == nil {
+					list = append(list, host)
+					continue
+				}
 
-					nicRes, err := fetchInterfacesList(ctx, group, res.ResourceName, subscription, d.Authorizer)
+				for _, nic := range vm.Properties.NetworkProfile.NetworkInterfaces {
+					nicRes, err := fetchInterfaces(ctx, nic.ID, d.Client)
 					if err != nil {
 						logger.Error("Fetch interfaces list failed.")
 						return list, err
 					}
-					ipConfigs := *nicRes.IPConfigurations
-					for _, ipConfig := range ipConfigs {
-						ipConfig := *ipConfig.InterfaceIPConfigurationPropertiesFormat
-						privateIP := *ipConfig.PrivateIPAddress
-						_host.PrivateIpv4 = privateIP
-
-						if ipConfig.PublicIPAddress == nil {
+					for _, ipConfig := range nicRes.Properties.IPConfigurations {
+						privateIP := strings.TrimSpace(ipConfig.Properties.PrivateIPAddress)
+						if privateIP != "" {
+							host.PrivateIpv4 = privateIP
+						}
+						if ipConfig.Properties.PublicIPAddress == nil || strings.TrimSpace(ipConfig.Properties.PublicIPAddress.ID) == "" {
 							continue
 						}
 
-						res, err := azure.ParseResourceID(*ipConfig.PublicIPAddress.ID)
+						publicIP, err := fetchPublicIP(ctx, ipConfig.Properties.PublicIPAddress.ID, d.Client)
 						if err != nil {
 							continue
 						}
-
-						publicIP, err := fetchPublicIP(ctx, group, res.ResourceName, subscription, d.Authorizer)
-						if err != nil {
-							continue
-						}
-
-						_host.PublicIPv4 = *publicIP.IPAddress
-						_host.PrivateIpv4 = privateIP
-						if publicIP.IPAddress != nil {
-							_host.Public = true
+						if address := strings.TrimSpace(publicIP.Properties.IPAddress); address != "" {
+							host.PublicIPv4 = address
+							host.Public = true
+							if privateIP != "" {
+								host.PrivateIpv4 = privateIP
+							}
 							break
 						}
 					}
+					if host.Public {
+						break
+					}
 				}
 
-				list = append(list, _host)
+				list = append(list, host)
 			}
 		}
 	}
 	return list, nil
 }
 
-func fetchResouceGroups(ctx context.Context, sess *Driver) (map[string][]string, error) {
-	resGrp := make(map[string][]string)
+func fetchResourceGroups(ctx context.Context, sess *Driver) (map[string][]string, error) {
+	resGroups := make(map[string][]string, len(sess.SubscriptionIDs))
 	for _, subscription := range sess.SubscriptionIDs {
-		grClient := resources.NewGroupsClient(subscription)
-		grClient.Authorizer = sess.Authorizer
-		resGrp[subscription] = []string{}
-
-		list, err := grClient.List(ctx, "", nil)
+		pager := azapi.NewPager[azapi.ResourceGroup](sess.Client, azapi.Request{
+			Method: http.MethodGet,
+			Path:   fmt.Sprintf("/subscriptions/%s/resourceGroups", subscription),
+			Query:  url.Values{"api-version": {azapi.ResourcesAPIVersion}},
+			Idempotent: true,
+		})
+		items, err := pager.All(ctx)
 		if err != nil {
-			return resGrp, err
+			return resGroups, err
 		}
-		for _, v := range list.Values() {
-			resGrp[subscription] = append(resGrp[subscription], *v.Name)
+		for _, item := range items {
+			if item.Name != "" {
+				resGroups[subscription] = append(resGroups[subscription], item.Name)
+			}
 		}
 	}
-	return resGrp, nil
+	return resGroups, nil
 }
 
-func fetchVMList(ctx context.Context, group, subscription string, auth autorest.Authorizer) ([]compute.VirtualMachine, error) {
-	vmClient := compute.NewVirtualMachinesClient(subscription)
-	vmClient.Authorizer = auth
-	vm, err := vmClient.List(ctx, group, "")
+func fetchVMList(ctx context.Context, group, subscription string, client *azapi.Client) ([]azapi.VirtualMachine, error) {
+	pager := azapi.NewPager[azapi.VirtualMachine](client, azapi.Request{
+		Method: http.MethodGet,
+		Path:   fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/virtualMachines", subscription, group),
+		Query:  url.Values{"api-version": {azapi.ComputeAPIVersion}},
+		Idempotent: true,
+	})
+	return pager.All(ctx)
+}
+
+func fetchInterfaces(ctx context.Context, nicID string, client *azapi.Client) (azapi.NetworkInterface, error) {
+	res, err := azapi.ParseResourceID(nicID)
 	if err != nil {
-		return nil, err
+		logger.Error("Parse resource ID failed.")
+		return azapi.NetworkInterface{}, err
 	}
 
-	return vm.Values(), err
+	var nic azapi.NetworkInterface
+	err = client.Do(ctx, azapi.Request{
+		Method: http.MethodGet,
+		Path: fmt.Sprintf(
+			"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/networkInterfaces/%s",
+			res.SubscriptionID,
+			res.ResourceGroup,
+			res.ResourceName,
+		),
+		Query:      url.Values{"api-version": {azapi.NetworkAPIVersion}},
+		Idempotent: true,
+	}, &nic)
+	return nic, err
 }
 
-func fetchInterfacesList(ctx context.Context, group, nic, subscription string, auth autorest.Authorizer) (network.Interface, error) {
-	nicClient := network.NewInterfacesClient(subscription)
-	nicClient.Authorizer = auth
-	nicRes, err := nicClient.Get(ctx, group, nic, "")
-	return nicRes, err
-}
-
-func fetchPublicIP(ctx context.Context, group, publicIP, subscription string, auth autorest.Authorizer) (IP network.PublicIPAddress, err error) {
-	ipClient := network.NewPublicIPAddressesClient(subscription)
-	ipClient.Authorizer = auth
-
-	IP, err = ipClient.Get(ctx, group, publicIP, "")
+func fetchPublicIP(ctx context.Context, publicIPID string, client *azapi.Client) (azapi.PublicIPAddress, error) {
+	res, err := azapi.ParseResourceID(publicIPID)
 	if err != nil {
-		return network.PublicIPAddress{}, err
+		return azapi.PublicIPAddress{}, err
 	}
 
-	return IP, err
+	var ip azapi.PublicIPAddress
+	err = client.Do(ctx, azapi.Request{
+		Method: http.MethodGet,
+		Path: fmt.Sprintf(
+			"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/publicIPAddresses/%s",
+			res.SubscriptionID,
+			res.ResourceGroup,
+			res.ResourceName,
+		),
+		Query:      url.Values{"api-version": {azapi.NetworkAPIVersion}},
+		Idempotent: true,
+	}, &ip)
+	return ip, err
+}
+
+func vmState(vm azapi.VirtualMachine) string {
+	if state := strings.TrimSpace(vm.Status); state != "" {
+		return state
+	}
+	return strings.TrimSpace(vm.Properties.ProvisioningState)
 }

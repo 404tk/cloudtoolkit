@@ -2,24 +2,37 @@ package storage
 
 import (
 	"context"
+	"fmt"
+	"net/http"
+	"net/url"
 
+	azapi "github.com/404tk/cloudtoolkit/pkg/providers/azure/api"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/Azure/azure-sdk-for-go/profiles/latest/storage/mgmt/storage"
 )
 
 func (d *Driver) GetBlobService(ctx context.Context, subscription, groupName, accountName string) []string {
-	var blobs []string
-	client := storage.NewBlobServicesClient(subscription)
-	client.Authorizer = d.Authorizer
-
-	resp, err := client.List(context.Background(), groupName, accountName)
+	pager := azapi.NewPager[azapi.BlobService](d.Client, azapi.Request{
+		Method: http.MethodGet,
+		Path: fmt.Sprintf(
+			"/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Storage/storageAccounts/%s/blobServices",
+			subscription,
+			groupName,
+			accountName,
+		),
+		Query:      url.Values{"api-version": {azapi.StorageAPIVersion}},
+		Idempotent: true,
+	})
+	items, err := pager.All(ctx)
 	if err != nil {
 		logger.Error("List blob services failed:", err.Error())
-		return blobs
-	}
-	for _, blob := range *resp.Value {
-		blobs = append(blobs, *blob.Name)
+		return nil
 	}
 
+	blobs := make([]string, 0, len(items))
+	for _, blob := range items {
+		if blob.Name != "" {
+			blobs = append(blobs, blob.Name)
+		}
+	}
 	return blobs
 }
