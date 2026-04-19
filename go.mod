@@ -5,7 +5,6 @@ go 1.24
 require (
 	github.com/404tk/go-prompt v0.0.1
 	github.com/404tk/table v0.0.4
-	github.com/aliyun/aliyun-oss-go-sdk v3.0.2+incompatible
 	github.com/aws/aws-sdk-go-v2 v1.41.6
 	github.com/jdcloud-api/jdcloud-sdk-go v1.64.0
 	github.com/volcengine/volcengine-go-sdk v1.0.168
@@ -30,7 +29,6 @@ require (
 	github.com/volcengine/volc-sdk-golang v1.0.23 // indirect
 	golang.org/x/net v0.15.0 // indirect
 	golang.org/x/sys v0.15.0 // indirect
-	golang.org/x/time v0.1.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect

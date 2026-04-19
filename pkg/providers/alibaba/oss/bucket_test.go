@@ -6,9 +6,10 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/api"
 	aliauth "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/auth"
-	aliyunoss "github.com/aliyun/aliyun-oss-go-sdk/oss"
 )
 
 func TestNewClientUsesNormalizedEndpointAndToken(t *testing.T) {
@@ -23,11 +24,12 @@ func TestNewClientUsesNormalizedEndpointAndToken(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewClient() error = %v", err)
 	}
-	if client.Config.Endpoint != "https://oss-cn-hangzhou.aliyuncs.com" {
-		t.Fatalf("unexpected endpoint: %s", client.Config.Endpoint)
+	u, err := client.serviceURL(driver.Region)
+	if err != nil {
+		t.Fatalf("serviceURL() error = %v", err)
 	}
-	if client.Config.SecurityToken != "sts-token" {
-		t.Fatalf("unexpected security token: %s", client.Config.SecurityToken)
+	if u.String() != "https://oss-cn-hangzhou.aliyuncs.com/" {
+		t.Fatalf("unexpected endpoint: %s", u.String())
 	}
 }
 
@@ -50,8 +52,8 @@ func TestGetBucketsMapsResponseAndUsesToken(t *testing.T) {
 	driver := Driver{
 		Cred:   aliauth.New("ak", "sk", "sts-token"),
 		Region: "cn-shanghai",
-		clientOptions: []aliyunoss.ClientOption{
-			aliyunoss.HTTPClient(&http.Client{
+		clientOptions: []Option{
+			WithHTTPClient(&http.Client{
 				Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
 					if req.Method != http.MethodGet {
 						t.Fatalf("unexpected method: %s", req.Method)
@@ -59,8 +61,14 @@ func TestGetBucketsMapsResponseAndUsesToken(t *testing.T) {
 					if req.URL.Host != "oss-cn-shanghai.aliyuncs.com" {
 						t.Fatalf("unexpected host: %s", req.URL.Host)
 					}
+					if got := req.URL.Query().Get("max-keys"); got != "1000" {
+						t.Fatalf("unexpected max-keys query: %s", got)
+					}
 					if got := req.Header.Get("X-Oss-Security-Token"); got != "sts-token" {
 						t.Fatalf("unexpected security token header: %s", got)
+					}
+					if got := req.Header.Get("Authorization"); got == "" || !strings.HasPrefix(got, "OSS ak:") {
+						t.Fatalf("unexpected authorization: %s", got)
 					}
 					body := `<?xml version="1.0" encoding="UTF-8"?>
 <ListAllMyBucketsResult>
@@ -79,9 +87,12 @@ func TestGetBucketsMapsResponseAndUsesToken(t *testing.T) {
 						StatusCode: http.StatusOK,
 						Header:     http.Header{"Content-Type": []string{"application/xml"}},
 						Body:       io.NopCloser(strings.NewReader(body)),
+						Request:    req,
 					}, nil
 				}),
 			}),
+			WithRetryPolicy(api.RetryPolicy{MaxAttempts: 1}),
+			WithClock(func() time.Time { return time.Date(2026, 4, 19, 12, 0, 0, 0, time.UTC) }),
 		},
 	}
 

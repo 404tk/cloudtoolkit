@@ -3,27 +3,21 @@ package oss
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
-	"github.com/aliyun/aliyun-oss-go-sdk/oss"
 )
 
 func (d *Driver) ListObjects(ctx context.Context, buckets map[string]string) {
+	client, err := d.NewClient()
+	if err != nil {
+		logger.Error(err)
+		return
+	}
 	for b, r := range buckets {
-		d.Region = r
-		client, err := d.NewClient()
-		if err != nil {
-			logger.Error(err)
-			return
-		}
-		bucket, err := client.Bucket(b)
-		if err != nil {
-			logger.Error(err)
-			return
-		}
-		resp, err := bucket.ListObjectsV2(oss.MaxKeys(100))
+		resp, err := client.ListObjectsV2(ctx, b, normalizeBucketRegion(r), "", 100)
 		if err != nil {
 			msg := fmt.Sprintf("List Objects in %s failed: %s", b, err.Error())
 			logger.Error(msg)
@@ -66,38 +60,52 @@ func (d *Driver) TotalObjects(ctx context.Context, buckets map[string]string) {
 	tracker := processbar.NewCountTracker()
 	defer tracker.Finish()
 	for b, r := range buckets {
-		var token string
-		count := 0
-		isTruncated := true
-		for isTruncated {
-			d.Region = r
-			client, err := d.NewClient()
-			if err != nil {
-				logger.Error(err)
-				return
-			}
-			bucket, err := client.Bucket(b)
-			if err != nil {
-				logger.Error(err)
-				return
-			}
-			resp, err := bucket.ListObjectsV2(oss.MaxKeys(1000), oss.ContinuationToken(token))
-			if err != nil {
-				logger.Error(fmt.Sprintf("List Objects in %s failed: %s", b, err))
-				return
-			}
-
-			isTruncated = resp.IsTruncated
-			token = resp.NextContinuationToken
-			count += len(resp.Objects)
-			select {
-			case <-ctx.Done():
-				return
-			default:
-				tracker.Update(b, count)
-			}
+		count, err := d.countBucketObjects(ctx, b, normalizeBucketRegion(r), tracker)
+		if err != nil {
+			logger.Error(fmt.Sprintf("List Objects in %s failed: %s", b, err))
+			return
 		}
 		fmt.Printf("\r")
 		logger.Warning(fmt.Sprintf("%s has %d objects.", b, count))
 	}
+}
+
+func (d *Driver) countBucketObjects(ctx context.Context, bucket, region string, tracker *processbar.CountTracker) (int, error) {
+	client, err := d.NewClient()
+	if err != nil {
+		return 0, err
+	}
+
+	token := ""
+	count := 0
+	for {
+		resp, err := client.ListObjectsV2(ctx, bucket, region, token, 1000)
+		if err != nil {
+			return 0, err
+		}
+		count += len(resp.Objects)
+		select {
+		case <-ctx.Done():
+			return count, nil
+		default:
+			if tracker != nil {
+				tracker.Update(bucket, count)
+			}
+		}
+		if !resp.IsTruncated {
+			return count, nil
+		}
+		token = strings.TrimSpace(resp.NextContinuationToken)
+		if token == "" {
+			return 0, fmt.Errorf("alibaba oss: missing next continuation token for bucket %s", bucket)
+		}
+	}
+}
+
+func normalizeBucketRegion(region string) string {
+	region = strings.TrimSpace(region)
+	if region == "" || region == "all" {
+		return ""
+	}
+	return region
 }

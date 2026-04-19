@@ -148,33 +148,17 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
 	ossdrvier := &_oss.Driver{Cred: p.apiCred, Region: p.region}
 	switch action {
 	case "list":
-		var infos = make(map[string]string)
-		if bucketName == "all" {
-			buckets, err := ossdrvier.GetBuckets(context.Background())
-			if err != nil {
-				logger.Error("List buckets failed:", err)
-				return
-			}
-			for _, b := range buckets {
-				infos[b.BucketName] = b.Region
-			}
-		} else {
-			infos[bucketName] = p.region
+		infos, err := p.bucketInfos(context.Background(), ossdrvier, bucketName)
+		if err != nil {
+			logger.Error("List buckets failed:", err)
+			return
 		}
 		ossdrvier.ListObjects(ctx, infos)
 	case "total":
-		var infos = make(map[string]string)
-		if bucketName == "all" {
-			buckets, err := ossdrvier.GetBuckets(context.Background())
-			if err != nil {
-				logger.Error("List buckets failed:", err)
-				return
-			}
-			for _, b := range buckets {
-				infos[b.BucketName] = b.Region
-			}
-		} else {
-			infos[bucketName] = p.region
+		infos, err := p.bucketInfos(context.Background(), ossdrvier, bucketName)
+		if err != nil {
+			logger.Error("List buckets failed:", err)
+			return
 		}
 		ossdrvier.TotalObjects(ctx, infos)
 	default:
@@ -285,4 +269,41 @@ func (p *Provider) lookupDatabase(instanceID string) (schema.Database, bool) {
 		}
 	}
 	return schema.Database{}, false
+}
+
+func (p *Provider) bucketInfos(ctx context.Context, driver *_oss.Driver, bucketName string) (map[string]string, error) {
+	infos := make(map[string]string)
+	bucketName = strings.TrimSpace(bucketName)
+	region := strings.TrimSpace(p.region)
+	switch {
+	case bucketName == "":
+		return nil, fmt.Errorf("empty bucket name")
+	case bucketName == "all":
+		buckets, err := driver.GetBuckets(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, bucket := range buckets {
+			infos[bucket.BucketName] = bucket.Region
+		}
+		if len(infos) == 0 {
+			return nil, fmt.Errorf("no buckets found")
+		}
+		return infos, nil
+	case region != "" && region != "all":
+		infos[bucketName] = region
+		return infos, nil
+	default:
+		buckets, err := driver.GetBuckets(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, bucket := range buckets {
+			if bucket.BucketName == bucketName {
+				infos[bucket.BucketName] = bucket.Region
+				return infos, nil
+			}
+		}
+		return nil, fmt.Errorf("bucket %s region not found; set region explicitly or use `list all` first", bucketName)
+	}
 }
