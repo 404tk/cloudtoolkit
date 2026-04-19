@@ -5,24 +5,15 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/api"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/volcengine/volcengine-go-sdk/service/iam"
-	"github.com/volcengine/volcengine-go-sdk/volcengine"
-	"github.com/volcengine/volcengine-go-sdk/volcengine/session"
 )
 
 type Driver struct {
-	Conf *volcengine.Config
-}
-
-func (d *Driver) NewClient() (*iam.IAM, error) {
-	sess, err := session.NewSession(d.Conf.WithRegion("cn-beijing"))
-	if err != nil {
-		return nil, err
-	}
-	return iam.New(sess), nil
+	Client *api.Client
+	Region string
 }
 
 func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
@@ -33,36 +24,32 @@ func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 	default:
 		logger.Info("List IAM users ...")
 	}
-	svc, err := d.NewClient()
+	client, err := d.requireClient()
 	if err != nil {
 		return list, err
 	}
+	region := d.requestRegion()
 	var offset int32 = 0
 	//policy_infos = make(map[string]string)
 	for {
-		listUsersInput := &iam.ListUsersInput{
-			Limit:  volcengine.Int32(100),
-			Offset: volcengine.Int32(offset),
-		}
-		resp, err := svc.ListUsers(listUsersInput)
+		resp, err := client.ListUsers(ctx, region, 100, offset)
 		if err != nil {
 			logger.Error("List users failed.")
 			return list, err
 		}
 
-		for _, user := range resp.UserMetadata {
+		for _, user := range resp.Result.UserMetadata {
 			_user := schema.User{
-				UserName: volcengine.StringValue(user.UserName),
-				UserId:   fmt.Sprint(*user.AccountId),
+				UserName: user.UserName,
+				UserId:   fmt.Sprint(user.AccountID),
 			}
-			date, _ := time.Parse("20060102T150405Z", volcengine.StringValue(user.CreateDate))
+			date, _ := time.Parse("20060102T150405Z", user.CreateDate)
 			_user.CreateTime = date.String()
 
-			input := &iam.GetLoginProfileInput{UserName: user.UserName}
-			lresp, err := svc.GetLoginProfile(input)
+			lresp, err := client.GetLoginProfile(ctx, region, user.UserName)
 			if err == nil {
 				_user.EnableLogin = true
-				ldate := volcengine.StringValue(lresp.LoginProfile.LastLoginDate)
+				ldate := lresp.Result.LoginProfile.LastLoginDate
 				if ldate != "" && ldate != "19700101T000000Z" {
 					lastLoginDate, _ := time.Parse("20060102T150405Z", ldate)
 					_user.LastLogin = lastLoginDate.String()
@@ -82,7 +69,7 @@ func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 				continue
 			}
 		}
-		if len(resp.UserMetadata) < 100 || *resp.Total == offset {
+		if len(resp.Result.UserMetadata) < 100 || resp.Result.Total == offset {
 			break
 		}
 		offset += 100

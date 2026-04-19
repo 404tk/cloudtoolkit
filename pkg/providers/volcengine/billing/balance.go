@@ -1,21 +1,35 @@
 package billing
 
 import (
+	"context"
+
+	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/api"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/volcengine/volcengine-go-sdk/service/billing"
-	"github.com/volcengine/volcengine-go-sdk/volcengine"
-	"github.com/volcengine/volcengine-go-sdk/volcengine/session"
 )
 
-func QueryAccountBalance(conf *volcengine.Config) {
-	sess, err := session.NewSession(conf.WithRegion("cn-beijing"))
-	if err != nil {
+type Driver struct {
+	Client *api.Client
+	Region string
+}
+
+func (d *Driver) QueryAccountBalance(ctx context.Context) {
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
+	if d.Client == nil {
 		return
 	}
-	svc := billing.New(sess)
-	queryBalanceAcctInput := &billing.QueryBalanceAcctInput{}
-	resp, err := svc.QueryBalanceAcct(queryBalanceAcctInput)
-	if err == nil {
-		logger.Warning("Available cash amount:", *resp.AvailableBalance)
+	resp, err := d.Client.QueryBalanceAcct(ctx, d.requestRegion())
+	if err == nil && resp.Result.AvailableBalance != "" {
+		logger.Warning("Available cash amount:", resp.Result.AvailableBalance)
 	}
+}
+
+func (d *Driver) requestRegion() string {
+	if d.Region == "" || d.Region == "all" {
+		return api.DefaultRegion
+	}
+	return d.Region
 }

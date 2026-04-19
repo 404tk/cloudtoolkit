@@ -2,8 +2,9 @@ package volcengine
 
 import (
 	"context"
-	"fmt"
 
+	_api "github.com/404tk/cloudtoolkit/pkg/providers/volcengine/api"
+	_auth "github.com/404tk/cloudtoolkit/pkg/providers/volcengine/auth"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/billing"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/ecs"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/iam"
@@ -11,65 +12,36 @@ import (
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/volcengine/volcengine-go-sdk/service/iam20210801"
-	"github.com/volcengine/volcengine-go-sdk/volcengine"
-	"github.com/volcengine/volcengine-go-sdk/volcengine/credentials"
-	"github.com/volcengine/volcengine-go-sdk/volcengine/session"
 )
 
 type Provider struct {
-	conf   *volcengine.Config
-	region string
+	region    string
+	apiClient *_api.Client
 }
 
-// New creates a new provider client for alibaba API
+// New creates a new provider client for volcengine API.
 func New(options schema.Options) (*Provider, error) {
-	accessKey, ok := options.GetMetadata(utils.AccessKey)
-	if !ok {
-		return nil, &schema.ErrNoSuchKey{Name: utils.AccessKey}
-	}
-	secretKey, ok := options.GetMetadata(utils.SecretKey)
-	if !ok {
-		return nil, &schema.ErrNoSuchKey{Name: utils.SecretKey}
+	credential, err := _auth.FromOptions(options)
+	if err != nil {
+		return nil, err
 	}
 	region, _ := options.GetMetadata(utils.Region)
-	token, _ := options.GetMetadata(utils.SecurityToken)
-	cred := credentials.NewStaticCredentials(accessKey, secretKey, token)
-	config := volcengine.NewConfig().WithCredentials(cred)
+	apiClient := _api.NewClient(credential)
 
 	payload, _ := options.GetMetadata(utils.Payload)
 	if payload == "cloudlist" {
-		name, err := getProject(region, config)
+		name, err := (&iam.Driver{Client: apiClient, Region: region}).GetProject(context.Background())
 		if err != nil {
 			return nil, err
 		}
+		logger.Warning("Current project:", name)
 		cache.Cfg.CredInsert(name, options)
 	}
 
 	return &Provider{
-		conf:   config,
-		region: region,
+		region:    region,
+		apiClient: apiClient,
 	}, nil
-}
-
-func getProject(r string, conf *volcengine.Config) (string, error) {
-	if r == "all" {
-		conf = conf.WithRegion("cn-beijing")
-	} else {
-		conf = conf.WithRegion(r)
-	}
-	sess, err := session.NewSession(conf)
-	if err != nil {
-		return "", err
-	}
-	svc := iam20210801.New(sess)
-	out, err := svc.ListProjects(&iam20210801.ListProjectsInput{})
-	if err != nil {
-		return "", err
-	}
-	name := fmt.Sprintf("%s(%d)", *out.Projects[0].ProjectName, *out.Projects[0].AccountID)
-	logger.Warning("Current project:", name)
-	return name, nil
 }
 
 // Name returns the name of the provider
@@ -84,15 +56,15 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	for _, product := range utils.Cloudlist {
 		switch product {
 		case "balance":
-			billing.QueryAccountBalance(p.conf)
+			(&billing.Driver{Client: p.apiClient, Region: p.region}).QueryAccountBalance(ctx)
 		case "host":
-			d := &ecs.Driver{Conf: p.conf, Region: p.region}
+			d := &ecs.Driver{Client: p.apiClient, Region: p.region}
 			hosts, err := d.GetResource(ctx)
 			schema.AppendAssets(&list, hosts)
 			list.AddError("host", err)
 		case "domain":
 		case "account":
-			d := &iam.Driver{Conf: p.conf}
+			d := &iam.Driver{Client: p.apiClient, Region: p.region}
 			users, err := d.ListUsers(ctx)
 			schema.AppendAssets(&list, users)
 			list.AddError("account", err)

@@ -2,99 +2,103 @@ package ecs
 
 import (
 	"context"
+	"errors"
+	"strings"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/api"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/paginate"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
-	"github.com/volcengine/volcengine-go-sdk/service/ecs"
-	"github.com/volcengine/volcengine-go-sdk/volcengine"
-	"github.com/volcengine/volcengine-go-sdk/volcengine/session"
 )
 
 type Driver struct {
-	Conf   *volcengine.Config
+	Client *api.Client
 	Region string
 }
 
-func (d *Driver) NewClient(region string) (*ecs.ECS, error) {
-	if region == "all" || region == "" {
-		region = "cn-beijing"
-	}
-	sess, err := session.NewSession(d.Conf.Copy().WithRegion(region))
-	if err != nil {
-		return nil, err
-	}
-	return ecs.New(sess), nil
-}
+var errNilAPIClient = errors.New("volcengine ecs: nil api client")
 
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := []schema.Host{}
 	logger.Info("List ECS instances ...")
-	svc, err := d.NewClient(d.Region)
+	client, err := d.requireClient()
 	if err != nil {
 		return list, err
 	}
 
-	var regions []string
-	if d.Region == "all" {
-		input := &ecs.DescribeRegionsInput{MaxResults: volcengine.Int32(100)}
-		resp, err := svc.DescribeRegions(input)
-		if err != nil {
-			logger.Error("List regions failed.")
-			return list, err
-		}
-		for _, r := range resp.Regions {
-			regions = append(regions, *r.RegionId)
-		}
-	} else {
-		regions = append(regions, d.Region)
+	regions, err := d.getRegions(ctx, client)
+	if err != nil {
+		logger.Error("List regions failed.")
+		return list, err
 	}
 	tracker := processbar.NewRegionTracker()
 	defer tracker.Finish()
 	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
-		svc, err := d.NewClient(r)
-		if err != nil {
-			return nil, err
-		}
-		return paginate.Fetch(ctx, func(ctx context.Context, token *string) (paginate.Page[schema.Host, *string], error) {
-			if token == nil {
-				token = volcengine.String("")
-			}
-			resp, err := svc.DescribeInstances(&ecs.DescribeInstancesInput{
-				MaxResults: volcengine.Int32(100),
-				NextToken:  token,
-			})
+		return paginate.Fetch[schema.Host, string](ctx, func(ctx context.Context, token string) (paginate.Page[schema.Host, string], error) {
+			resp, err := client.DescribeInstances(ctx, r, 100, token)
 			if err != nil {
-				return paginate.Page[schema.Host, *string]{}, err
+				return paginate.Page[schema.Host, string]{}, err
 			}
-			items := make([]schema.Host, 0, len(resp.Instances))
-			for _, i := range resp.Instances {
-				ipv4 := volcengine.StringValue(i.EipAddress.IpAddress)
+			items := make([]schema.Host, 0, len(resp.Result.Instances))
+			for _, i := range resp.Result.Instances {
+				ipv4 := i.EipAddress.IPAddress
 				var privateIPv4 string
 				if len(i.NetworkInterfaces) > 0 {
-					privateIPv4 = volcengine.StringValue(i.NetworkInterfaces[0].PrimaryIpAddress)
+					privateIPv4 = i.NetworkInterfaces[0].PrimaryIPAddress
 				}
 				items = append(items, schema.Host{
-					HostName:    volcengine.StringValue(i.Hostname),
-					ID:          volcengine.StringValue(i.InstanceId),
-					State:       volcengine.StringValue(i.Status),
+					HostName:    i.Hostname,
+					ID:          i.InstanceID,
+					State:       i.Status,
 					PublicIPv4:  ipv4,
 					PrivateIpv4: privateIPv4,
-					OSType:      volcengine.StringValue(i.OsType),
+					OSType:      i.OSType,
 					Public:      ipv4 != "",
 					Region:      r,
 				})
 			}
-			done := len(resp.Instances) < 100 || volcengine.StringValue(resp.NextToken) == ""
-			return paginate.Page[schema.Host, *string]{
+			done := len(resp.Result.Instances) < 100 || strings.TrimSpace(resp.Result.NextToken) == ""
+			return paginate.Page[schema.Host, string]{
 				Items: items,
-				Next:  resp.NextToken,
+				Next:  resp.Result.NextToken,
 				Done:  done,
 			}, nil
 		})
 	})
 	list = append(list, got...)
 	return list, nil
+}
+
+func (d *Driver) requireClient() (*api.Client, error) {
+	if d.Client == nil {
+		return nil, errNilAPIClient
+	}
+	return d.Client, nil
+}
+
+func (d *Driver) getRegions(ctx context.Context, client *api.Client) ([]string, error) {
+	if d.Region != "all" {
+		return []string{d.requestRegion()}, nil
+	}
+	resp, err := client.DescribeRegions(ctx, d.requestRegion(), 100)
+	if err != nil {
+		return nil, err
+	}
+	regions := make([]string, 0, len(resp.Result.Regions))
+	for _, region := range resp.Result.Regions {
+		if id := strings.TrimSpace(region.RegionID); id != "" {
+			regions = append(regions, id)
+		}
+	}
+	return regions, nil
+}
+
+func (d *Driver) requestRegion() string {
+	region := strings.TrimSpace(d.Region)
+	if region == "" || region == "all" {
+		return api.DefaultRegion
+	}
+	return region
 }
