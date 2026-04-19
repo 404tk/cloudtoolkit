@@ -2,21 +2,13 @@ package iam
 
 import (
 	"context"
+	"net/http"
+	"net/url"
 
-	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/endpoint"
+	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/api"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
-	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/global"
-	iam "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3"
-	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3/model"
 )
-
-type Driver struct {
-	Auth     *basic.Credentials
-	Username string
-	Password string
-}
 
 func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 	list := []schema.User{}
@@ -26,25 +18,31 @@ func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 	default:
 		logger.Info("List IAM users ...")
 	}
-	auth := global.NewCredentialsBuilder().
-		WithAk(d.Auth.AK).
-		WithSk(d.Auth.SK).
-		Build()
-	client := iam.NewIamClient(iam.IamClientBuilder().
-		WithEndpoint(endpoint.For("iam", "cn-north-1", false)).
-		WithCredential(auth).
-		Build())
-	keystoneListUsersRequest := &model.KeystoneListUsersRequest{}
-	keystoneListUsersResponse, err := client.KeystoneListUsers(keystoneListUsersRequest)
+	region, err := d.requestRegion()
+	if err != nil {
+		logger.Error("List users failed.")
+		return list, err
+	}
+	query := url.Values{}
+	var resp api.ListUsersV5Response
+	err = d.client().DoJSON(ctx, api.Request{
+		Service:    "iam",
+		Region:     region,
+		Intl:       d.Cred.Intl,
+		Method:     http.MethodGet,
+		Path:       "/v5/users",
+		Query:      query,
+		Idempotent: true,
+	}, &resp)
 	if err != nil {
 		logger.Error("List users failed.")
 		return list, err
 	}
 
-	for _, user := range *keystoneListUsersResponse.Users {
+	for _, user := range resp.Users {
 		_user := schema.User{
-			UserName:    user.Name,
-			UserId:      user.Id,
+			UserName:    user.UserName,
+			UserId:      user.UserID,
 			EnableLogin: user.Enabled,
 		}
 		list = append(list, _user)

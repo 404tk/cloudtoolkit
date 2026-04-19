@@ -3,20 +3,32 @@ package rds
 import (
 	"context"
 	"fmt"
-	"reflect"
+	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 
-	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/endpoint"
+	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/api"
+	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/auth"
+	"github.com/404tk/cloudtoolkit/pkg/runtime/paginate"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
-	rds "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/rds/v3"
-	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/rds/v3/model"
+	"github.com/404tk/cloudtoolkit/utils/processbar"
 )
 
 type Driver struct {
-	Auth    *basic.Credentials
-	Regions []string
+	Cred      auth.Credential
+	Regions   []string
+	DomainID  string
+	Client    *api.Client
+	projectID map[string]string
+}
+
+func (d *Driver) client() *api.Client {
+	if d.Client == nil {
+		d.Client = api.NewClient(d.Cred)
+	}
+	return d.Client
 }
 
 func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
@@ -27,42 +39,22 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 	default:
 		logger.Info("List RDS instances ...")
 	}
+	tracker := processbar.NewRegionTracker()
+	defer tracker.Finish()
 	var regionErrs []string
 	for _, r := range d.Regions {
-		client := newClient(r, d.Auth)
-		request := &model.ListInstancesRequest{}
-		resp, err := client.ListInstances(request)
+		instances, err := d.listRegionDatabases(ctx, r)
 		if err != nil {
+			tracker.Update(r, 0)
+			if api.IsProjectNotFound(err) {
+				logger.Warning("Skip RDS region", r, ":", err.Error())
+				continue
+			}
 			regionErrs = append(regionErrs, fmt.Sprintf("%s: %s", r, err))
 			continue
 		}
-
-		for _, instance := range *resp.Instances {
-			i := reflect.ValueOf(instance.Datastore.Type)
-			engine := i.FieldByName("value").String()
-			_dbInstance := schema.Database{
-				InstanceId:    instance.Id,
-				Engine:        engine,
-				EngineVersion: instance.Datastore.Version,
-				Region:        instance.Region,
-			}
-			if len(instance.PublicIps) > 0 {
-				addrs := []string{}
-				for _, ip := range instance.PublicIps {
-					addrs = append(addrs, fmt.Sprintf("%s:%d", ip, instance.Port))
-				}
-				_dbInstance.Address = strings.Join(addrs, "\n")
-			} else if len(instance.PrivateIps) > 0 {
-				addrs := []string{}
-				for _, ip := range instance.PrivateIps {
-					addrs = append(addrs, fmt.Sprintf("%s:%d", ip, instance.Port))
-				}
-				_dbInstance.Address = strings.Join(addrs, "\n")
-			}
-
-			list = append(list, _dbInstance)
-		}
-		break
+		tracker.Update(r, len(instances))
+		list = append(list, instances...)
 	}
 
 	if len(regionErrs) > 0 {
@@ -71,9 +63,87 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 	return list, nil
 }
 
-func newClient(r string, auth *basic.Credentials) *rds.RdsClient {
-	return rds.NewRdsClient(rds.RdsClientBuilder().
-		WithEndpoint(endpoint.For("rds", r, false)).
-		WithCredential(auth).
-		Build())
+func (d *Driver) listRegionDatabases(ctx context.Context, region string) ([]schema.Database, error) {
+	projectID, err := d.resolveProjectID(ctx, region)
+	if err != nil {
+		return nil, err
+	}
+
+	const limit = int32(100)
+	return paginate.Fetch(ctx, func(ctx context.Context, offset int32) (paginate.Page[schema.Database, int32], error) {
+		query := url.Values{}
+		query.Set("limit", strconv.Itoa(int(limit)))
+		query.Set("offset", strconv.Itoa(int(offset)))
+
+		var resp api.ListRDSInstancesResponse
+		if err := d.client().DoJSON(ctx, api.Request{
+			Service:    "rds",
+			Region:     region,
+			Intl:       d.Cred.Intl,
+			Method:     http.MethodGet,
+			Path:       fmt.Sprintf("/v3/%s/instances", projectID),
+			Query:      query,
+			Idempotent: true,
+		}, &resp); err != nil {
+			return paginate.Page[schema.Database, int32]{}, err
+		}
+
+		list := make([]schema.Database, 0, len(resp.Instances))
+		for _, instance := range resp.Instances {
+			item := schema.Database{
+				InstanceId: instance.ID,
+				Region:     strings.TrimSpace(instance.Region),
+			}
+			if item.Region == "" {
+				item.Region = region
+			}
+			if instance.Datastore != nil {
+				item.Engine = strings.TrimSpace(instance.Datastore.Type)
+				item.EngineVersion = strings.TrimSpace(instance.Datastore.Version)
+			}
+			if item.Address = joinAddresses(instance.PublicIPs, instance.Port); item.Address == "" {
+				item.Address = joinAddresses(instance.PrivateIPs, instance.Port)
+			}
+			list = append(list, item)
+		}
+
+		done := len(resp.Instances) == 0 ||
+			(resp.TotalCount != nil && offset+int32(len(resp.Instances)) >= *resp.TotalCount) ||
+			(resp.TotalCount == nil && int32(len(resp.Instances)) < limit)
+		return paginate.Page[schema.Database, int32]{
+			Items: list,
+			Next:  offset + limit,
+			Done:  done,
+		}, nil
+	})
+}
+
+func (d *Driver) resolveProjectID(ctx context.Context, region string) (string, error) {
+	if d.projectID == nil {
+		d.projectID = make(map[string]string)
+	}
+	if cached := strings.TrimSpace(d.projectID[region]); cached != "" {
+		return cached, nil
+	}
+	projectID, err := api.ResolveProjectID(ctx, d.client(), d.DomainID, region)
+	if err != nil {
+		return "", err
+	}
+	d.projectID[region] = projectID
+	return projectID, nil
+}
+
+func joinAddresses(ips []string, port int32) string {
+	if len(ips) == 0 {
+		return ""
+	}
+	addrs := make([]string, 0, len(ips))
+	for _, ip := range ips {
+		ip = strings.TrimSpace(ip)
+		if ip == "" {
+			continue
+		}
+		addrs = append(addrs, fmt.Sprintf("%s:%d", ip, port))
+	}
+	return strings.Join(addrs, "\n")
 }

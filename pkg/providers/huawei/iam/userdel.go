@@ -3,23 +3,13 @@ package iam
 import (
 	"context"
 	"fmt"
+	"net/http"
 
-	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/endpoint"
+	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/api"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/global"
-	iam "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3"
-	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3/model"
 )
 
 func (d *Driver) DelUser() {
-	auth := global.NewCredentialsBuilder().
-		WithAk(d.Auth.AK).
-		WithSk(d.Auth.SK).
-		Build()
-	client := iam.NewIamClient(iam.IamClientBuilder().
-		WithEndpoint(endpoint.For("iam", "cn-north-1", false)).
-		WithCredential(auth).
-		Build())
 	users, err := d.ListUsers(context.Background())
 	if err != nil {
 		logger.Error("List users failed:", err.Error())
@@ -28,7 +18,7 @@ func (d *Driver) DelUser() {
 	for _, u := range users {
 		if u.UserName == d.Username {
 			logger.Warning("Found UserId:", u.UserId)
-			err := deleteUser(client, u.UserId)
+			err := d.deleteUser(context.Background(), u.UserId)
 			if err != nil {
 				logger.Error(fmt.Sprintf("Delete user %s failed: %s", d.Username, err.Error()))
 				return
@@ -40,7 +30,17 @@ func (d *Driver) DelUser() {
 	logger.Error(fmt.Sprintf("User %s not found.", d.Username))
 }
 
-func deleteUser(client *iam.IamClient, uid string) error {
-	_, err := client.KeystoneDeleteUser(&model.KeystoneDeleteUserRequest{UserId: uid})
-	return err
+func (d *Driver) deleteUser(ctx context.Context, uid string) error {
+	region, err := d.requestRegion()
+	if err != nil {
+		return err
+	}
+	return d.client().DoJSON(ctx, api.Request{
+		Service: "iam",
+		Region:  region,
+		Intl:    d.Cred.Intl,
+		Method:  http.MethodDelete,
+		Path:    fmt.Sprintf("/v3/users/%s", uid),
+		Headers: d.domainHeaders(ctx),
+	}, nil)
 }

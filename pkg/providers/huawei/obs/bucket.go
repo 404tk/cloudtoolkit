@@ -2,16 +2,24 @@ package obs
 
 import (
 	"context"
+	"strings"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/auth"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/huaweicloud/huaweicloud-sdk-go-obs/obs"
-	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
 )
 
 type Driver struct {
-	Auth    *basic.Credentials
+	Cred    auth.Credential
 	Regions []string
+	Client  *Client
+}
+
+func (d *Driver) client() *Client {
+	if d.Client == nil {
+		d.Client = NewClient(d.Cred)
+	}
+	return d.Client
 }
 
 func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
@@ -22,32 +30,36 @@ func (d *Driver) GetBuckets(ctx context.Context) ([]schema.Storage, error) {
 	default:
 		logger.Info("List OBS buckets...")
 	}
-	for _, r := range d.Regions {
-		endPoint := "obs." + r + ".myhuaweicloud.com"
-		client, err := obs.New(d.Auth.AK, d.Auth.SK, endPoint)
-		if err != nil {
-			continue
-		}
-		response, err := client.ListBuckets(nil)
-		if err != nil {
-			logger.Error("List buckets failed with", r)
-			return list, err
-		}
 
-		for _, bucket := range response.Buckets {
-			_bucket := schema.Storage{
-				BucketName: bucket.Name,
-				Region:     bucket.Location,
-			}
-			if _bucket.Region == "" {
-				_bucket.Region = r
-			}
-			list = append(list, _bucket)
-		}
-		if len(list) > 0 {
-			break
-		}
+	endpointRegion := d.requestRegion()
+	resp, err := d.client().ListBuckets(ctx, endpointRegion)
+	if err != nil {
+		logger.Error("List buckets failed with", endpointRegion)
+		return list, err
 	}
 
+	for _, bucket := range resp.Buckets {
+		item := schema.Storage{
+			BucketName: bucket.Name,
+			Region:     bucket.Location,
+		}
+		if item.Region == "" {
+			item.Region = endpointRegion
+		}
+		list = append(list, item)
+	}
 	return list, nil
+}
+
+func (d *Driver) requestRegion() string {
+	if region := strings.TrimSpace(d.Cred.Region); region != "" && region != "all" {
+		return region
+	}
+	for _, region := range d.Regions {
+		region = strings.TrimSpace(region)
+		if region != "" && region != "all" {
+			return region
+		}
+	}
+	return "cn-north-4"
 }

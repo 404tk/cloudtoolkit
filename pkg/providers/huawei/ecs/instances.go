@@ -3,23 +3,34 @@ package ecs
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/url"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
-	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/endpoint"
+	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/api"
+	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/auth"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/paginate"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
-	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
-	ecs "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2"
-	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
 )
 
 type Driver struct {
-	Auth    *basic.Credentials
-	Regions []string
+	Cred     auth.Credential
+	Regions  []string
+	DomainID string
+	Client   *api.Client
+}
+
+func (d *Driver) client() *api.Client {
+	if d.Client == nil {
+		d.Client = api.NewClient(d.Cred)
+	}
+	return d.Client
 }
 
 // GetResource returns all the resources in the store for a provider.
@@ -31,31 +42,35 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	var regionErrs []string
 	var errMu sync.Mutex
 	got, _ := regionrun.ForEach(ctx, d.Regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
-		client := newClient(r, d.Auth)
+		projectID, err := api.ResolveProjectID(ctx, d.client(), d.DomainID, r)
+		if err != nil {
+			return nil, err
+		}
 		const limit = int32(100)
 		items, err := paginate.Fetch(ctx, func(ctx context.Context, page int32) (paginate.Page[schema.Host, int32], error) {
 			if page == 0 {
 				page = 1
 			}
-			pagePtr := page
-			limitPtr := limit
-			response, err := client.ListServersDetails(&model.ListServersDetailsRequest{Limit: &limitPtr, Offset: &pagePtr})
+			query := url.Values{}
+			query.Set("limit", strconv.Itoa(int(limit)))
+			query.Set("offset", strconv.Itoa(int(page)))
+
+			var resp api.ListECSServersDetailsResponse
+			err := d.client().DoJSON(ctx, api.Request{
+				Service:    "ecs",
+				Region:     r,
+				Intl:       d.Cred.Intl,
+				Method:     http.MethodGet,
+				Path:       fmt.Sprintf("/v1/%s/cloudservers/detail", projectID),
+				Query:      query,
+				Idempotent: true,
+			}, &resp)
 			if err != nil {
 				return paginate.Page[schema.Host, int32]{}, err
 			}
-			var items []schema.Host
-			for _, instance := range *response.Servers {
-				var ipv4, privateIPv4 string
-				for _, instance := range instance.Addresses {
-					for _, addr := range instance {
-						if *addr.OSEXTIPStype == model.GetServerAddressOSEXTIPStypeEnum().FIXED {
-							privateIPv4 = addr.Addr
-						}
-						if *addr.OSEXTIPStype == model.GetServerAddressOSEXTIPStypeEnum().FLOATING {
-							ipv4 = addr.Addr
-						}
-					}
-				}
+			items := make([]schema.Host, 0, len(resp.Servers))
+			for _, instance := range resp.Servers {
+				ipv4, privateIPv4 := mapHostIPs(instance.Addresses)
 				items = append(items, schema.Host{
 					State:       instance.Status,
 					HostName:    instance.Name,
@@ -65,10 +80,13 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 					Region:      r,
 				})
 			}
+			done := len(resp.Servers) == 0 ||
+				(resp.Count > 0 && page*limit >= resp.Count) ||
+				(resp.Count == 0 && int32(len(resp.Servers)) < limit)
 			return paginate.Page[schema.Host, int32]{
 				Items: items,
 				Next:  page + 1,
-				Done:  page*limit >= *response.Count,
+				Done:  done,
 			}, nil
 		})
 		if err != nil {
@@ -86,9 +104,31 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	return list, nil
 }
 
-func newClient(r string, auth *basic.Credentials) *ecs.EcsClient {
-	return ecs.NewEcsClient(ecs.EcsClientBuilder().
-		WithEndpoint(endpoint.For("ecs", r, false)).
-		WithCredential(auth).
-		Build())
+func mapHostIPs(addresses map[string][]api.ECSServerAddress) (string, string) {
+	if len(addresses) == 0 {
+		return "", ""
+	}
+
+	keys := make([]string, 0, len(addresses))
+	for key := range addresses {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	var publicIPv4, privateIPv4 string
+	for _, key := range keys {
+		for _, addr := range addresses[key] {
+			switch strings.ToLower(strings.TrimSpace(addr.OSEXTIPStype)) {
+			case "floating":
+				if publicIPv4 == "" {
+					publicIPv4 = strings.TrimSpace(addr.Addr)
+				}
+			case "fixed":
+				if privateIPv4 == "" {
+					privateIPv4 = strings.TrimSpace(addr.Addr)
+				}
+			}
+		}
+	}
+	return publicIPv4, privateIPv4
 }

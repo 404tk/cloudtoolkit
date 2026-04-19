@@ -1,35 +1,28 @@
 package iam
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 
-	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/endpoint"
+	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/api"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/global"
-	iam "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3"
-	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/iam/v3/model"
 )
 
 func (d *Driver) AddUser() {
-	auth := global.NewCredentialsBuilder().
-		WithAk(d.Auth.AK).
-		WithSk(d.Auth.SK).
-		Build()
-	client := iam.NewIamClient(iam.IamClientBuilder().
-		WithEndpoint(endpoint.For("iam", "cn-north-1", false)).
-		WithCredential(auth).
-		Build())
-	uid, domainid, err := createUser(client, d.Username, d.Password)
+	ctx := context.Background()
+	uid, domainID, err := d.createUser(ctx)
 	if err != nil {
 		logger.Error("Create user failed:", err.Error())
 		return
 	}
-	err = addUserToAdminGroup(client, uid)
+	err = d.addUserToAdminGroup(ctx, uid)
 	if err != nil {
 		logger.Error("Grant AdministratorAccess policy failed.")
 		return
 	}
-	name := getDomainName(client, domainid)
+	name := d.getDomainName(ctx, domainID)
 	fmt.Printf("\n%-10s\t%-10s\t%-60s\n", "Username", "Password", "Login URL")
 	fmt.Printf("%-10s\t%-10s\t%-60s\n", "--------", "--------", "---------")
 	fmt.Printf("%-10s\t%-10s\t%-60s\n\n",
@@ -37,60 +30,95 @@ func (d *Driver) AddUser() {
 		d.Password, "https://auth.huaweicloud.com/authui/login?id="+name)
 }
 
-func createUser(client *iam.IamClient, uname, pwd string) (string, string, error) {
-	enable := true
-	request := &model.KeystoneCreateUserRequest{
-		Body: &model.KeystoneCreateUserRequestBody{
-			User: &model.KeystoneCreateUserOption{
-				Name:     uname,
-				Password: &pwd,
-				Enabled:  &enable,
-			}}}
-	resp, err := client.KeystoneCreateUser(request)
+func (d *Driver) createUser(ctx context.Context) (string, string, error) {
+	region, err := d.requestRegion()
 	if err != nil {
 		return "", "", err
 	}
-	return resp.User.Id, resp.User.DomainId, err
+	domainID := d.resolveDomainID(ctx)
+	body, err := json.Marshal(api.CreateUserRequest{
+		User: api.CreateUserOption{
+			Name:     d.Username,
+			Password: d.Password,
+			Enabled:  true,
+			DomainID: domainID,
+		},
+	})
+	if err != nil {
+		return "", "", err
+	}
+
+	var resp api.CreateUserResponse
+	if err := d.client().DoJSON(ctx, api.Request{
+		Service: "iam",
+		Region:  region,
+		Intl:    d.Cred.Intl,
+		Method:  http.MethodPost,
+		Path:    "/v3/users",
+		Body:    body,
+		Headers: d.domainHeaders(ctx),
+	}, &resp); err != nil {
+		return "", "", err
+	}
+	if resp.User.DomainID != "" {
+		d.DomainID = resp.User.DomainID
+	}
+	return resp.User.ID, resp.User.DomainID, nil
 }
 
-func addUserToAdminGroup(client *iam.IamClient, uid string) error {
-	request := &model.KeystoneListGroupsRequest{}
-	resp, err := client.KeystoneListGroups(request)
+func (d *Driver) addUserToAdminGroup(ctx context.Context, uid string) error {
+	region, err := d.requestRegion()
 	if err != nil {
+		return err
+	}
+	var resp api.ListGroupsResponse
+	if err := d.client().DoJSON(ctx, api.Request{
+		Service:    "iam",
+		Region:     region,
+		Intl:       d.Cred.Intl,
+		Method:     http.MethodGet,
+		Path:       "/v3/groups",
+		Idempotent: true,
+		Headers:    d.domainHeaders(ctx),
+	}, &resp); err != nil {
 		return err
 	}
 
 	groups := make(map[string]string)
-	for _, v := range *resp.Groups {
-		groups[v.Name] = v.Id
+	for _, v := range resp.Groups {
+		groups[v.Name] = v.ID
 	}
 
 	if g, ok := groups["admin"]; ok {
-		_, err = client.KeystoneAddUserToGroup(
-			&model.KeystoneAddUserToGroupRequest{
-				GroupId: g,
-				UserId:  uid,
-			})
-	} else {
-		for _, g := range groups {
-			_, err = client.KeystoneAddUserToGroup(
-				&model.KeystoneAddUserToGroupRequest{
-					GroupId: g,
-					UserId:  uid,
-				})
+		return d.addUserToGroup(ctx, region, g, uid)
+	}
+	for _, g := range groups {
+		if err := d.addUserToGroup(ctx, region, g, uid); err != nil {
+			return err
 		}
 	}
-	return err
+	return nil
 }
 
-func getDomainName(client *iam.IamClient, domainid string) string {
-	resp, err := client.KeystoneListAuthDomains(&model.KeystoneListAuthDomainsRequest{})
+func (d *Driver) addUserToGroup(ctx context.Context, region, groupID, userID string) error {
+	return d.client().DoJSON(ctx, api.Request{
+		Service: "iam",
+		Region:  region,
+		Intl:    d.Cred.Intl,
+		Method:  http.MethodPut,
+		Path:    fmt.Sprintf("/v3/groups/%s/users/%s", groupID, userID),
+		Headers: d.domainHeaders(ctx),
+	}, nil)
+}
+
+func (d *Driver) getDomainName(ctx context.Context, domainID string) string {
+	resp, err := d.listAuthDomains(ctx)
 	if err != nil {
 		logger.Error("List domains failed:", err.Error())
 		return ""
 	}
-	for _, v := range *resp.Domains {
-		if v.Id == domainid {
+	for _, v := range resp.Domains {
+		if v.ID == domainID {
 			return v.Name
 		}
 	}
