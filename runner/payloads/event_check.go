@@ -6,9 +6,7 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/inventory"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
-	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/argparse"
-	"github.com/404tk/cloudtoolkit/utils/audit"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
@@ -35,11 +33,6 @@ func (p EventCheck) Run(ctx context.Context, config map[string]string) {
 		logger.Error(fmt.Sprintf("%s does not support event-check", i.Providers.Name()))
 		return
 	}
-	audit.Log(audit.Record{
-		Provider:  config[utils.Provider],
-		Operation: "event-check." + action,
-		Target:    sourceIp,
-	})
 	reader.EventDump(action, sourceIp)
 	logger.Info("Done.")
 }

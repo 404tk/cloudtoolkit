@@ -2,14 +2,11 @@ package payloads
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 
 	"github.com/404tk/cloudtoolkit/pkg/inventory"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
-	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/argparse"
-	"github.com/404tk/cloudtoolkit/utils/audit"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
@@ -36,17 +33,6 @@ func (p InstanceCmdCheck) Run(ctx context.Context, config map[string]string) {
 		logger.Error(fmt.Sprintf("%s does not support instance-cmd-check", i.Providers.Name()))
 		return
 	}
-	record := audit.Record{
-		Provider:  config[utils.Provider],
-		Operation: "instance-cmd-check",
-		Target:    instanceId,
-	}
-	if decoded, err := base64.StdEncoding.DecodeString(cmd); err == nil {
-		record.Args = string(decoded)
-	} else {
-		record.Args = cmd
-	}
-	audit.Log(record)
 	execer.ExecuteCloudVMCommand(instanceId, cmd)
 }
 

@@ -6,9 +6,7 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/inventory"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
-	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/argparse"
-	"github.com/404tk/cloudtoolkit/utils/audit"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
@@ -39,11 +37,6 @@ func (p IAMUserCheck) Run(ctx context.Context, config map[string]string) {
 		logger.Error(fmt.Sprintf("%s does not support user management", i.Providers.Name()))
 		return
 	}
-	audit.Log(audit.Record{
-		Provider:  config[utils.Provider],
-		Operation: "iam-user-check." + action,
-		Target:    args_1,
-	})
 	mgr.UserManagement(action, args_1, args_2)
 }
 
