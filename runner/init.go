@@ -13,6 +13,17 @@ import (
 
 const legacyFilename = "config.yaml"
 
+type userValidationConfig struct {
+	Action   string `yaml:"action"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+}
+
+type databaseAccountConfig struct {
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+}
+
 type Config struct {
 	Common struct {
 		LogEnable      bool   `yaml:"log_enable"`
@@ -20,16 +31,13 @@ type Config struct {
 		LogDir         string `yaml:"log_dir"`
 		TimeoutMinutes int    `yaml:"timeout_minutes"`
 	} `yaml:"common"`
-	Cloudlist    []string `yaml:"cloudlist"`
-	BackdoorUser struct {
-		Action   string `yaml:"action"`
-		Username string `yaml:"username"`
-		Password string `yaml:"password"`
-	} `yaml:"backdoor-user"`
-	DatabaseAccount struct {
-		Username string `yaml:"username"`
-		Password string `yaml:"password"`
-	} `yaml:"database-account"`
+	Cloudlist                 []string              `yaml:"cloudlist"`
+	IAMUserCheck              userValidationConfig  `yaml:"iam-user-check"`
+	LegacyIAMUserValidation   userValidationConfig  `yaml:"iam-user-validation"`
+	LegacyBackdoorUser        userValidationConfig  `yaml:"backdoor-user"`
+	RDSAccountCheck           databaseAccountConfig `yaml:"rds-account-check"`
+	LegacyDBAccountValidation databaseAccountConfig `yaml:"database-account-validation"`
+	LegacyDatabaseAccount     databaseAccountConfig `yaml:"database-account"`
 }
 
 func resolveConfigPath() string {
@@ -81,15 +89,29 @@ func InitConfig() {
 		utils.RunTimeout = 10 * time.Minute
 	}
 
-	utils.BackdoorUser = fmt.Sprintf("%s %s %s",
-		cfg.BackdoorUser.Action,
-		cfg.BackdoorUser.Username,
-		cfg.BackdoorUser.Password,
+	iamUserCheck := cfg.IAMUserCheck
+	if iamUserCheck == (userValidationConfig{}) {
+		iamUserCheck = cfg.LegacyIAMUserValidation
+	}
+	if iamUserCheck == (userValidationConfig{}) {
+		iamUserCheck = cfg.LegacyBackdoorUser
+	}
+	utils.IAMUserCheck = fmt.Sprintf("%s %s %s",
+		iamUserCheck.Action,
+		iamUserCheck.Username,
+		iamUserCheck.Password,
 	)
 
-	utils.DBAccount = fmt.Sprintf("%s:%s",
-		cfg.DatabaseAccount.Username,
-		cfg.DatabaseAccount.Password,
+	rdsAccountCheck := cfg.RDSAccountCheck
+	if rdsAccountCheck == (databaseAccountConfig{}) {
+		rdsAccountCheck = cfg.LegacyDBAccountValidation
+	}
+	if rdsAccountCheck == (databaseAccountConfig{}) {
+		rdsAccountCheck = cfg.LegacyDatabaseAccount
+	}
+	utils.RDSAccount = fmt.Sprintf("%s:%s",
+		rdsAccountCheck.Username,
+		rdsAccountCheck.Password,
 	)
 }
 
@@ -109,12 +131,12 @@ cloudlist:
   - sms
   - log
 
-backdoor-user:
+iam-user-check:
   action: add
   username: ctkguest
   password: 1QAZ2wsx@Asdlkj
 
-database-account:
+rds-account-check:
   username: ctkguest
   password: 1QAZ2wsx@Asdlkj
 `

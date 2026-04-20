@@ -88,36 +88,36 @@ func Executor(s string) {
 }
 
 // confirmIfSensitive prompts the user before dispatching payloads that mutate
-// cloud state. Read-only payloads (cloudlist, bucket-dump, event-dump.dump)
-// bypass the prompt. exec-command is intentionally skipped here so the shell
-// REPL, which enters a single confirmation at session start, does not prompt
-// on every keystroke.
+// cloud state. Read-only payloads (cloud asset inventory via `cloudlist`,
+// bucket-check, and event-check in dump mode) bypass the prompt.
+// instance-cmd-check is skipped here so the shell REPL, which enters a single
+// confirmation at session start, does not prompt on every keystroke.
 func confirmIfSensitive(config map[string]string) bool {
-	payload := config[utils.Payload]
+	payload := payloads.ResolveName(config[utils.Payload])
 	metadata := config[utils.Metadata]
 	parts := argparse.Split(metadata)
 	provider := config[utils.Provider]
 
 	switch payload {
-	case "backdoor-user":
+	case "iam-user-check":
 		if len(parts) < 2 {
 			return true
 		}
-		return confirm.Ask("backdoor-user."+parts[0], provider, parts[1])
-	case "database-account":
+		return confirm.Ask("iam-user-check."+parts[0], provider, parts[1])
+	case "rds-account-check":
 		if len(parts) < 2 {
 			return true
 		}
-		return confirm.Ask("database-account."+parts[0], provider, parts[1])
-	case "event-dump":
+		return confirm.Ask("rds-account-check."+parts[0], provider, parts[1])
+	case "event-check":
 		if len(parts) < 1 || parts[0] != "whitelist" {
 			return true
 		}
-		target := ""
+		resource := ""
 		if len(parts) >= 2 {
-			target = parts[1]
+			resource = parts[1]
 		}
-		return confirm.Ask("event-dump.whitelist", provider, target)
+		return confirm.Ask("event-check.whitelist", provider, resource)
 	}
 	return true
 }
@@ -141,10 +141,10 @@ func show(args []string) {
 			}
 		}
 	case "payloads":
-		fmt.Printf("\n%-10s\t%-60s\n", "Payload", "Details")
-		fmt.Printf("%-10s\t%-60s\n", "-------", "-------")
-		for k, v := range payloads.Payloads {
-			fmt.Printf("%-15s\t%-60s\n", k, v.Desc())
+		fmt.Printf("\n%-24s\t%-60s\n", "Payload", "Details")
+		fmt.Printf("%-24s\t%-60s\n", "-------", "-------")
+		for _, entry := range payloads.Visible() {
+			fmt.Printf("%-24s\t%-60s\n", entry.Name, entry.Payload.Desc())
 		}
 	}
 }
@@ -153,20 +153,25 @@ func set(args []string) {
 	if len(args) < 2 {
 		return
 	}
-	if _, ok := config[args[0]]; ok {
-		if args[0] != utils.Provider {
-			config[args[0]] = args[1]
-			fmt.Printf("%s => %s\n", args[0], args[1])
+	key := args[0]
+	if _, ok := config[key]; ok {
+		if key != utils.Provider {
+			value := args[1]
+			if key == utils.Payload {
+				value = payloads.ResolveName(value)
+			}
+			config[key] = value
+			fmt.Printf("%s => %s\n", key, value)
 		}
 	}
-	if args[0] == utils.Payload {
-		switch args[1] {
-		case "backdoor-user":
-			config[utils.Metadata] = utils.BackdoorUser
-		case "bucket-dump":
-			config[utils.Metadata] = utils.BucketDump
-		case "event-dump":
-			config[utils.Metadata] = utils.EventDump
+	if key == utils.Payload {
+		switch config[utils.Payload] {
+		case "iam-user-check":
+			config[utils.Metadata] = utils.IAMUserCheck
+		case "bucket-check":
+			config[utils.Metadata] = utils.BucketCheck
+		case "event-check":
+			config[utils.Metadata] = utils.EventCheck
 		default:
 			config[utils.Metadata] = ""
 		}
@@ -174,7 +179,8 @@ func set(args []string) {
 }
 
 func run(ctx context.Context) {
-	if v, ok := payloads.Payloads[config[utils.Payload]]; ok {
+	if v, name, ok := payloads.Lookup(config[utils.Payload]); ok {
+		config[utils.Payload] = name
 		v.Run(ctx, config)
 	} else {
 		logger.Error("Please type `show payloads` to confirm the required payload.")

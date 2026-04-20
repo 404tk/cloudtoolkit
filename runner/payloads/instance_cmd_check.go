@@ -13,9 +13,9 @@ import (
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
-type ExecuteCloudVMCommand struct{}
+type InstanceCmdCheck struct{}
 
-func (p ExecuteCloudVMCommand) Run(ctx context.Context, config map[string]string) {
+func (p InstanceCmdCheck) Run(ctx context.Context, config map[string]string) {
 	var instanceId, cmd string
 	if metadata, ok := config["metadata"]; ok {
 		data := argparse.SplitN(metadata, 2)
@@ -33,12 +33,12 @@ func (p ExecuteCloudVMCommand) Run(ctx context.Context, config map[string]string
 	}
 	execer, ok := i.Providers.(schema.VMExecutor)
 	if !ok {
-		logger.Error(fmt.Sprintf("%s does not support exec-command", i.Providers.Name()))
+		logger.Error(fmt.Sprintf("%s does not support instance-cmd-check", i.Providers.Name()))
 		return
 	}
 	record := audit.Record{
 		Provider:  config[utils.Provider],
-		Operation: "exec-command",
+		Operation: "instance-cmd-check",
 		Target:    instanceId,
 	}
 	if decoded, err := base64.StdEncoding.DecodeString(cmd); err == nil {
@@ -50,10 +50,12 @@ func (p ExecuteCloudVMCommand) Run(ctx context.Context, config map[string]string
 	execer.ExecuteCloudVMCommand(instanceId, cmd)
 }
 
-func (p ExecuteCloudVMCommand) Desc() string {
-	return "Run command on Cloud instance."
+func (p InstanceCmdCheck) Desc() string {
+	return "Run an authorized validation command on a cloud instance to generate telemetry for detection and investigation verification."
 }
 
 func init() {
-	registerPayload("exec-command", ExecuteCloudVMCommand{})
+	registerPayload("instance-cmd-check", InstanceCmdCheck{})
+	registerAlias("instance-command", "instance-cmd-check")
+	registerAlias("exec-command", "instance-cmd-check")
 }

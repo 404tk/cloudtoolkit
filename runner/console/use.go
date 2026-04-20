@@ -30,11 +30,11 @@ func loadModule(m string) error {
 	case "gcp":
 		config = loadConfig3()
 	default:
-		return errors.New("Unsupported module: " + m)
+		return errors.New("Unsupported provider: " + m)
 	}
 
 	config[utils.Provider] = m
-	config[utils.Payload] = "cloudlist" // Default use cloudlist
+	config[utils.Payload] = "cloudlist" // Default payload is cloud asset inventory
 
 	p := prompt.New(
 		Executor,

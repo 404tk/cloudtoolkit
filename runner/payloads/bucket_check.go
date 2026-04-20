@@ -12,9 +12,9 @@ import (
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
-type BucketDump struct{}
+type BucketCheck struct{}
 
-func (p BucketDump) Run(ctx context.Context, config map[string]string) {
+func (p BucketCheck) Run(ctx context.Context, config map[string]string) {
 	var action, bucketname string
 	if metadata, ok := config["metadata"]; ok {
 		data := argparse.Split(metadata)
@@ -32,22 +32,24 @@ func (p BucketDump) Run(ctx context.Context, config map[string]string) {
 	}
 	mgr, ok := i.Providers.(schema.BucketManager)
 	if !ok {
-		logger.Error(fmt.Sprintf("%s does not support bucket-dump", i.Providers.Name()))
+		logger.Error(fmt.Sprintf("%s does not support bucket-check", i.Providers.Name()))
 		return
 	}
 	audit.Log(audit.Record{
 		Provider:  config[utils.Provider],
-		Operation: "bucket-dump." + action,
+		Operation: "bucket-check." + action,
 		Target:    bucketname,
 	})
 	mgr.BucketDump(ctx, action, bucketname)
 	logger.Info("Done.")
 }
 
-func (p BucketDump) Desc() string {
-	return "Quickly enumerate buckets to look for loot."
+func (p BucketCheck) Desc() string {
+	return "Review bucket contents in an authorized test environment to validate storage visibility and investigation workflows."
 }
 
 func init() {
-	registerPayload("bucket-dump", BucketDump{})
+	registerPayload("bucket-check", BucketCheck{})
+	registerAlias("bucket-enumeration", "bucket-check")
+	registerAlias("bucket-dump", "bucket-check")
 }

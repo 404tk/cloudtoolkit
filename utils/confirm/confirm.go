@@ -10,14 +10,14 @@ import (
 // Ask prints a summary of a pending sensitive operation and blocks until the
 // user responds. Returns true only on explicit y/yes. Empty input, EOF, or
 // anything else counts as a rejection.
-func Ask(op, provider, target string) bool {
+func Ask(op, provider, resource string) bool {
 	fmt.Fprintln(os.Stderr)
 	fmt.Fprintf(os.Stderr, "[!] About to run: %s\n", op)
 	if provider != "" {
 		fmt.Fprintf(os.Stderr, "    Provider: %s\n", provider)
 	}
-	if target != "" {
-		fmt.Fprintf(os.Stderr, "    Target:   %s\n", target)
+	if resource != "" {
+		fmt.Fprintf(os.Stderr, "    Resource: %s\n", resource)
 	}
 	fmt.Fprint(os.Stderr, "Proceed? [y/N]: ")
 

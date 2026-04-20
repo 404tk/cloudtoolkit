@@ -14,8 +14,8 @@ import "strings"
 // Split parses s into argv.
 func Split(s string) []string {
 	var (
-		out []string
-		cur strings.Builder
+		out                        []string
+		cur                        strings.Builder
 		inSingle, inDouble, hasTok bool
 	)
 	flush := func() {
@@ -72,8 +72,8 @@ func SplitN(s string, n int) []string {
 		return Split(s)
 	}
 	var (
-		out []string
-		cur strings.Builder
+		out                        []string
+		cur                        strings.Builder
 		inSingle, inDouble, hasTok bool
 	)
 	for i := 0; i < len(s); i++ {

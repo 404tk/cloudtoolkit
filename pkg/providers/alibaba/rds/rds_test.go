@@ -147,10 +147,10 @@ func TestCreateAccountCreatesReadonlyUserAndGrantsPrivilege(t *testing.T) {
 		logger.SetOutput(nil)
 	})
 
-	originalAccount := utils.DBAccount
-	utils.DBAccount = "readonly:Secret!1"
+	originalAccount := utils.RDSAccount
+	utils.RDSAccount = "readonly:Secret!1"
 	t.Cleanup(func() {
-		utils.DBAccount = originalAccount
+		utils.RDSAccount = originalAccount
 	})
 
 	var actions []string
@@ -207,10 +207,10 @@ func TestDeleteAccountUsesConfiguredCredential(t *testing.T) {
 		logger.SetOutput(nil)
 	})
 
-	originalAccount := utils.DBAccount
-	utils.DBAccount = "readonly:Secret!1"
+	originalAccount := utils.RDSAccount
+	utils.RDSAccount = "readonly:Secret!1"
 	t.Cleanup(func() {
-		utils.DBAccount = originalAccount
+		utils.RDSAccount = originalAccount
 	})
 
 	var actions []string

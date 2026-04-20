@@ -14,7 +14,7 @@ import (
 
 type CloudList struct{}
 
-// assetPrintOrder keeps cloudlist output stable regardless of the map
+// assetPrintOrder keeps asset-inventory output stable regardless of the map
 // iteration order returned by Resources.Grouped().
 var assetPrintOrder = []struct {
 	key, label string
@@ -35,7 +35,7 @@ func (p CloudList) Run(ctx context.Context, config map[string]string) {
 	}
 	enum, ok := i.Providers.(schema.Enumerator)
 	if !ok {
-		logger.Error(fmt.Sprintf("%s does not support cloudlist", i.Providers.Name()))
+		logger.Error(fmt.Sprintf("%s does not support cloud asset inventory", i.Providers.Name()))
 		return
 	}
 
@@ -106,7 +106,7 @@ func (p CloudList) Run(ctx context.Context, config map[string]string) {
 }
 
 func (p CloudList) Desc() string {
-	return "Getting Assets from Cloud Providers to augment Attack Surface Management efforts."
+	return "Enumerate cloud assets in authorized environments to verify CSPM and CNAPP inventory coverage, telemetry quality, and investigation readiness."
 }
 
 func init() {

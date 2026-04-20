@@ -21,10 +21,10 @@ Module Commands
 
 	Command       Description
 	-------       -----------
-	show          Displays options of a given type, or all payloads
-	set           Sets a context-specific variable to a value
-	run           Run the jobs
-	shell         Run commands on the cloud host
+	show          Displays provider options or validation payloads
+	set           Sets a provider option or payload parameter
+	run           Runs the selected validation workflow
+	shell         Opens an authorized instance-cmd-check session
 
 
 ### Examples
@@ -37,12 +37,18 @@ Displays the options required by the provider:
 
 	show options
 
-Select a payload:
+Display the available validation payloads:
 
-	set payload backdoor-user
+	show payloads
+
+Select a validation payload:
+
+	set payload iam-user-check
 
 Select a cache credential:
 
-	sessions -i 1`
+	sessions -i 1
+
+Use CloudToolKit only in owned, lab, or explicitly authorized environments.`
 	fmt.Println(document)
 }

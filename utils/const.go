@@ -24,9 +24,9 @@ const (
 )
 
 const (
-	Metadata   = "metadata"
-	BucketDump = "list all"
-	EventDump  = "dump all"
+	Metadata    = "metadata"
+	BucketCheck = "list all"
+	EventCheck  = "dump all"
 )
 
 var (
@@ -34,7 +34,7 @@ var (
 	ListPolicies bool
 	LogDir       string
 	Cloudlist    []string
-	BackdoorUser string
-	DBAccount    string
+	IAMUserCheck string
+	RDSAccount   string
 	RunTimeout   time.Duration
 )

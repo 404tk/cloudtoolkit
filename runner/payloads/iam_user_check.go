@@ -12,9 +12,9 @@ import (
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
-type BackdoorUser struct{}
+type IAMUserCheck struct{}
 
-func (p BackdoorUser) Run(ctx context.Context, config map[string]string) {
+func (p IAMUserCheck) Run(ctx context.Context, config map[string]string) {
 	var action, args_1, args_2 string
 	if metadata, ok := config["metadata"]; ok {
 		data := argparse.Split(metadata)
@@ -41,16 +41,18 @@ func (p BackdoorUser) Run(ctx context.Context, config map[string]string) {
 	}
 	audit.Log(audit.Record{
 		Provider:  config[utils.Provider],
-		Operation: "backdoor-user." + action,
+		Operation: "iam-user-check." + action,
 		Target:    args_1,
 	})
 	mgr.UserManagement(action, args_1, args_2)
 }
 
-func (p BackdoorUser) Desc() string {
-	return "Backdoored user can be used to obtain persistence in the Cloud environment."
+func (p IAMUserCheck) Desc() string {
+	return "Provision or remove a test IAM user in an authorized environment to validate identity telemetry, alerting, and persistence detection coverage."
 }
 
 func init() {
-	registerPayload("backdoor-user", BackdoorUser{})
+	registerPayload("iam-user-check", IAMUserCheck{})
+	registerAlias("iam-user-validation", "iam-user-check")
+	registerAlias("backdoor-user", "iam-user-check")
 }

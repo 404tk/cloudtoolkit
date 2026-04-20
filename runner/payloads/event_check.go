@@ -12,9 +12,9 @@ import (
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
-type EventDump struct{}
+type EventCheck struct{}
 
-func (p EventDump) Run(ctx context.Context, config map[string]string) {
+func (p EventCheck) Run(ctx context.Context, config map[string]string) {
 	var action, sourceIp string
 	if metadata, ok := config["metadata"]; ok {
 		data := argparse.Split(metadata)
@@ -32,22 +32,24 @@ func (p EventDump) Run(ctx context.Context, config map[string]string) {
 	}
 	reader, ok := i.Providers.(schema.EventReader)
 	if !ok {
-		logger.Error(fmt.Sprintf("%s does not support event-dump", i.Providers.Name()))
+		logger.Error(fmt.Sprintf("%s does not support event-check", i.Providers.Name()))
 		return
 	}
 	audit.Log(audit.Record{
 		Provider:  config[utils.Provider],
-		Operation: "event-dump." + action,
+		Operation: "event-check." + action,
 		Target:    sourceIp,
 	})
 	reader.EventDump(action, sourceIp)
 	logger.Info("Done.")
 }
 
-func (p EventDump) Desc() string {
-	return "Obtain alarm events of the cloud platform."
+func (p EventCheck) Desc() string {
+	return "Review cloud security events from an authorized environment to validate alert context and investigation workflows."
 }
 
 func init() {
-	registerPayload("event-dump", EventDump{})
+	registerPayload("event-check", EventCheck{})
+	registerAlias("event-review", "event-check")
+	registerAlias("event-dump", "event-check")
 }

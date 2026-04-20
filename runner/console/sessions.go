@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/404tk/cloudtoolkit/pkg/plugins"
+	"github.com/404tk/cloudtoolkit/runner/payloads"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -101,6 +102,9 @@ func internation(uuid string) {
 	}
 	if provider, ok := m[utils.Provider]; ok {
 		config = m
+		if name, ok := config[utils.Payload]; ok {
+			config[utils.Payload] = payloads.ResolveName(name)
+		}
 		p := prompt.New(
 			Executor,
 			actionCompleter,

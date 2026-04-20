@@ -11,7 +11,7 @@ import (
 
 var core = []prompt.Suggest{
 	{Text: "help", Description: "help menu"},
-	{Text: "use", Description: "use module"},
+	{Text: "use", Description: "use provider"},
 	{Text: "sessions", Description: "list cache credential"},
 	{Text: "note", Description: "add remarks to the session"},
 	{Text: "clear", Description: "clear screen"},
@@ -19,10 +19,10 @@ var core = []prompt.Suggest{
 }
 
 var action = []prompt.Suggest{
-	{Text: "show", Description: "show options"},
-	{Text: "set", Description: "set option"},
-	{Text: "run", Description: "run job"},
-	{Text: "shell", Description: "run commands"},
+	{Text: "show", Description: "show options or payloads"},
+	{Text: "set", Description: "set option or parameter"},
+	{Text: "run", Description: "run selected payload"},
+	{Text: "shell", Description: "open instance-cmd-check session"},
 }
 
 var modules = func() (m []prompt.Suggest) {
@@ -34,10 +34,10 @@ var modules = func() (m []prompt.Suggest) {
 
 var optionsDesc = map[string]string{
 	// utils.Provider:              "Vendor Name",
-	utils.Payload:               "Module Name (Default: cloudlist)",
+	utils.Payload:               "Validation payload (Default: cloudlist)",
 	utils.AccessKey:             "Key ID",
 	utils.SecretKey:             "Secret",
-	utils.SecurityToken:         "Securit Token (Optional)",
+	utils.SecurityToken:         "Security Token (Optional)",
 	utils.Region:                "Region (Default: all)",
 	utils.Version:               "International or custom edition (Optional)",
 	utils.AzureClientId:         "Key ID",
@@ -95,8 +95,8 @@ func actionCompleter(d prompt.Document) []prompt.Suggest {
 		}
 		if len(args) == 3 && args[1] == utils.Payload {
 			getPayloads := func() (p []prompt.Suggest) {
-				for k, v := range payloads.Payloads {
-					p = append(p, prompt.Suggest{Text: k, Description: v.Desc()})
+				for _, entry := range payloads.Visible() {
+					p = append(p, prompt.Suggest{Text: entry.Name, Description: entry.Payload.Desc()})
 				}
 				return
 			}()

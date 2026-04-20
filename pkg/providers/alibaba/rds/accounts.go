@@ -11,7 +11,7 @@ import (
 )
 
 func (d *Driver) CreateAccount(instanceID, dbName string) bool {
-	accountName, accountPassword, ok := parseDBAccount()
+	accountName, accountPassword, ok := parseRDSAccount()
 	if !ok {
 		return false
 	}
@@ -34,7 +34,7 @@ func (d *Driver) CreateAccount(instanceID, dbName string) bool {
 }
 
 func (d *Driver) DeleteAccount(instanceID string) {
-	accountName, _, ok := parseDBAccount()
+	accountName, _, ok := parseRDSAccount()
 	if !ok {
 		return
 	}
@@ -53,10 +53,10 @@ func grantAccountPrivilege(ctx context.Context, client *api.Client, region, inst
 	return err
 }
 
-func parseDBAccount() (string, string, bool) {
-	accountName, accountPassword, ok := strings.Cut(utils.DBAccount, ":")
+func parseRDSAccount() (string, string, bool) {
+	accountName, accountPassword, ok := strings.Cut(utils.RDSAccount, ":")
 	if !ok || strings.TrimSpace(accountName) == "" || strings.TrimSpace(accountPassword) == "" {
-		logger.Error("DB account metadata is invalid. expected username:password")
+		logger.Error("RDS account metadata is invalid. expected username:password")
 		return "", "", false
 	}
 	return accountName, accountPassword, true

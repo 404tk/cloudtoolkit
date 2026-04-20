@@ -12,9 +12,9 @@ import (
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
-type DatabaseAccount struct{}
+type RDSAccountCheck struct{}
 
-func (p DatabaseAccount) Run(ctx context.Context, config map[string]string) {
+func (p RDSAccountCheck) Run(ctx context.Context, config map[string]string) {
 	var action, args string
 	if metadata, ok := config["metadata"]; ok {
 		data := argparse.Split(metadata)
@@ -32,21 +32,23 @@ func (p DatabaseAccount) Run(ctx context.Context, config map[string]string) {
 	}
 	mgr, ok := i.Providers.(schema.DBManager)
 	if !ok {
-		logger.Error(fmt.Sprintf("%s does not support database-account", i.Providers.Name()))
+		logger.Error(fmt.Sprintf("%s does not support rds-account-check", i.Providers.Name()))
 		return
 	}
 	audit.Log(audit.Record{
 		Provider:  config[utils.Provider],
-		Operation: "database-account." + action,
+		Operation: "rds-account-check." + action,
 		Target:    args,
 	})
 	mgr.DBManagement(action, args)
 }
 
-func (p DatabaseAccount) Desc() string {
-	return "Add an account with read-only permission for the Cloud database instance."
+func (p RDSAccountCheck) Desc() string {
+	return "Provision a read-only test database account in an authorized environment to validate database telemetry, investigation readiness, and control coverage."
 }
 
 func init() {
-	registerPayload("database-account", DatabaseAccount{})
+	registerPayload("rds-account-check", RDSAccountCheck{})
+	registerAlias("database-account-validation", "rds-account-check")
+	registerAlias("database-account", "rds-account-check")
 }

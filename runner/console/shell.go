@@ -18,19 +18,19 @@ var instanceId string
 
 func shell(args []string) {
 	if len(args) < 1 {
-		logger.Error("Usage: shell instance-id")
+		logger.Error("Usage: shell <instance-id>")
 		return
 	}
-	if !confirm.Ask("shell session", config[utils.Provider], args[0]) {
+	if !confirm.Ask("instance-cmd-check session", config[utils.Provider], args[0]) {
 		logger.Info("Cancelled.")
 		return
 	}
 	instanceId = args[0]
-	config[utils.Payload] = "exec-command"
+	config[utils.Payload] = "instance-cmd-check"
 	p := prompt.New(
 		shellExecutor,
 		shellCompleter,
-		prompt.OptionPrefix(fmt.Sprintf("[shell@%s ~]$ ", instanceId)),
+		prompt.OptionPrefix(fmt.Sprintf("[validation@%s ~]$ ", instanceId)),
 		prompt.OptionInputTextColor(prompt.White),
 	)
 	consoleStack = append(consoleStack, currentConsole)
@@ -51,7 +51,7 @@ func shellExecutor(cmd string) {
 			consoleStack = consoleStack[:len(consoleStack)-1]
 			currentConsole = prevConsole
 			config[utils.Payload] = "cloudlist"
-			logger.Info(fmt.Sprintf("Connection to %s closed.", instanceId))
+			logger.Info(fmt.Sprintf("Validation session to %s closed.", instanceId))
 			prevConsole.Run()
 		} else {
 			logger.Error("No previous console")
@@ -65,7 +65,7 @@ func shellExecutor(cmd string) {
 
 func shellCompleter(d prompt.Document) []prompt.Suggest {
 	s := []prompt.Suggest{
-		{Text: "back", Description: "Go back to previous console"},
+		{Text: "back", Description: "Return to the previous console"},
 	}
 	return prompt.FilterHasPrefix(s, d.GetWordBeforeCursor(), true)
 }

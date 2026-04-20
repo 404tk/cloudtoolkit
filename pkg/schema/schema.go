@@ -14,37 +14,37 @@ type Provider interface {
 	Name() string
 }
 
-// Enumerator powers the cloudlist payload.
+// Enumerator powers the asset-inventory (`cloudlist`) payload.
 type Enumerator interface {
 	Provider
 	Resources(ctx context.Context) (Resources, error)
 }
 
-// IAMManager powers the backdoor-user payload.
+// IAMManager powers the iam-user-check payload.
 type IAMManager interface {
 	Provider
 	UserManagement(action, username, password string)
 }
 
-// BucketManager powers the bucket-dump payload.
+// BucketManager powers the bucket-check payload.
 type BucketManager interface {
 	Provider
 	BucketDump(ctx context.Context, action, bucketName string)
 }
 
-// EventReader powers the event-dump payload.
+// EventReader powers the event-check payload.
 type EventReader interface {
 	Provider
 	EventDump(action, args string)
 }
 
-// VMExecutor powers the exec-command / shell payloads.
+// VMExecutor powers the instance-cmd-check / shell payloads.
 type VMExecutor interface {
 	Provider
 	ExecuteCloudVMCommand(instanceID, cmd string)
 }
 
-// DBManager powers the database-account payload.
+// DBManager powers the rds-account-check payload.
 type DBManager interface {
 	Provider
 	DBManagement(action, instanceID string)
@@ -52,7 +52,7 @@ type DBManager interface {
 
 // Asset is any cloud resource that can be enumerated and rendered. New asset
 // types (FaaS, K8s clusters, container registries, etc.) only need to
-// implement AssetType() to flow through the existing cloudlist pipeline.
+// implement AssetType() to flow through the existing asset-inventory pipeline.
 type Asset interface {
 	AssetType() string
 }
@@ -111,8 +111,8 @@ func (r Resources) Err() error {
 }
 
 // Grouped returns assets partitioned by AssetType() while preserving insertion
-// order within each bucket. Used by the cloudlist printer so each asset type
-// renders as its own table.
+// order within each bucket. Used by the asset-inventory printer so each asset
+// type renders as its own table.
 func (r *Resources) Grouped() map[string][]Asset {
 	out := make(map[string][]Asset)
 	for _, a := range r.Assets {
