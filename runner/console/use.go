@@ -42,6 +42,7 @@ func loadModule(m string) error {
 		actionCompleter,
 		prompt.OptionPrefix(fmt.Sprintf("ctk > %s > ", m)),
 		prompt.OptionInputTextColor(prompt.White),
+		sharedConsoleHistoryOption(),
 	)
 	currentConsole = p
 	p.Run()

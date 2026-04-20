@@ -126,6 +126,7 @@ func internation(uuid string) {
 			actionCompleter,
 			prompt.OptionPrefix(fmt.Sprintf("ctk > %s > ", provider)),
 			prompt.OptionInputTextColor(prompt.White),
+			sharedConsoleHistoryOption(),
 		)
 		currentConsole = p
 		p.Run()

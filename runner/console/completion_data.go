@@ -179,17 +179,7 @@ func providerCommandSuggestions() []prompt.Suggest {
 		{Text: "clear", Description: "clear the console"},
 		{Text: "exit", Description: "exit the console"},
 	}
-	if canReturnToPreviousConsole() {
-		suggestions = append(suggestions, prompt.Suggest{
-			Text:        "back",
-			Description: "return to the previous console",
-		})
-	}
 	return suggestions
-}
-
-func canReturnToPreviousConsole() bool {
-	return len(consoleStack) > 0
 }
 
 func showTopicSuggestions() []prompt.Suggest {

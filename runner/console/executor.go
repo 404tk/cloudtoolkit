@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/404tk/cloudtoolkit/runner/payloads"
@@ -17,9 +18,11 @@ import (
 )
 
 func Executor(s string) {
+	s = strings.TrimSpace(s)
 	if s == "" {
 		return
 	}
+	rememberConsoleCommand(s)
 	cmd, args := utils.ParseCmd(s)
 
 	// Only payload `run` needs a cancellable context with timeout + SIGINT wiring.
