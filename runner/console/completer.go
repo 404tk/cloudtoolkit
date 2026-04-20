@@ -54,61 +54,103 @@ var opt = []prompt.Suggest{
 }
 
 func Complete(d prompt.Document) []prompt.Suggest {
-	args := strings.Split(d.TextBeforeCursor(), " ")
+	args := completionArgs(d)
+	word := d.GetWordBeforeCursor()
 	if len(args) <= 1 {
-		return prompt.FilterHasPrefix(core, d.GetWordBeforeCursor(), true)
+		return prompt.FilterHasPrefix(core, word, true)
 	}
 	switch args[0] {
+	case "help":
+		return helpSuggestions(args, word)
 	case "use":
 		if len(args) == 2 {
-			return prompt.FilterContains(modules, d.GetWordBeforeCursor(), true)
+			return prompt.FilterContains(modules, word, true)
 		}
 	}
 	return []prompt.Suggest{}
 }
 
 func actionCompleter(d prompt.Document) []prompt.Suggest {
-	args := strings.Split(d.TextBeforeCursor(), " ")
+	args := completionArgs(d)
+	word := d.GetWordBeforeCursor()
 	if len(args) <= 1 {
-		return prompt.FilterHasPrefix(append(core, action...), d.GetWordBeforeCursor(), true)
+		return prompt.FilterHasPrefix(append(core, action...), word, true)
 	}
 	switch args[0] {
+	case "help":
+		return helpSuggestions(args, word)
 	case "use":
 		if len(args) == 2 {
-			return prompt.FilterContains(modules, d.GetWordBeforeCursor(), true)
+			return prompt.FilterContains(modules, word, true)
 		}
 	case "show":
 		if len(args) == 2 {
-			return prompt.FilterContains(opt, d.GetWordBeforeCursor(), true)
+			return prompt.FilterContains(opt, word, true)
 		}
 	case "set":
 		if len(args) == 2 {
-			getOpt := func() (p []prompt.Suggest) {
-				for k := range config {
-					if v, ok := optionsDesc[k]; ok { // && k != utils.Provider
-						p = append(p, prompt.Suggest{Text: k, Description: v})
-					}
-				}
-				return
-			}()
-			return prompt.FilterContains(getOpt, d.GetWordBeforeCursor(), true)
+			return prompt.FilterContains(optionSuggestions(), word, true)
 		}
 		if len(args) == 3 && args[1] == utils.Payload {
-			getPayloads := func() (p []prompt.Suggest) {
-				for _, entry := range payloads.Visible() {
-					p = append(p, prompt.Suggest{Text: entry.Name, Description: entry.Payload.Desc()})
-				}
-				return
-			}()
-			return prompt.FilterContains(getPayloads, d.GetWordBeforeCursor(), true)
+			return prompt.FilterContains(payloadSuggestions(), word, true)
 		}
 		if len(args) == 3 && args[1] == utils.Version {
 			var versions = []prompt.Suggest{
 				{Text: "Intl", Description: "International Edition"},
 				{Text: "China", Description: "Chinese Edition"},
 			}
-			return prompt.FilterContains(versions, d.GetWordBeforeCursor(), true)
+			return prompt.FilterContains(versions, word, true)
 		}
 	}
 	return []prompt.Suggest{}
+}
+
+func completionArgs(d prompt.Document) []string {
+	text := d.TextBeforeCursor()
+	args := strings.Fields(text)
+	if strings.HasSuffix(text, " ") || strings.HasSuffix(text, "\t") {
+		args = append(args, "")
+	}
+	return args
+}
+
+func helpSuggestions(args []string, word string) []prompt.Suggest {
+	if len(args) == 2 {
+		return prompt.FilterContains(helpTopicSuggestions(), word, true)
+	}
+	if len(args) == 3 && (args[1] == "payload" || args[1] == "metadata") {
+		return prompt.FilterContains(payloadSuggestions(), word, true)
+	}
+	return []prompt.Suggest{}
+}
+
+func helpTopicSuggestions() []prompt.Suggest {
+	suggestions := make([]prompt.Suggest, 0, len(helpTopicOrder))
+	for _, key := range helpTopicOrder {
+		if topic, ok := helpTopics[key]; ok {
+			suggestions = append(suggestions, prompt.Suggest{
+				Text:        key,
+				Description: topic.Summary,
+			})
+		}
+	}
+	return suggestions
+}
+
+func optionSuggestions() []prompt.Suggest {
+	suggestions := make([]prompt.Suggest, 0, len(config))
+	for k := range config {
+		if v, ok := optionsDesc[k]; ok {
+			suggestions = append(suggestions, prompt.Suggest{Text: k, Description: v})
+		}
+	}
+	return suggestions
+}
+
+func payloadSuggestions() []prompt.Suggest {
+	suggestions := make([]prompt.Suggest, 0, len(payloads.Visible()))
+	for _, entry := range payloads.Visible() {
+		suggestions = append(suggestions, prompt.Suggest{Text: entry.Name, Description: entry.Payload.Desc()})
+	}
+	return suggestions
 }

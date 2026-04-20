@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/confirm"
@@ -39,33 +40,63 @@ func shell(args []string) {
 }
 
 func shellExecutor(cmd string) {
+	cmd = strings.TrimSpace(cmd)
 	if cmd == "" {
 		return
 	}
-	switch cmd {
+	name, args := utils.ParseCmd(cmd)
+	switch name {
+	case "help":
+		help(args)
+		return
 	case "clear":
-		os.Stdout.Write([]byte("\033[2J\033[H"))
-	case "exit", "quit", "back":
-		if len(consoleStack) > 0 {
-			prevConsole := consoleStack[len(consoleStack)-1]
-			consoleStack = consoleStack[:len(consoleStack)-1]
-			currentConsole = prevConsole
-			config[utils.Payload] = "cloudlist"
-			logger.Info(fmt.Sprintf("Validation session to %s closed.", instanceId))
-			prevConsole.Run()
-		} else {
-			logger.Error("No previous console")
+		if len(args) == 0 {
+			os.Stdout.Write([]byte("\033[2J\033[H"))
+			return
 		}
-	default:
-		cmd = base64.StdEncoding.EncodeToString([]byte(cmd))
-		config[utils.Metadata] = fmt.Sprintf("%s %s", instanceId, cmd)
-		run(context.TODO())
+	case "exit", "quit", "back":
+		if len(args) == 0 {
+			closeShell()
+			return
+		}
 	}
+
+	cmd = base64.StdEncoding.EncodeToString([]byte(cmd))
+	config[utils.Metadata] = fmt.Sprintf("%s %s", instanceId, cmd)
+	run(context.TODO())
+}
+
+func closeShell() {
+	if len(consoleStack) == 0 {
+		logger.Error("No previous console")
+		return
+	}
+	target := instanceId
+	prevConsole := consoleStack[len(consoleStack)-1]
+	consoleStack = consoleStack[:len(consoleStack)-1]
+	currentConsole = prevConsole
+	config[utils.Payload] = "cloudlist"
+	instanceId = ""
+	logger.Info(fmt.Sprintf("Validation session to %s closed.", target))
+	prevConsole.Run()
 }
 
 func shellCompleter(d prompt.Document) []prompt.Suggest {
-	s := []prompt.Suggest{
-		{Text: "back", Description: "Return to the previous console"},
+	args := completionArgs(d)
+	word := d.GetWordBeforeCursor()
+	if len(args) <= 1 {
+		s := []prompt.Suggest{
+			{Text: "help", Description: "context-aware help"},
+			{Text: "clear", Description: "clear the local shell screen"},
+			{Text: "back", Description: "return to provider mode"},
+			{Text: "exit", Description: "close shell mode"},
+			{Text: "quit", Description: "close shell mode"},
+		}
+		return prompt.FilterHasPrefix(s, word, true)
 	}
-	return prompt.FilterHasPrefix(s, d.GetWordBeforeCursor(), true)
+	switch args[0] {
+	case "help":
+		return helpSuggestions(args, word)
+	}
+	return []prompt.Suggest{}
 }

@@ -39,7 +39,7 @@ func Executor(s string) {
 		case "note":
 			note(args)
 		case "help":
-			help()
+			help(args)
 		case "clear":
 			os.Stdout.Write([]byte("\033[2J\033[H"))
 		case "exit", "quit":

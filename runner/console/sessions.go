@@ -54,7 +54,7 @@ func sessions(args []string) {
 		checkCred("all")
 		return
 	}
-	fmt.Println("Usage of sessions:\n\t-i, internation [id]\n\t-k, kill [id]\n\t-c, check all")
+	fmt.Println("Usage of sessions:\n\t-i, interact [id]\n\t-k, kill [id]\n\t-c, check all")
 }
 
 func note(args []string) {
