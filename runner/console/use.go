@@ -35,6 +35,7 @@ func loadModule(m string) error {
 
 	config[utils.Provider] = m
 	config[utils.Payload] = "cloudlist" // Default payload is cloud asset inventory
+	config[utils.Metadata] = ""
 
 	p := prompt.New(
 		Executor,

@@ -27,6 +27,7 @@ func shell(args []string) {
 		return
 	}
 	instanceId = args[0]
+	rememberShellTarget(instanceId, config[utils.Provider], "shell command")
 	config[utils.Payload] = "instance-cmd-check"
 	p := prompt.New(
 		shellExecutor,
@@ -82,21 +83,5 @@ func closeShell() {
 }
 
 func shellCompleter(d prompt.Document) []prompt.Suggest {
-	args := completionArgs(d)
-	word := d.GetWordBeforeCursor()
-	if len(args) <= 1 {
-		s := []prompt.Suggest{
-			{Text: "help", Description: "context-aware help"},
-			{Text: "clear", Description: "clear the local shell screen"},
-			{Text: "back", Description: "return to provider mode"},
-			{Text: "exit", Description: "close shell mode"},
-			{Text: "quit", Description: "close shell mode"},
-		}
-		return prompt.FilterHasPrefix(s, word, true)
-	}
-	switch args[0] {
-	case "help":
-		return helpSuggestions(args, word)
-	}
-	return []prompt.Suggest{}
+	return completeForMode(d, HelpModeShell)
 }

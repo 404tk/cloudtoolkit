@@ -153,15 +153,26 @@ func set(args []string) {
 	if len(args) < 2 {
 		return
 	}
+	if config == nil {
+		return
+	}
 	key := args[0]
-	if _, ok := config[key]; ok {
-		if key != utils.Provider {
-			value := args[1]
-			if key == utils.Payload {
-				value = payloads.ResolveName(value)
+	if key == utils.Provider {
+		return
+	}
+
+	if _, ok := config[key]; ok || key == utils.Metadata || key == utils.Payload {
+		value := args[1]
+		if key == utils.Payload {
+			value = payloads.ResolveName(value)
+		}
+		config[key] = value
+		fmt.Printf("%s => %s\n", key, value)
+
+		if key == utils.Metadata && payloads.ResolveName(config[utils.Payload]) == "instance-cmd-check" {
+			if target := shellTargetFromMetadata(value); target != "" {
+				rememberShellTarget(target, config[utils.Provider], "instance-cmd-check metadata")
 			}
-			config[key] = value
-			fmt.Printf("%s => %s\n", key, value)
 		}
 	}
 	if key == utils.Payload {
@@ -174,6 +185,9 @@ func set(args []string) {
 			config[utils.Metadata] = utils.EventCheck
 		default:
 			config[utils.Metadata] = ""
+		}
+		if target := shellTargetFromConfig(config); target != "" {
+			rememberShellTarget(target, config[utils.Provider], "payload metadata")
 		}
 	}
 }

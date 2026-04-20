@@ -31,10 +31,15 @@ func init() {
 
 func sessions(args []string) {
 	if len(args) == 0 {
-		loadCred()
-		table.Output(creds)
+		listSessions()
 		return
 	} else if len(args) == 2 {
+		if args[0] == "-c" {
+			if args[1] == "all" {
+				checkCred("all")
+				return
+			}
+		}
 		uuid := getUuid(args[1])
 		if len(uuid) > 0 {
 			switch args[0] {
@@ -54,7 +59,7 @@ func sessions(args []string) {
 		checkCred("all")
 		return
 	}
-	fmt.Println("Usage of sessions:\n\t-i, interact [id]\n\t-k, kill [id]\n\t-c, check all")
+	fmt.Println("Usage of sessions:\n\t-i, interact [id]\n\t-k, kill [id]\n\t-c, check [id|all]")
 }
 
 func note(args []string) {
@@ -93,6 +98,11 @@ func loadCred() {
 	}
 }
 
+func listSessions() {
+	loadCred()
+	table.Output(creds)
+}
+
 func internation(uuid string) {
 	data := cache.Cfg.CredSelect(uuid)
 	m := make(map[string]string)
@@ -102,8 +112,14 @@ func internation(uuid string) {
 	}
 	if provider, ok := m[utils.Provider]; ok {
 		config = m
+		if _, ok := config[utils.Metadata]; !ok {
+			config[utils.Metadata] = ""
+		}
 		if name, ok := config[utils.Payload]; ok {
 			config[utils.Payload] = payloads.ResolveName(name)
+		}
+		if target := shellTargetFromConfig(config); target != "" {
+			rememberShellTarget(target, provider, "cached session")
 		}
 		p := prompt.New(
 			Executor,

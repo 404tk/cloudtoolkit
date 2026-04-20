@@ -435,9 +435,7 @@ func renderShellHelp(ctx HelpContext) {
 	writeLines(&b, "Local shell commands:", []string{
 		"help [topic]            Show local help without sending a remote command.",
 		"clear                   Clear the screen.",
-		"back                    Close shell mode and return to provider mode.",
 		"exit                    Close shell mode and return to provider mode.",
-		"quit                    Close shell mode and return to provider mode.",
 	})
 	writeLines(&b, "Remote command behavior:", []string{
 		"Any other input is treated as a remote instance command for the current authorized target.",
