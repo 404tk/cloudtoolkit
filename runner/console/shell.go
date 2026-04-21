@@ -22,6 +22,28 @@ func shell(args []string) {
 		logger.Error("Usage: shell <instance-id>")
 		return
 	}
+	if isDemoReplayActiveForCurrentProvider() {
+		instanceId = args[0]
+		rememberShellTarget(instanceId, config[utils.Provider], "shell command")
+		config[utils.Payload] = "instance-cmd-check"
+		fmt.Println()
+		fmt.Println("Mock Shell Session")
+		fmt.Println("==================")
+		fmt.Println()
+		fmt.Println("Simulated commands only.")
+		fmt.Println("Type `exit` to return.")
+		fmt.Println()
+		p := prompt.New(
+			shellExecutor,
+			shellCompleter,
+			prompt.OptionPrefix(shellPromptPrefix(instanceId, true)),
+			prompt.OptionInputTextColor(prompt.White),
+		)
+		consoleStack = append(consoleStack, currentConsole)
+		currentConsole = p
+		p.Run()
+		return
+	}
 	if !confirm.Ask("instance-cmd-check session", config[utils.Provider], args[0]) {
 		logger.Info("Cancelled.")
 		return
@@ -32,7 +54,7 @@ func shell(args []string) {
 	p := prompt.New(
 		shellExecutor,
 		shellCompleter,
-		prompt.OptionPrefix(fmt.Sprintf("[validation@%s ~]$ ", instanceId)),
+		prompt.OptionPrefix(shellPromptPrefix(instanceId, false)),
 		prompt.OptionInputTextColor(prompt.White),
 	)
 	consoleStack = append(consoleStack, currentConsole)
@@ -78,7 +100,7 @@ func closeShell() {
 	currentConsole = prevConsole
 	config[utils.Payload] = "cloudlist"
 	instanceId = ""
-	logger.Info(fmt.Sprintf("Validation session to %s closed.", target))
+	logger.Info(fmt.Sprintf("Connection to %s closed.", target))
 	prevConsole.Run()
 }
 

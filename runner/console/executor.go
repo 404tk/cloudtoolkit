@@ -41,6 +41,8 @@ func Executor(s string) {
 			sessions(args)
 		case "note":
 			note(args)
+		case "demo":
+			demoCommand()
 		case "help":
 			help(args)
 		case "clear":
@@ -54,7 +56,7 @@ func Executor(s string) {
 		return
 	}
 
-	if !confirmIfSensitive(config) {
+	if !isDemoRunHandledByProviderReplay() && !confirmIfSensitive(config) {
 		logger.Info("Cancelled.")
 		return
 	}

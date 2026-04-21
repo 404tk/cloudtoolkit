@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/404tk/cloudtoolkit/pkg/inventory"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/argparse"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -23,9 +22,8 @@ func (p RDSAccountCheck) Run(ctx context.Context, config map[string]string) {
 		action = data[0]
 		args = data[1]
 	}
-	i, err := inventory.New(config)
-	if err != nil {
-		logger.Error(err)
+	i, ok := loadInventory(config)
+	if !ok {
 		return
 	}
 	mgr, ok := i.Providers.(schema.DBManager)

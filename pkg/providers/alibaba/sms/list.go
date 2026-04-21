@@ -17,6 +17,10 @@ type Driver struct {
 	now           func() time.Time
 }
 
+func (d *Driver) SetClientOptions(opts ...api.Option) {
+	d.clientOptions = append([]api.Option(nil), opts...)
+}
+
 func (d *Driver) GetResource(ctx context.Context) (schema.Sms, error) {
 	res := schema.Sms{}
 	select {

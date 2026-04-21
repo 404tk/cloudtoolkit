@@ -28,6 +28,10 @@ func (d *Driver) newClient() *api.Client {
 	return api.NewClient(d.Cred, d.clientOptions...)
 }
 
+func (d *Driver) SetClientOptions(opts ...api.Option) {
+	d.clientOptions = append([]api.Option(nil), opts...)
+}
+
 func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 	list := []schema.User{}
 	select {

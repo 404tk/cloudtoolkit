@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -27,12 +28,29 @@ import (
 
 // Provider is a data provider for alibaba API
 type Provider struct {
-	apiCred _auth.Credential
-	region  string
+	apiCred          _auth.Credential
+	region           string
+	apiClientOptions []_api.Option
+	ossClientOptions []_oss.Option
+	slsHTTPClient    *http.Client
 }
 
 // New creates a new provider client for alibaba API
 func New(options schema.Options) (*Provider, error) {
+	return NewWithConfig(options, ClientConfig{})
+}
+
+type ClientConfig struct {
+	APIOptions          []_api.Option
+	OSSOptions          []_oss.Option
+	SLSHTTPClient       *http.Client
+	SkipCredentialCache bool
+}
+
+// NewWithConfig creates a new provider client for alibaba API with injected
+// transport options. This keeps payload behavior intact while allowing
+// replay/test clients to flow through the real provider and driver stack.
+func NewWithConfig(options schema.Options, cfg ClientConfig) (*Provider, error) {
 	apiCred, err := _auth.FromOptions(options)
 	if err != nil {
 		return nil, err
@@ -42,7 +60,7 @@ func New(options schema.Options) (*Provider, error) {
 	payload, _ := options.GetMetadata(utils.Payload)
 	if payload == "cloudlist" {
 		// Get current username
-		response, err := _api.NewClient(apiCred).GetCallerIdentity(context.Background(), region)
+		response, err := _api.NewClient(apiCred, cfg.APIOptions...).GetCallerIdentity(context.Background(), region)
 		if err != nil {
 			return nil, err
 		}
@@ -56,13 +74,18 @@ func New(options schema.Options) (*Provider, error) {
 			}
 		}
 		msg := fmt.Sprintf("Current user: %s (%s)", userName, accountArn)
-		cache.Cfg.CredInsert(userName, options)
+		if !cfg.SkipCredentialCache {
+			cache.Cfg.CredInsert(userName, options)
+		}
 		logger.Warning(msg)
 	}
 
 	return &Provider{
-		apiCred: apiCred,
-		region:  region,
+		apiCred:          apiCred,
+		region:           region,
+		apiClientOptions: append([]_api.Option(nil), cfg.APIOptions...),
+		ossClientOptions: append([]_oss.Option(nil), cfg.OSSOptions...),
+		slsHTTPClient:    cfg.SLSHTTPClient,
 	}, nil
 }
 
@@ -78,40 +101,40 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	for _, product := range utils.Cloudlist {
 		switch product {
 		case "balance":
-			d := &_bss.Driver{Cred: p.apiCred, Region: p.region}
+			d := p.newBSSDriver(p.region)
 			d.QueryAccountBalance(ctx)
 		case "host":
-			ecsprovider := &_ecs.Driver{Cred: p.apiCred, Region: p.region}
+			ecsprovider := p.newECSDriver(p.region)
 			hosts, err := ecsprovider.GetResource(ctx)
 			schema.AppendAssets(&list, hosts)
 			list.AddError("host", err)
 		case "domain":
-			dnsprovider := &_dns.Driver{Cred: p.apiCred, Region: p.region}
+			dnsprovider := p.newDNSDriver(p.region)
 			domains, err := dnsprovider.GetDomains(ctx)
 			schema.AppendAssets(&list, domains)
 			list.AddError("domain", err)
 		case "account":
-			ramprovider := &_iam.Driver{Cred: p.apiCred, Region: p.region}
+			ramprovider := p.newIAMDriver(p.region)
 			users, err := ramprovider.ListUsers(ctx)
 			schema.AppendAssets(&list, users)
 			list.AddError("account", err)
 		case "database":
-			rdsprovider := &_rds.Driver{Cred: p.apiCred, Region: p.region}
+			rdsprovider := p.newRDSDriver(p.region)
 			databases, err := rdsprovider.GetDatabases(ctx)
 			schema.AppendAssets(&list, databases)
 			list.AddError("database", err)
 		case "bucket":
-			ossprovider := &_oss.Driver{Cred: p.apiCred, Region: p.region}
+			ossprovider := p.newOSSDriver(p.region)
 			storages, err := ossprovider.GetBuckets(ctx)
 			schema.AppendAssets(&list, storages)
 			list.AddError("bucket", err)
 		case "sms":
-			smsprovider := &_sms.Driver{Cred: p.apiCred, Region: p.region}
+			smsprovider := p.newSMSDriver(p.region)
 			sms, err := smsprovider.GetResource(ctx)
 			list.Sms = sms
 			list.AddError("sms", err)
 		case "log":
-			slsprovider := &sls.Driver{Cred: p.apiCred, Region: p.region}
+			slsprovider := p.newSLSDriver(p.region)
 			logs, err := slsprovider.ListProjects(ctx)
 			schema.AppendAssets(&list, logs)
 			list.AddError("log", err)
@@ -123,7 +146,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 }
 
 func (p *Provider) UserManagement(action, username, password string) {
-	r := &_iam.Driver{Cred: p.apiCred, Region: p.region}
+	r := p.newIAMDriver(p.region)
 	switch action {
 	case "add":
 		r.UserName = username
@@ -145,7 +168,7 @@ func (p *Provider) UserManagement(action, username, password string) {
 }
 
 func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
-	ossdrvier := &_oss.Driver{Cred: p.apiCred, Region: p.region}
+	ossdrvier := p.newOSSDriver(p.region)
 	switch action {
 	case "list":
 		infos, err := p.bucketInfos(context.Background(), ossdrvier, bucketName)
@@ -167,7 +190,7 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
 }
 
 func (p *Provider) EventDump(action, args string) {
-	d := _sas.Driver{Cred: p.apiCred}
+	d := p.newSASDriver()
 	switch action {
 	case "dump":
 		events, err := d.DumpEvents()
@@ -199,7 +222,7 @@ func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {
 		logger.Error("Unable to resolve instance metadata.")
 		return
 	}
-	d := _ecs.Driver{Cred: p.apiCred, Region: host.Region}
+	d := p.newECSDriver(host.Region)
 	command, err := base64.StdEncoding.DecodeString(cmd)
 	if err != nil {
 		logger.Error(err.Error())
@@ -212,12 +235,12 @@ func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {
 }
 
 func (p *Provider) DBManagement(action, instanceID string) {
-	r := &_rds.Driver{Cred: p.apiCred, Region: p.region}
+	r := p.newRDSDriver(p.region)
 	switch action {
 	case "useradd":
 		db, ok := p.lookupDatabase(instanceID)
 		if !ok {
-			logger.Error("Unable to resolve database metadata.")
+			logger.Error("Unable to resolve database metadata, retry: shell <instance-id>")
 			return
 		}
 		r.Region = db.Region
@@ -235,18 +258,6 @@ func (p *Provider) lookupHost(instanceID string) (schema.Host, bool) {
 			return host, true
 		}
 	}
-	logger.Info("Host metadata cache miss, refreshing instances ...")
-	driver := &_ecs.Driver{Cred: p.apiCred, Region: p.region}
-	hosts, err := driver.GetResource(context.Background())
-	if err != nil {
-		logger.Error(err)
-		return schema.Host{}, false
-	}
-	for _, host := range hosts {
-		if host.ID == instanceID {
-			return host, true
-		}
-	}
 	return schema.Host{}, false
 }
 
@@ -257,7 +268,7 @@ func (p *Provider) lookupDatabase(instanceID string) (schema.Database, bool) {
 		}
 	}
 	logger.Info("Database metadata cache miss, refreshing instances ...")
-	driver := &_rds.Driver{Cred: p.apiCred, Region: p.region}
+	driver := p.newRDSDriver(p.region)
 	databases, err := driver.GetDatabases(context.Background())
 	if err != nil {
 		logger.Error(err)
@@ -306,4 +317,60 @@ func (p *Provider) bucketInfos(ctx context.Context, driver *_oss.Driver, bucketN
 		}
 		return nil, fmt.Errorf("bucket %s region not found; set region explicitly or use `list all` first", bucketName)
 	}
+}
+
+func (p *Provider) newBSSDriver(region string) *_bss.Driver {
+	driver := &_bss.Driver{Cred: p.apiCred, Region: region}
+	driver.SetClientOptions(p.apiClientOptions...)
+	return driver
+}
+
+func (p *Provider) newDNSDriver(region string) *_dns.Driver {
+	driver := &_dns.Driver{Cred: p.apiCred, Region: region}
+	driver.SetClientOptions(p.apiClientOptions...)
+	return driver
+}
+
+func (p *Provider) newECSDriver(region string) *_ecs.Driver {
+	driver := &_ecs.Driver{Cred: p.apiCred, Region: region}
+	driver.SetClientOptions(p.apiClientOptions...)
+	return driver
+}
+
+func (p *Provider) newIAMDriver(region string) *_iam.Driver {
+	driver := &_iam.Driver{Cred: p.apiCred, Region: region}
+	driver.SetClientOptions(p.apiClientOptions...)
+	return driver
+}
+
+func (p *Provider) newOSSDriver(region string) *_oss.Driver {
+	driver := &_oss.Driver{Cred: p.apiCred, Region: region}
+	if len(p.ossClientOptions) != 0 {
+		driver.Client = _oss.NewClient(p.apiCred, p.ossClientOptions...)
+	}
+	return driver
+}
+
+func (p *Provider) newRDSDriver(region string) *_rds.Driver {
+	driver := &_rds.Driver{Cred: p.apiCred, Region: region}
+	driver.SetClientOptions(p.apiClientOptions...)
+	return driver
+}
+
+func (p *Provider) newSASDriver() _sas.Driver {
+	driver := _sas.Driver{Cred: p.apiCred}
+	driver.SetClientOptions(p.apiClientOptions...)
+	return driver
+}
+
+func (p *Provider) newSLSDriver(region string) *sls.Driver {
+	driver := &sls.Driver{Cred: p.apiCred, Region: region}
+	driver.SetHTTPClient(p.slsHTTPClient)
+	return driver
+}
+
+func (p *Provider) newSMSDriver(region string) *_sms.Driver {
+	driver := &_sms.Driver{Cred: p.apiCred, Region: region}
+	driver.SetClientOptions(p.apiClientOptions...)
+	return driver
 }

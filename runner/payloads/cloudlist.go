@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/404tk/cloudtoolkit/pkg/inventory"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -28,9 +27,8 @@ var assetPrintOrder = []struct {
 }
 
 func (p CloudList) Run(ctx context.Context, config map[string]string) {
-	i, err := inventory.New(config)
-	if err != nil {
-		logger.Error(err)
+	i, ok := loadInventory(config)
+	if !ok {
 		return
 	}
 	enum, ok := i.Providers.(schema.Enumerator)

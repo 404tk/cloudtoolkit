@@ -10,7 +10,6 @@ import (
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/404tk/go-prompt"
 	"github.com/404tk/table"
 )
 
@@ -104,11 +103,9 @@ func listSessions() {
 }
 
 func internation(uuid string) {
-	data := cache.Cfg.CredSelect(uuid)
-	m := make(map[string]string)
-	err := json.Unmarshal([]byte(data), &m)
-	if err != nil {
-		logger.Error("Unmarshal failed:", err.Error())
+	m, ok := decodeSessionConfig(cache.Cfg.CredSelect(uuid))
+	if !ok {
+		return
 	}
 	if provider, ok := m[utils.Provider]; ok {
 		config = m
@@ -121,15 +118,7 @@ func internation(uuid string) {
 		if target := shellTargetFromConfig(config); target != "" {
 			rememberShellTarget(target, provider, "cached session")
 		}
-		p := prompt.New(
-			Executor,
-			actionCompleter,
-			prompt.OptionPrefix(fmt.Sprintf("ctk > %s > ", provider)),
-			prompt.OptionInputTextColor(prompt.White),
-			sharedConsoleHistoryOption(),
-		)
-		currentConsole = p
-		p.Run()
+		startProviderConsole(provider)
 	}
 }
 
@@ -138,19 +127,27 @@ func checkCred(uuid string) {
 		if uuid != "all" && cred.UUID != uuid {
 			continue
 		}
-		m := make(map[string]string)
-		err := json.Unmarshal([]byte(cred.JsonData), &m)
-		if err != nil {
-			logger.Error("Unmarshal failed:", err.Error())
+		m, ok := decodeSessionConfig(cred.JsonData)
+		if !ok {
+			continue
 		}
 		if value, ok := m[utils.Provider]; ok {
 			if v, ok := plugins.Providers[value]; ok {
 				m[utils.Payload] = "cloudlist"
-				_, err = v.Check(m)
+				_, err := v.Check(m)
 				if err != nil {
 					logger.Error(fmt.Sprintf("%s(%s) check failed.", cred.User, cred.AccessKey))
 				}
 			}
 		}
 	}
+}
+
+func decodeSessionConfig(data string) (map[string]string, bool) {
+	m := make(map[string]string)
+	if err := json.Unmarshal([]byte(data), &m); err != nil {
+		logger.Error("Unmarshal failed:", err.Error())
+		return nil, false
+	}
+	return m, true
 }

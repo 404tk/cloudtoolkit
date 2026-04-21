@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/404tk/cloudtoolkit/pkg/inventory"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/argparse"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -23,9 +22,8 @@ func (p InstanceCmdCheck) Run(ctx context.Context, config map[string]string) {
 		instanceId = data[0]
 		cmd = data[1]
 	}
-	i, err := inventory.New(config)
-	if err != nil {
-		logger.Error(err)
+	i, ok := loadInventory(config)
+	if !ok {
 		return
 	}
 	execer, ok := i.Providers.(schema.VMExecutor)

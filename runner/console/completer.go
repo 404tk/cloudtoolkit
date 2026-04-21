@@ -54,13 +54,13 @@ func completeForMode(d prompt.Document, mode HelpMode) []prompt.Suggest {
 	case HelpModeProvider:
 		return providerSuggestions(ctx, args, word)
 	case HelpModeShell:
-		return shellSuggestions(ctx, args, word)
+		return shellSuggestions(args, word)
 	default:
-		return rootSuggestions(ctx, args, word)
+		return rootSuggestions(args, word)
 	}
 }
 
-func rootSuggestions(_ CompletionContext, args []string, word string) []prompt.Suggest {
+func rootSuggestions(args []string, word string) []prompt.Suggest {
 	if len(args) <= 1 {
 		return prompt.FilterHasPrefix(rootCommandSuggestions, word, true)
 	}
@@ -81,7 +81,10 @@ func rootSuggestions(_ CompletionContext, args []string, word string) []prompt.S
 
 func providerSuggestions(ctx CompletionContext, args []string, word string) []prompt.Suggest {
 	if len(args) <= 1 {
-		return prompt.FilterHasPrefix(providerCommandSuggestions(), word, true)
+		if ctx.DemoReplay {
+			return prompt.FilterHasPrefix(mockCommandSuggestions(), word, true)
+		}
+		return prompt.FilterHasPrefix(providerCommandSuggestionsData, word, true)
 	}
 	switch args[0] {
 	case "help":
@@ -104,7 +107,7 @@ func providerSuggestions(ctx CompletionContext, args []string, word string) []pr
 	return []prompt.Suggest{}
 }
 
-func shellSuggestions(_ CompletionContext, args []string, word string) []prompt.Suggest {
+func shellSuggestions(args []string, word string) []prompt.Suggest {
 	if len(args) <= 1 {
 		return prompt.FilterHasPrefix(shellCommandSuggestions, word, true)
 	}
@@ -117,7 +120,7 @@ func shellSuggestions(_ CompletionContext, args []string, word string) []prompt.
 
 func showSuggestions(args []string, word string) []prompt.Suggest {
 	if len(args) == 2 {
-		return prompt.FilterContains(showTopicSuggestions(), word, true)
+		return prompt.FilterContains(showTopicSuggestionsData, word, true)
 	}
 	return []prompt.Suggest{}
 }

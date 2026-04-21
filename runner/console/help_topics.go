@@ -22,6 +22,7 @@ type HelpContext struct {
 	Provider   string
 	Payload    string
 	InstanceID string
+	DemoReplay bool
 }
 
 type helpTopic struct {
@@ -46,6 +47,7 @@ var helpTopicOrder = []string{
 	"set",
 	"run",
 	"shell",
+	"demo",
 	"payload",
 	"metadata",
 }
@@ -166,6 +168,28 @@ var helpTopics = map[string]helpTopic{
 			"shell i-1234567890abcdef0",
 		},
 	},
+	"demo": {
+		Title:   "Demo",
+		Summary: "Enable deterministic replay mode inside the current provider session.",
+		Usage: []string{
+			"demo",
+		},
+		Details: []string{
+			"`demo` opens a nested provider mock session and changes the prompt to `ctk > <provider>[mock] >`.",
+			"`exit`, `quit`, or `back` leave mock mode and return to the live provider session.",
+			"After enabling demo replay, use the designated demo access key and secret key with the existing `set` commands.",
+			"When the designated demo credentials match, supported payloads and shell sessions replay deterministic provider responses through the real provider and payload flow.",
+			"If the credentials do not match, mock mode returns a natural authentication failure and does not silently fall through to live provider execution.",
+		},
+		Examples: []string{
+			"use alibaba",
+			"demo",
+			"set accesskey LTAIxxxxxxxxxxxxEXAMPLE",
+			"set secretkey EXAMPLExxxxxxxxxxxxxxxxKEY",
+			"run",
+			"exit",
+		},
+	},
 	"payload": {
 		Title:   "Payload",
 		Summary: "Inspect visible validation payloads and get payload-specific guidance.",
@@ -232,10 +256,11 @@ var payloadHelpDocs = map[string]payloadHelp{
 	"bucket-check": {
 		MetadataSyntax: []string{
 			"set metadata <action> <bucket-name>",
-			"`action` is typically `dump`.",
+			"`action` is typically `list` or `total`.",
 		},
 		MetadataExamples: []string{
-			"set metadata dump ctk-validation-bucket",
+			"set metadata list ctk-validation-bucket",
+			"set metadata total ctk-validation-bucket",
 		},
 		SafetyNotes: []string{
 			"Use buckets created for validation or otherwise explicitly approved for review.",
@@ -309,8 +334,9 @@ var sensitiveHelpOptions = map[string]struct{}{
 
 func currentHelpContext() HelpContext {
 	ctx := HelpContext{
-		Mode:    HelpModeRoot,
-		Payload: currentPayloadName(),
+		Mode:       HelpModeRoot,
+		Payload:    currentPayloadName(),
+		DemoReplay: isDemoReplayActiveForCurrentProvider(),
 	}
 	if config != nil {
 		ctx.Provider = config[utils.Provider]
@@ -378,6 +404,7 @@ func renderRootHelp() {
 		"show options            Review provider configuration.",
 		"show payloads           Review visible validation payloads.",
 		"set <option> <value>    Update provider options or payload metadata.",
+		"demo                    Enable deterministic replay for supported providers.",
 		"run                     Execute the active payload.",
 		"shell <instance-id>     Open an instance command validation shell.",
 	})
@@ -392,6 +419,7 @@ func renderRootHelp() {
 	writeLines(&b, "More help:", []string{
 		"help use",
 		"help sessions",
+		"help demo",
 		"help payload",
 		"help metadata",
 	})
@@ -405,9 +433,10 @@ func renderProviderHelp(ctx HelpContext) {
 	var b strings.Builder
 	writeHeader(&b, "Provider Help")
 	writeLines(&b, "Current context:", []string{
-		fmt.Sprintf("mode: provider"),
+		fmt.Sprintf("mode: %s", providerHelpModeLabel(ctx)),
 		fmt.Sprintf("provider: %s", helpValueOrDefault(ctx.Provider, "(not set)")),
 		fmt.Sprintf("payload: %s", helpValueOrDefault(ctx.Payload, "cloudlist")),
+		fmt.Sprintf("demo replay: %s", demoReplayStatus(ctx.DemoReplay)),
 	})
 	writeLines(&b, "Current config summary:", providerConfigSummaryLines())
 
@@ -431,19 +460,33 @@ func renderShellHelp(ctx HelpContext) {
 		fmt.Sprintf("provider: %s", helpValueOrDefault(ctx.Provider, "(not set)")),
 		fmt.Sprintf("target instance: %s", helpValueOrDefault(ctx.InstanceID, "(not set)")),
 		fmt.Sprintf("payload: %s", helpValueOrDefault(ctx.Payload, "instance-cmd-check")),
+		fmt.Sprintf("demo replay: %s", demoReplayStatus(ctx.DemoReplay)),
 	})
 	writeLines(&b, "Local shell commands:", []string{
 		"help [topic]            Show local help without sending a remote command.",
 		"clear                   Clear the screen.",
 		"exit                    Close shell mode and return to provider mode.",
 	})
-	writeLines(&b, "Remote command behavior:", []string{
-		"Any other input is treated as a remote instance command for the current authorized target.",
-		"Use `help shell` or `help payload instance-cmd-check` if you need payload details before sending a command.",
-	})
-	writeLines(&b, "Responsible use:", []string{
-		"Run remote commands only against owned, lab, or explicitly authorized instances.",
-	})
+	if ctx.DemoReplay {
+		writeLines(&b, "Replay behavior:", []string{
+			"Any other input is replayed locally from deterministic demo data for the current target.",
+			"No real remote command execution will occur while demo replay is active and the designated demo credentials are configured.",
+		})
+	} else {
+		writeLines(&b, "Remote command behavior:", []string{
+			"Any other input is treated as a remote instance command for the current authorized target.",
+			"Use `help shell` or `help payload instance-cmd-check` if you need payload details before sending a command.",
+		})
+	}
+	if ctx.DemoReplay {
+		writeLines(&b, "Responsible use:", []string{
+			"Use demo replay only for walkthroughs, demos, and validation dry-runs in owned, lab, or explicitly authorized environments.",
+		})
+	} else {
+		writeLines(&b, "Responsible use:", []string{
+			"Run remote commands only against owned, lab, or explicitly authorized instances.",
+		})
+	}
 	fmt.Print(b.String())
 }
 
@@ -589,8 +632,14 @@ func providerRecommendedCommands(ctx HelpContext) []string {
 	}
 	if len(missing) > 0 {
 		commands := []string{"show options"}
+		if ctx.DemoReplay {
+			commands = append(commands, "exit")
+		}
 		for _, key := range missing {
 			commands = append(commands, fmt.Sprintf("set %s <value>", key))
+		}
+		if !ctx.DemoReplay {
+			commands = append(commands, "demo")
 		}
 		commands = append(commands,
 			"show payloads",
@@ -603,6 +652,12 @@ func providerRecommendedCommands(ctx HelpContext) []string {
 		"show payloads",
 		"set payload <payload-name>",
 		"help payload <payload-name>",
+	}
+	if ctx.DemoReplay {
+		commands = append([]string{"exit"}, commands...)
+	}
+	if !ctx.DemoReplay {
+		commands = append(commands, "demo")
 	}
 	if ctx.Payload == "instance-cmd-check" {
 		commands = append(commands,
@@ -667,6 +722,20 @@ func helpValueOrDefault(value, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func demoReplayStatus(enabled bool) string {
+	if enabled {
+		return "enabled"
+	}
+	return "disabled"
+}
+
+func providerHelpModeLabel(ctx HelpContext) string {
+	if ctx.DemoReplay {
+		return "provider[mock]"
+	}
+	return "provider"
 }
 
 func writeHeader(b *strings.Builder, title string) {

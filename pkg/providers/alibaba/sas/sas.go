@@ -31,6 +31,10 @@ func (d *Driver) newClient() *api.Client {
 	return api.NewClient(d.Cred, d.clientOptions...)
 }
 
+func (d *Driver) SetClientOptions(opts ...api.Option) {
+	d.clientOptions = append([]api.Option(nil), opts...)
+}
+
 func (d *Driver) DumpEvents() ([]schema.Event, error) {
 	var events []schema.Event
 	client := d.newClient()

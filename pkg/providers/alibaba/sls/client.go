@@ -35,6 +35,10 @@ func NewClient(internal bool, region, accessKeyId, accessKeySecret, securityToke
 	}
 }
 
+func (d *Driver) SetHTTPClient(client *http.Client) {
+	d.httpClient = client
+}
+
 func (client *Client) forProject(name string) *Client {
 	newclient := *client
 

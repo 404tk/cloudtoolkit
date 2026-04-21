@@ -187,7 +187,7 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
 func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {
 	host, ok := p.lookupHost(instanceID)
 	if !ok {
-		logger.Error("Unable to resolve instance metadata.")
+		logger.Error("Unable to resolve instance metadata, retry: shell <instance-id>")
 		return
 	}
 	d := tat.Driver{Credential: p.apiCredential, Region: host.Region}
@@ -205,28 +205,6 @@ func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {
 
 func (p *Provider) lookupHost(instanceID string) (schema.Host, bool) {
 	for _, host := range tat.GetCacheHostList() {
-		if host.ID == instanceID {
-			return host, true
-		}
-	}
-	logger.Info("Host metadata cache miss, refreshing instances ...")
-	cvmProvider := &cvm.Driver{Credential: p.apiCredential, Region: p.region}
-	cvmProvider.SetClientOptions(p.clientOptions...)
-	hosts, err := cvmProvider.GetResource(context.Background())
-	if err != nil {
-		logger.Error(err)
-	}
-	lightProvider := &lighthouse.Driver{Credential: p.apiCredential, Region: p.region}
-	lightProvider.SetClientOptions(p.clientOptions...)
-	lights, lightErr := lightProvider.GetResource(context.Background())
-	if lightErr != nil {
-		logger.Error(lightErr)
-	}
-	hosts = append(hosts, lights...)
-	if len(hosts) > 0 {
-		tat.SetCacheHostList(hosts)
-	}
-	for _, host := range hosts {
 		if host.ID == instanceID {
 			return host, true
 		}

@@ -20,6 +20,7 @@ type CompletionContext struct {
 	Payload    string
 	Config     map[string]string
 	InstanceID string
+	DemoReplay bool
 }
 
 type shellTargetHint struct {
@@ -29,26 +30,56 @@ type shellTargetHint struct {
 
 var knownShellTargets = make(map[string]shellTargetHint)
 
-var rootCommandSuggestions = []prompt.Suggest{
-	{Text: "help", Description: "show context-aware help"},
-	{Text: "use", Description: "enter provider mode"},
-	{Text: "sessions", Description: "list or reuse cached sessions"},
-	{Text: "note", Description: "annotate a cached session"},
-	{Text: "clear", Description: "clear the console"},
-	{Text: "exit", Description: "exit the console"},
+var commandSuggestionDescriptions = map[string]string{
+	"help":     "show context-aware help",
+	"use":      "enter provider mode",
+	"sessions": "list or reuse sessions",
+	"note":     "annotate a session",
+	"clear":    "clear the current screen",
+	"exit":     "leave the current mode",
+	// "quit":     "leave the current mode",
+	// "back":     "return to the previous mode",
+	"show":  "show options or payloads",
+	"set":   "set an option or payload parameter",
+	"demo":  "enable deterministic replay for supported providers",
+	"run":   "run the selected payload",
+	"shell": "open an authorized instance shell",
 }
 
-var shellCommandSuggestions = []prompt.Suggest{
-	{Text: "help", Description: "show local help"},
-	{Text: "clear", Description: "clear the local shell screen"},
-	{Text: "exit", Description: "close shell mode"},
-}
+var rootCommandSuggestions = buildCommandSuggestions([]string{
+	"help",
+	"use",
+	"sessions",
+	"note",
+	"clear",
+	"exit",
+})
+
+var shellCommandSuggestions = buildCommandSuggestions([]string{
+	"help",
+	"clear",
+	"exit",
+})
 
 var sessionsCommandSuggestions = []prompt.Suggest{
 	{Text: "-i", Description: "interact with a cached session by ID"},
 	{Text: "-k", Description: "delete a cached session by ID"},
 	{Text: "-c", Description: "check one cached session or all sessions"},
 }
+
+var providerCommandSuggestionsData = buildCommandSuggestions([]string{
+	"help",
+	"show",
+	"set",
+	"demo",
+	"run",
+	"shell",
+	"sessions",
+	"note",
+	"use",
+	"clear",
+	"exit",
+})
 
 var showTopicSuggestionsData = []prompt.Suggest{
 	{Text: "options", Description: "display provider configuration"},
@@ -125,7 +156,8 @@ var metadataTemplatesByPayload = map[string][]prompt.Suggest{
 		{Text: "del <username> <password>", Description: "remove a validation IAM user"},
 	},
 	"bucket-check": {
-		{Text: "dump <bucket-name>", Description: "review bucket contents in an authorized environment"},
+		{Text: "list <bucket-name>", Description: "review bucket contents in an authorized environment"},
+		{Text: "total <bucket-name>", Description: "count objects in a bucket"},
 	},
 	"event-check": {
 		{Text: "dump all", Description: "review all relevant events"},
@@ -147,6 +179,7 @@ func currentCompletionContext() CompletionContext {
 		Payload:    helpCtx.Payload,
 		Config:     config,
 		InstanceID: helpCtx.InstanceID,
+		DemoReplay: helpCtx.DemoReplay,
 	}
 }
 
@@ -166,24 +199,29 @@ func completionContextForMode(mode HelpMode) CompletionContext {
 	return ctx
 }
 
-func providerCommandSuggestions() []prompt.Suggest {
-	suggestions := []prompt.Suggest{
-		{Text: "help", Description: "show context-aware help"},
-		{Text: "show", Description: "show options or payloads"},
-		{Text: "set", Description: "set an option or payload parameter"},
-		{Text: "run", Description: "run the selected payload"},
-		{Text: "shell", Description: "open an authorized instance shell"},
-		{Text: "sessions", Description: "list or reuse cached sessions"},
-		{Text: "note", Description: "annotate a cached session"},
-		{Text: "use", Description: "switch to another provider"},
-		{Text: "clear", Description: "clear the console"},
-		{Text: "exit", Description: "exit the console"},
+func buildCommandSuggestions(commands []string) []prompt.Suggest {
+	suggestions := make([]prompt.Suggest, 0, len(commands))
+	for _, command := range commands {
+		desc := commandSuggestionDescriptions[command]
+		suggestions = append(suggestions, prompt.Suggest{
+			Text:        command,
+			Description: desc,
+		})
 	}
 	return suggestions
 }
 
-func showTopicSuggestions() []prompt.Suggest {
-	return showTopicSuggestionsData
+func mockCommandSuggestions() []prompt.Suggest {
+	return buildCommandSuggestions([]string{
+		"help",
+		"show",
+		"set",
+		"run",
+		"shell",
+		"note",
+		"clear",
+		"exit",
+	})
 }
 
 func noteSuggestions(args []string, word string) []prompt.Suggest {

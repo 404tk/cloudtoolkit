@@ -64,6 +64,24 @@ func resolveConfigPath() string {
 	return path
 }
 
+func firstUserValidationConfig(values ...userValidationConfig) userValidationConfig {
+	for _, value := range values {
+		if value != (userValidationConfig{}) {
+			return value
+		}
+	}
+	return userValidationConfig{}
+}
+
+func firstDatabaseAccountConfig(values ...databaseAccountConfig) databaseAccountConfig {
+	for _, value := range values {
+		if value != (databaseAccountConfig{}) {
+			return value
+		}
+	}
+	return databaseAccountConfig{}
+}
+
 func InitConfig() {
 	filename := resolveConfigPath()
 
@@ -89,26 +107,22 @@ func InitConfig() {
 		utils.RunTimeout = 10 * time.Minute
 	}
 
-	iamUserCheck := cfg.IAMUserCheck
-	if iamUserCheck == (userValidationConfig{}) {
-		iamUserCheck = cfg.LegacyIAMUserValidation
-	}
-	if iamUserCheck == (userValidationConfig{}) {
-		iamUserCheck = cfg.LegacyBackdoorUser
-	}
+	iamUserCheck := firstUserValidationConfig(
+		cfg.IAMUserCheck,
+		cfg.LegacyIAMUserValidation,
+		cfg.LegacyBackdoorUser,
+	)
 	utils.IAMUserCheck = fmt.Sprintf("%s %s %s",
 		iamUserCheck.Action,
 		iamUserCheck.Username,
 		iamUserCheck.Password,
 	)
 
-	rdsAccountCheck := cfg.RDSAccountCheck
-	if rdsAccountCheck == (databaseAccountConfig{}) {
-		rdsAccountCheck = cfg.LegacyDBAccountValidation
-	}
-	if rdsAccountCheck == (databaseAccountConfig{}) {
-		rdsAccountCheck = cfg.LegacyDatabaseAccount
-	}
+	rdsAccountCheck := firstDatabaseAccountConfig(
+		cfg.RDSAccountCheck,
+		cfg.LegacyDBAccountValidation,
+		cfg.LegacyDatabaseAccount,
+	)
 	utils.RDSAccount = fmt.Sprintf("%s:%s",
 		rdsAccountCheck.Username,
 		rdsAccountCheck.Password,
