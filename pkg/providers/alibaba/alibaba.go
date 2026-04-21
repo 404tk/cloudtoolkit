@@ -108,6 +108,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			hosts, err := ecsprovider.GetResource(ctx)
 			schema.AppendAssets(&list, hosts)
 			list.AddError("host", err)
+			list.AddError("host", ecsprovider.PartialError())
 		case "domain":
 			dnsprovider := p.newDNSDriver(p.region)
 			domains, err := dnsprovider.GetDomains(ctx)
@@ -123,6 +124,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			databases, err := rdsprovider.GetDatabases(ctx)
 			schema.AppendAssets(&list, databases)
 			list.AddError("database", err)
+			list.AddError("database", rdsprovider.PartialError())
 		case "bucket":
 			ossprovider := p.newOSSDriver(p.region)
 			storages, err := ossprovider.GetBuckets(ctx)
@@ -138,6 +140,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			logs, err := slsprovider.ListProjects(ctx)
 			schema.AppendAssets(&list, logs)
 			list.AddError("log", err)
+			list.AddError("log", slsprovider.PartialError())
 		default:
 		}
 	}

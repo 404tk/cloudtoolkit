@@ -18,6 +18,7 @@ type Driver struct {
 	Cred          aliauth.Credential
 	Region        string
 	clientOptions []api.Option
+	partialErr    error
 }
 
 var (
@@ -47,6 +48,7 @@ func (d *Driver) SetClientOptions(opts ...api.Option) {
 
 func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 	list := []schema.Database{}
+	d.partialErr = nil
 	select {
 	case <-ctx.Done():
 		return list, nil
@@ -69,7 +71,7 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 	}
 	tracker := processbar.NewRegionTracker()
 	defer tracker.Finish()
-	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Database, error) {
+	got, regionErrs := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Database, error) {
 		return paginate.Fetch(ctx, func(ctx context.Context, page int) (paginate.Page[schema.Database, int], error) {
 			if page == 0 {
 				page = 1
@@ -98,7 +100,12 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 		})
 	})
 	list = append(list, got...)
+	d.partialErr = regionrun.Wrap(regionErrs)
 	return list, nil
+}
+
+func (d *Driver) PartialError() error {
+	return d.partialErr
 }
 
 func describeRegions(ctx context.Context, client *api.Client) ([]string, error) {

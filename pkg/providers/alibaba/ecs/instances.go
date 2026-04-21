@@ -20,11 +20,13 @@ type Driver struct {
 	pollInterval  time.Duration
 	maxPolls      int
 	sleep         func(time.Duration)
+	partialErr    error
 }
 
 // GetResource returns all the resources in the store for a provider.
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := []schema.Host{}
+	d.partialErr = nil
 	select {
 	case <-ctx.Done():
 		return list, nil
@@ -48,7 +50,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	}
 	tracker := processbar.NewRegionTracker()
 	defer tracker.Finish()
-	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
+	got, regionErrs := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
 		return paginate.Fetch(ctx, func(ctx context.Context, page int) (paginate.Page[schema.Host, int], error) {
 			if page == 0 {
 				page = 1
@@ -66,8 +68,12 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		})
 	})
 	list = append(list, got...)
-
+	d.partialErr = regionrun.Wrap(regionErrs)
 	return list, nil
+}
+
+func (d *Driver) PartialError() error {
+	return d.partialErr
 }
 
 func mapInstances(region string, instances []api.ECSInstance) []schema.Host {

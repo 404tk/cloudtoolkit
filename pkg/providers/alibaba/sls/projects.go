@@ -18,6 +18,7 @@ type Driver struct {
 	Cred       aliauth.Credential
 	Region     string
 	httpClient *http.Client
+	partialErr error
 }
 
 func (d *Driver) newClient(region string) *Client {
@@ -34,6 +35,7 @@ var allRegions = []string{"cn-qingdao", "cn-beijing", "cn-zhangjiakou", "cn-huhe
 
 func (d *Driver) ListProjects(ctx context.Context) ([]schema.Log, error) {
 	list := []schema.Log{}
+	d.partialErr = nil
 	select {
 	case <-ctx.Done():
 		return list, nil
@@ -49,7 +51,7 @@ func (d *Driver) ListProjects(ctx context.Context) ([]schema.Log, error) {
 
 	tracker := processbar.NewRegionTracker()
 	defer tracker.Finish()
-	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Log, error) {
+	got, regionErrs := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Log, error) {
 		client := d.newClient(r)
 		return paginate.Fetch(ctx, func(ctx context.Context, offset int32) (paginate.Page[schema.Log, int32], error) {
 			resp, err := client.ListProjects(ListProjectRequest{Offset: offset, Size: 500})
@@ -74,5 +76,10 @@ func (d *Driver) ListProjects(ctx context.Context) ([]schema.Log, error) {
 		})
 	})
 	list = append(list, got...)
+	d.partialErr = regionrun.Wrap(regionErrs)
 	return list, nil
+}
+
+func (d *Driver) PartialError() error {
+	return d.partialErr
 }

@@ -16,6 +16,7 @@ type Driver struct {
 	Client        *api.Client
 	Region        string
 	DefaultRegion string
+	partialErr    error
 }
 
 var errNilAPIClient = errors.New("aws ec2: nil api client")
@@ -23,6 +24,7 @@ var errNilAPIClient = errors.New("aws ec2: nil api client")
 // GetResource returns all the resources in the store for a provider.
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := []schema.Host{}
+	d.partialErr = nil
 	logger.Info("List EC2 instances ...")
 	client, err := d.requireClient()
 	if err != nil {
@@ -35,7 +37,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	}
 	tracker := processbar.NewRegionTracker()
 	defer tracker.Finish()
-	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, region string) ([]schema.Host, error) {
+	got, regionErrs := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, region string) ([]schema.Host, error) {
 		items, err := paginate.Fetch[schema.Host, string](ctx, func(ctx context.Context, token string) (paginate.Page[schema.Host, string], error) {
 			resp, err := client.DescribeInstances(ctx, region, token, 1000)
 			if err != nil {
@@ -68,7 +70,12 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		return items, nil
 	})
 	list = append(list, got...)
+	d.partialErr = regionrun.Wrap(regionErrs)
 	return list, nil
+}
+
+func (d *Driver) PartialError() error {
+	return d.partialErr
 }
 
 func (d *Driver) GetEC2Regions(ctx context.Context) ([]string, error) {

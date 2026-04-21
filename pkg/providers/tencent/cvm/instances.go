@@ -17,6 +17,7 @@ type Driver struct {
 	Credential    auth.Credential
 	Region        string
 	clientOptions []api.Option
+	partialErr    error
 }
 
 func (d *Driver) newClient() *api.Client {
@@ -29,6 +30,7 @@ func (d *Driver) SetClientOptions(opts ...api.Option) {
 
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := []schema.Host{}
+	d.partialErr = nil
 	logger.Info("List CVM instances ...")
 	var regions []string
 	client := d.newClient()
@@ -50,7 +52,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	}
 	tracker := processbar.NewRegionTracker()
 	defer tracker.Finish()
-	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
+	got, regionErrs := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
 		return paginate.Fetch(ctx, func(ctx context.Context, offset int64) (paginate.Page[schema.Host, int64], error) {
 			response, err := client.DescribeCVMInstances(ctx, r, offset, 100)
 			if err != nil {
@@ -68,8 +70,12 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		})
 	})
 	list = append(list, got...)
-
+	d.partialErr = regionrun.Wrap(regionErrs)
 	return list, nil
+}
+
+func (d *Driver) PartialError() error {
+	return d.partialErr
 }
 
 func mapHost(instance api.CVMInstanceInfo, region string) schema.Host {

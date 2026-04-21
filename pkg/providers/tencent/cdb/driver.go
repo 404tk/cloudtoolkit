@@ -13,6 +13,7 @@ type Driver struct {
 	Credential    auth.Credential
 	Region        string
 	clientOptions []api.Option
+	partialErr    error
 }
 
 func (d *Driver) newClient() *api.Client {
@@ -21,6 +22,10 @@ func (d *Driver) newClient() *api.Client {
 
 func (d *Driver) SetClientOptions(opts ...api.Option) {
 	d.clientOptions = append([]api.Option(nil), opts...)
+}
+
+func (d *Driver) PartialError() error {
+	return d.partialErr
 }
 
 func addRegion(regions *[]string, region string) {

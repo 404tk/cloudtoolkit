@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/api"
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/auth"
@@ -39,9 +38,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	logger.Info("List ECS instances ...")
 	tracker := processbar.NewRegionTracker()
 	defer tracker.Finish()
-	var regionErrs []string
-	var errMu sync.Mutex
-	got, _ := regionrun.ForEach(ctx, d.Regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
+	got, regionErrs := regionrun.ForEach(ctx, d.Regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
 		projectID, err := api.ResolveProjectID(ctx, d.client(), d.DomainID, r)
 		if err != nil {
 			return nil, err
@@ -89,19 +86,10 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 				Done:  done,
 			}, nil
 		})
-		if err != nil {
-			errMu.Lock()
-			regionErrs = append(regionErrs, fmt.Sprintf("%s: %s", r, err))
-			errMu.Unlock()
-		}
-		return items, nil
+		return items, err
 	})
 	list = append(list, got...)
-
-	if len(regionErrs) > 0 {
-		return list, fmt.Errorf("%s", strings.Join(regionErrs, "; "))
-	}
-	return list, nil
+	return list, regionrun.Wrap(regionErrs)
 }
 
 func mapHostIPs(addresses map[string][]api.ECSServerAddress) (string, string) {

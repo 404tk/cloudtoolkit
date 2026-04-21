@@ -93,11 +93,13 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			cvms, err := cvmprovider.GetResource(ctx)
 			schema.AppendAssets(&list, cvms)
 			list.AddError("host/cvm", err)
+			list.AddError("host/cvm", cvmprovider.PartialError())
 			light := &lighthouse.Driver{Credential: p.apiCredential, Region: p.region}
 			light.SetClientOptions(p.clientOptions...)
 			lights, err := light.GetResource(ctx)
 			schema.AppendAssets(&list, lights)
 			list.AddError("host/lighthouse", err)
+			list.AddError("host/lighthouse", light.PartialError())
 			allHosts := append(cvms, lights...)
 			tat.SetCacheHostList(allHosts)
 		case "domain":
@@ -118,15 +120,19 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			mysqls, err := cdbprovider.ListMySQL(ctx)
 			schema.AppendAssets(&list, mysqls)
 			list.AddError("database/mysql", err)
+			list.AddError("database/mysql", cdbprovider.PartialError())
 			mariadbs, err := cdbprovider.ListMariaDB(ctx)
 			schema.AppendAssets(&list, mariadbs)
 			list.AddError("database/mariadb", err)
+			list.AddError("database/mariadb", cdbprovider.PartialError())
 			postgres, err := cdbprovider.ListPostgreSQL(ctx)
 			schema.AppendAssets(&list, postgres)
 			list.AddError("database/postgresql", err)
+			list.AddError("database/postgresql", cdbprovider.PartialError())
 			mssqls, err := cdbprovider.ListSQLServer(ctx)
 			schema.AppendAssets(&list, mssqls)
 			list.AddError("database/sqlserver", err)
+			list.AddError("database/sqlserver", cdbprovider.PartialError())
 		case "bucket":
 			cosprovider := &cos.Driver{Credential: p.apiCredential}
 			storages, err := cosprovider.GetBuckets(ctx)

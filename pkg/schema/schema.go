@@ -85,8 +85,16 @@ type ResourceError struct {
 	Message string
 }
 
+type resourceErrorExpander interface {
+	ResourceErrors(scope string) []ResourceError
+}
+
 func (r *Resources) AddError(scope string, err error) {
 	if err == nil {
+		return
+	}
+	if expander, ok := err.(resourceErrorExpander); ok {
+		r.Errors = append(r.Errors, expander.ResourceErrors(scope)...)
 		return
 	}
 	r.Errors = append(r.Errors, ResourceError{

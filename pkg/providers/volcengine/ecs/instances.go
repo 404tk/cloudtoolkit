@@ -3,8 +3,6 @@ package ecs
 import (
 	"context"
 	"errors"
-	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/api"
@@ -70,7 +68,7 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		})
 	})
 	list = append(list, got...)
-	return list, flattenRegionErrors(regionErrs)
+	return list, regionrun.Wrap(regionErrs)
 }
 
 func (d *Driver) requireClient() (*api.Client, error) {
@@ -103,25 +101,4 @@ func (d *Driver) requestRegion() string {
 		return api.DefaultRegion
 	}
 	return region
-}
-
-func flattenRegionErrors(errs map[string]error) error {
-	if len(errs) == 0 {
-		return nil
-	}
-	regions := make([]string, 0, len(errs))
-	for region := range errs {
-		regions = append(regions, region)
-	}
-	sort.Strings(regions)
-	parts := make([]string, 0, len(regions))
-	for _, region := range regions {
-		if err := errs[region]; err != nil {
-			parts = append(parts, fmt.Sprintf("%s: %v", region, err))
-		}
-	}
-	if len(parts) == 0 {
-		return nil
-	}
-	return fmt.Errorf("partial region errors: %s", strings.Join(parts, "; "))
 }

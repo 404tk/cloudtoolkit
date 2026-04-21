@@ -85,6 +85,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			hosts, err := ec2provider.GetResource(ctx)
 			schema.AppendAssets(&list, hosts)
 			list.AddError("host", err)
+			list.AddError("host", ec2provider.PartialError())
 		case "account":
 			iamprovider := &_iam.Driver{
 				Client:        p.apiClient,

@@ -12,6 +12,7 @@ import (
 
 func (d *Driver) ListPostgreSQL(ctx context.Context) ([]schema.Database, error) {
 	list := []schema.Database{}
+	d.partialErr = nil
 	select {
 	case <-ctx.Done():
 		return list, nil
@@ -37,7 +38,7 @@ func (d *Driver) ListPostgreSQL(ctx context.Context) ([]schema.Database, error) 
 
 	tracker := processbar.NewRegionTracker()
 	defer tracker.Finish()
-	got, _ := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Database, error) {
+	got, regionErrs := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Database, error) {
 		var regionList []schema.Database
 		response, err := client.DescribePostgresInstances(ctx, r)
 		if err != nil {
@@ -67,5 +68,6 @@ func (d *Driver) ListPostgreSQL(ctx context.Context) ([]schema.Database, error) 
 		return regionList, nil
 	})
 	list = append(list, got...)
+	d.partialErr = regionrun.Wrap(regionErrs)
 	return list, nil
 }
