@@ -3,15 +3,15 @@ package console
 import (
 	"strings"
 
-	"github.com/404tk/cloudtoolkit/pkg/plugins"
+	"github.com/404tk/cloudtoolkit/pkg/providers"
 	"github.com/404tk/cloudtoolkit/runner/payloads"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/go-prompt"
 )
 
 var modules = func() (m []prompt.Suggest) {
-	for k, v := range plugins.Providers {
-		m = append(m, prompt.Suggest{Text: k, Description: v.Desc()})
+	for _, provider := range providers.Supported() {
+		m = append(m, prompt.Suggest{Text: provider.Name, Description: provider.Desc})
 	}
 	return m
 }()

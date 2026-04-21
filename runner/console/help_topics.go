@@ -61,7 +61,7 @@ var helpTopics = map[string]helpTopic{
 		},
 		Details: []string{
 			"Provider mode enables `show`, `set`, `run`, and `shell` commands.",
-			"Supported providers are discovered from the registered provider plugins.",
+			"Supported providers come from the built-in provider catalog.",
 			"Use `sessions -i <id>` to reopen a cached provider session instead of starting from scratch.",
 		},
 		Examples: []string{

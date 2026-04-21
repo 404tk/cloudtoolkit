@@ -2,10 +2,9 @@ package inventory
 
 import (
 	"errors"
-	"fmt"
 	"reflect"
 
-	"github.com/404tk/cloudtoolkit/pkg/plugins"
+	"github.com/404tk/cloudtoolkit/pkg/providers"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 )
@@ -43,8 +42,5 @@ func IsNil(i schema.Provider) bool {
 
 // nameToProvider returns the provider for a name
 func nameToProvider(name string, block schema.Options) (schema.Provider, error) {
-	if v, ok := plugins.Providers[name]; ok {
-		return v.Check(block)
-	}
-	return nil, fmt.Errorf("invalid provider name found: %s", name)
+	return providers.New(name, block)
 }

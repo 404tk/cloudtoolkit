@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/404tk/cloudtoolkit/pkg/plugins"
+	"github.com/404tk/cloudtoolkit/pkg/providers"
 	"github.com/404tk/cloudtoolkit/runner/payloads"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
@@ -132,12 +132,13 @@ func checkCred(uuid string) {
 			continue
 		}
 		if value, ok := m[utils.Provider]; ok {
-			if v, ok := plugins.Providers[value]; ok {
-				m[utils.Payload] = "cloudlist"
-				_, err := v.Check(m)
-				if err != nil {
-					logger.Error(fmt.Sprintf("%s(%s) check failed.", cred.User, cred.AccessKey))
-				}
+			if !providers.Supports(value) {
+				continue
+			}
+			m[utils.Payload] = "cloudlist"
+			_, err := providers.New(value, m)
+			if err != nil {
+				logger.Error(fmt.Sprintf("%s(%s) check failed.", cred.User, cred.AccessKey))
 			}
 		}
 	}

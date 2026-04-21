@@ -5,7 +5,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	_ "github.com/404tk/cloudtoolkit/pkg/plugins"
 	"github.com/404tk/cloudtoolkit/runner"
 	"github.com/404tk/cloudtoolkit/runner/console"
 	"github.com/404tk/cloudtoolkit/utils/cache"
