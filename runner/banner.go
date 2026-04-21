@@ -12,7 +12,7 @@ const banner = `
 `
 
 // version is the current version of cloudtoolkit
-const version = `0.2.2`
+const version = `0.2.3`
 
 // showBanner is used to show the banner to the user
 func ShowBanner() {
