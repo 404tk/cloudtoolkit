@@ -2,9 +2,10 @@ package gcp
 
 import (
 	"context"
-	"encoding/base64"
 	"time"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/gcp/api"
+	"github.com/404tk/cloudtoolkit/pkg/providers/gcp/auth"
 	_compute "github.com/404tk/cloudtoolkit/pkg/providers/gcp/compute"
 	_dns "github.com/404tk/cloudtoolkit/pkg/providers/gcp/dns"
 	_iam "github.com/404tk/cloudtoolkit/pkg/providers/gcp/iam"
@@ -12,52 +13,48 @@ import (
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"golang.org/x/oauth2/google"
 )
 
 // Provider is a data provider for gcp API
 type Provider struct {
-	projects []string
-	token    string
+	cred        auth.Credential
+	tokenSource *auth.TokenSource
+	apiClient   *api.Client
+	projects    []string
 }
 
 // New creates a new provider client for gcp API
 func New(options schema.Options) (*Provider, error) {
-	gcpKey, ok := options.GetMetadata(utils.GCPserviceAccountJSON)
-	if !ok {
-		return nil, &schema.ErrNoSuchKey{Name: utils.GCPserviceAccountJSON}
-	}
-	tojson, err := base64.StdEncoding.DecodeString(gcpKey)
+	cred, err := auth.FromOptions(options)
 	if err != nil {
+		return nil, err
+	}
+	if err := cred.Validate(); err != nil {
 		return nil, err
 	}
 
-	var projects []string
-	var token string
+	httpClient := api.NewHTTPClient()
+	ts := auth.NewTokenSource(cred, httpClient)
+	client := api.NewClient(ts, api.WithHTTPClient(httpClient))
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	credentials, err := google.CredentialsFromJSON(ctx, tojson, "https://www.googleapis.com/auth/cloud-platform")
-	if err != nil {
+	if _, err := ts.Token(ctx); err != nil {
 		return nil, err
 	}
-	if credentials != nil {
-		projects = append(projects, credentials.ProjectID)
-		access, err := credentials.TokenSource.Token()
-		if err != nil {
-			return nil, err
-		}
-		token = access.AccessToken
-		payload, _ := options.GetMetadata(utils.Payload)
-		if payload == "cloudlist" {
-			logger.Warning("Current project:", projects[0])
-			cache.Cfg.CredInsert(projects[0], options)
-		}
+
+	payload, _ := options.GetMetadata(utils.Payload)
+	if payload == "cloudlist" {
+		logger.Warning("Current project:", cred.ProjectID)
+		cache.Cfg.CredInsert(cred.ProjectID, options)
 	}
 
 	return &Provider{
-		projects: projects,
-		token:    token,
-	}, err
+		cred:        cred,
+		tokenSource: ts,
+		apiClient:   client,
+		projects:    []string{cred.ProjectID},
+	}, nil
 }
 
 // Name returns the name of the provider
@@ -72,17 +69,17 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	for _, product := range utils.Cloudlist {
 		switch product {
 		case "host":
-			InstanceProvider := &_compute.Driver{Projects: p.projects, Token: p.token}
+			InstanceProvider := &_compute.Driver{Projects: p.projects, Client: p.apiClient}
 			computes, err := InstanceProvider.GetResource(ctx)
 			schema.AppendAssets(&list, computes)
 			list.AddError("host", err)
 		case "domain":
-			cloudDNSProvider := &_dns.Driver{Projects: p.projects, Token: p.token}
+			cloudDNSProvider := &_dns.Driver{Projects: p.projects, Client: p.apiClient}
 			domains, err := cloudDNSProvider.GetDomains(ctx)
 			schema.AppendAssets(&list, domains)
 			list.AddError("domain", err)
 		case "account":
-			saProvider := &_iam.Driver{Projects: p.projects, Token: p.token}
+			saProvider := &_iam.Driver{Projects: p.projects, Client: p.apiClient}
 			users, err := saProvider.ListUsers(ctx)
 			schema.AppendAssets(&list, users)
 			list.AddError("account", err)
