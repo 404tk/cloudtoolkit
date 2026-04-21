@@ -13,14 +13,13 @@ import (
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	awsv2 "github.com/aws/aws-sdk-go-v2/aws"
 )
 
 // Provider is a data provider for aws API
 type Provider struct {
-	region    string
-	cfg       awsv2.Config
-	apiClient *_api.Client
+	region        string
+	defaultRegion string
+	apiClient     *_api.Client
 }
 
 // New creates a new provider client for aws API
@@ -29,25 +28,19 @@ func New(options schema.Options) (*Provider, error) {
 	if err != nil {
 		return nil, err
 	}
-	region, _ := options.GetMetadata(utils.Region)
-	version, _ := options.GetMetadata(utils.Version)
-	cfg, err := newConfig(
-		credential.AccessKeyID,
-		credential.SecretAccessKey,
-		credential.SessionToken,
-		region,
-		version,
-	)
-	if err != nil {
+	if err := credential.Validate(); err != nil {
 		return nil, err
 	}
+	region, _ := options.GetMetadata(utils.Region)
+	version, _ := options.GetMetadata(utils.Version)
+	defaultRegion := resolveBootstrapRegion(region, version)
 	apiClient := _api.NewClient(credential)
 
 	payload, _ := options.GetMetadata(utils.Payload)
 	if payload == "cloudlist" {
 		resp, err := apiClient.GetCallerIdentity(
 			context.Background(),
-			resolveBootstrapRegion(region, version),
+			defaultRegion,
 		)
 		if err != nil {
 			return nil, err
@@ -59,9 +52,9 @@ func New(options schema.Options) (*Provider, error) {
 	}
 
 	return &Provider{
-		region:    region,
-		cfg:       cfg,
-		apiClient: apiClient,
+		region:        region,
+		defaultRegion: defaultRegion,
+		apiClient:     apiClient,
 	}, nil
 }
 
@@ -80,7 +73,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			ec2provider := &_ec2.Driver{
 				Client:        p.apiClient,
 				Region:        p.region,
-				DefaultRegion: p.cfg.Region,
+				DefaultRegion: p.defaultRegion,
 			}
 			hosts, err := ec2provider.GetResource(ctx)
 			schema.AppendAssets(&list, hosts)
@@ -90,13 +83,13 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			iamprovider := &_iam.Driver{
 				Client:        p.apiClient,
 				Region:        p.region,
-				DefaultRegion: p.cfg.Region,
+				DefaultRegion: p.defaultRegion,
 			}
 			users, err := iamprovider.ListUsers(ctx)
 			schema.AppendAssets(&list, users)
 			list.AddError("account", err)
 		case "bucket":
-			s3provider := &_s3.Driver{Client: p.apiClient, DefaultRegion: p.cfg.Region}
+			s3provider := &_s3.Driver{Client: p.apiClient, DefaultRegion: p.defaultRegion}
 			storages, err := s3provider.GetBuckets(ctx)
 			schema.AppendAssets(&list, storages)
 			list.AddError("bucket", err)
@@ -111,7 +104,7 @@ func (p *Provider) UserManagement(action, username, password string) {
 	ramprovider := &_iam.Driver{
 		Client:        p.apiClient,
 		Region:        p.region,
-		DefaultRegion: p.cfg.Region,
+		DefaultRegion: p.defaultRegion,
 		Username:      username,
 		Password:      password,
 	}
@@ -126,7 +119,7 @@ func (p *Provider) UserManagement(action, username, password string) {
 }
 
 func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
-	s3provider := &_s3.Driver{Client: p.apiClient, DefaultRegion: p.cfg.Region}
+	s3provider := &_s3.Driver{Client: p.apiClient, DefaultRegion: p.defaultRegion}
 	switch action {
 	case "list":
 		var infos = make(map[string]string)
@@ -140,7 +133,7 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
 				infos[b.BucketName] = b.Region
 			}
 		} else {
-			infos[bucketName] = p.cfg.Region
+			infos[bucketName] = p.defaultRegion
 		}
 		s3provider.ListObjects(ctx, infos)
 	case "total":
@@ -155,7 +148,7 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
 				infos[b.BucketName] = b.Region
 			}
 		} else {
-			infos[bucketName] = p.cfg.Region
+			infos[bucketName] = p.defaultRegion
 		}
 		s3provider.TotalObjects(ctx, infos)
 	default:

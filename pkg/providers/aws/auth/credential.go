@@ -1,17 +1,15 @@
 package auth
 
 import (
-	"context"
 	"errors"
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
-	awsv2 "github.com/aws/aws-sdk-go-v2/aws"
 )
 
-// Credential is the provider-local AWS credential shape used by the
-// lightweight STS client and direct sdk.Config construction.
+// Credential is the provider-local AWS credential shape consumed by the
+// lightweight STS / EC2 / IAM / S3 API clients under pkg/providers/aws/api.
 type Credential struct {
 	AccessKeyID     string
 	SecretAccessKey string
@@ -48,16 +46,4 @@ func (c Credential) Validate() error {
 	default:
 		return nil
 	}
-}
-
-func (c Credential) Retrieve(context.Context) (awsv2.Credentials, error) {
-	if err := c.Validate(); err != nil {
-		return awsv2.Credentials{}, err
-	}
-	return awsv2.Credentials{
-		AccessKeyID:     c.AccessKeyID,
-		SecretAccessKey: c.SecretAccessKey,
-		SessionToken:    c.SessionToken,
-		Source:          "ctk-static",
-	}, nil
 }

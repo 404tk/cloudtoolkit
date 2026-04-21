@@ -1,9 +1,6 @@
 package aws
 
-import (
-	"context"
-	"testing"
-)
+import "testing"
 
 func TestResolveBootstrapRegion(t *testing.T) {
 	tests := []struct {
@@ -55,25 +52,5 @@ func TestConsoleURLForARN(t *testing.T) {
 		if got := consoleURLForARN(tt.arn); got != tt.want {
 			t.Fatalf("consoleURLForARN(%q) = %q, want %q", tt.arn, got, tt.want)
 		}
-	}
-}
-
-func TestNewConfigUsesStaticCredentials(t *testing.T) {
-	cfg, err := newConfig("ak", "sk", "token", "all", "China")
-	if err != nil {
-		t.Fatalf("newConfig() error = %v", err)
-	}
-	if cfg.Region != "cn-northwest-1" {
-		t.Fatalf("unexpected region: %s", cfg.Region)
-	}
-	if cfg.Credentials == nil {
-		t.Fatal("expected credentials provider")
-	}
-	creds, err := cfg.Credentials.Retrieve(context.Background())
-	if err != nil {
-		t.Fatalf("Retrieve() error = %v", err)
-	}
-	if creds.AccessKeyID != "ak" || creds.SecretAccessKey != "sk" || creds.SessionToken != "token" {
-		t.Fatalf("unexpected credentials: %+v", creds)
 	}
 }

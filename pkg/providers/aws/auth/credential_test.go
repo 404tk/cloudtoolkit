@@ -1,14 +1,13 @@
 package auth
 
 import (
-	"context"
 	"testing"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 )
 
-func TestFromOptionsAndRetrieve(t *testing.T) {
+func TestFromOptionsParsesCredential(t *testing.T) {
 	options := schema.Options{
 		utils.AccessKey:     "ak",
 		utils.SecretKey:     "sk",
@@ -19,12 +18,8 @@ func TestFromOptionsAndRetrieve(t *testing.T) {
 	if err != nil {
 		t.Fatalf("FromOptions() error = %v", err)
 	}
-	creds, err := credential.Retrieve(context.Background())
-	if err != nil {
-		t.Fatalf("Retrieve() error = %v", err)
-	}
-	if creds.AccessKeyID != "ak" || creds.SecretAccessKey != "sk" || creds.SessionToken != "token" {
-		t.Fatalf("unexpected credentials: %+v", creds)
+	if credential.AccessKeyID != "ak" || credential.SecretAccessKey != "sk" || credential.SessionToken != "token" {
+		t.Fatalf("unexpected credential: %+v", credential)
 	}
 }
 
