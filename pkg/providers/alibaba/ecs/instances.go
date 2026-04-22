@@ -48,32 +48,84 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	} else {
 		regions = append(regions, api.NormalizeRegion(d.Region))
 	}
+
+	seedErrs := map[string]error{}
 	tracker := processbar.NewRegionTracker()
-	defer tracker.Finish()
+	trackerUsed := false
+	defer func() {
+		if trackerUsed {
+			tracker.Finish()
+		}
+	}()
+	if d.Region == "all" && len(regions) > 0 {
+		probeRegion := regions[0]
+		probeItems, probeErr := d.listRegion(ctx, client, probeRegion)
+		if probeErr != nil {
+			if api.IsAccessDenied(probeErr) {
+				return list, probeErr
+			}
+			seedErrs[probeRegion] = probeErr
+			tracker.Update(probeRegion, 0)
+			trackerUsed = true
+		} else {
+			list = append(list, probeItems...)
+			tracker.Update(probeRegion, len(probeItems))
+			trackerUsed = true
+		}
+		regions = regions[1:]
+	}
+	if len(regions) == 0 {
+		d.partialErr = regionrun.Wrap(seedErrs)
+		return list, nil
+	}
+
+	trackerUsed = true
 	got, regionErrs := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
-		return paginate.Fetch(ctx, func(ctx context.Context, page int) (paginate.Page[schema.Host, int], error) {
-			if page == 0 {
-				page = 1
-			}
-			response, err := client.DescribeECSInstances(ctx, r, page, 100)
-			if err != nil {
-				return paginate.Page[schema.Host, int]{}, err
-			}
-			items := mapInstances(r, response.Instances.Instance)
-			return paginate.Page[schema.Host, int]{
-				Items: items,
-				Next:  page + 1,
-				Done:  isLastPage(page, response.PageSize, response.TotalCount, len(response.Instances.Instance)),
-			}, nil
-		})
+		return d.listRegion(ctx, client, r)
 	})
 	list = append(list, got...)
-	d.partialErr = regionrun.Wrap(regionErrs)
+	d.partialErr = regionrun.Wrap(mergeRegionErrors(seedErrs, regionErrs))
 	return list, nil
 }
 
 func (d *Driver) PartialError() error {
 	return d.partialErr
+}
+
+func (d *Driver) listRegion(ctx context.Context, client *api.Client, region string) ([]schema.Host, error) {
+	return paginate.Fetch(ctx, func(ctx context.Context, page int) (paginate.Page[schema.Host, int], error) {
+		if page == 0 {
+			page = 1
+		}
+		response, err := client.DescribeECSInstances(ctx, region, page, 100)
+		if err != nil {
+			return paginate.Page[schema.Host, int]{}, err
+		}
+		items := mapInstances(region, response.Instances.Instance)
+		return paginate.Page[schema.Host, int]{
+			Items: items,
+			Next:  page + 1,
+			Done:  isLastPage(page, response.PageSize, response.TotalCount, len(response.Instances.Instance)),
+		}, nil
+	})
+}
+
+func mergeRegionErrors(base, extra map[string]error) map[string]error {
+	if len(base) == 0 && len(extra) == 0 {
+		return nil
+	}
+	merged := make(map[string]error, len(base)+len(extra))
+	for region, err := range base {
+		if err != nil {
+			merged[region] = err
+		}
+	}
+	for region, err := range extra {
+		if err != nil {
+			merged[region] = err
+		}
+	}
+	return merged
 }
 
 func mapInstances(region string, instances []api.ECSInstance) []schema.Host {

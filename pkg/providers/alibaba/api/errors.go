@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -109,4 +110,36 @@ func bodySnippet(body []byte) string {
 		return trimmed[:256] + "..."
 	}
 	return trimmed
+}
+
+func IsAccessDenied(err error) bool {
+	if err == nil {
+		return false
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	code := strings.ToLower(strings.TrimSpace(apiErr.Code))
+	if strings.Contains(code, "accessdenied") || strings.Contains(code, "forbidden") || strings.Contains(code, "nopermission") || strings.Contains(code, "unauthorized") {
+		return true
+	}
+	message := strings.ToLower(strings.TrimSpace(apiErr.Message))
+	return strings.Contains(message, "not authorized") || strings.Contains(message, "access denied") || strings.Contains(message, "forbidden") || strings.Contains(message, "no permission")
+}
+
+func IsNotSupportedEndpoint(err error) bool {
+	if err == nil {
+		return false
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	code := strings.ToLower(strings.TrimSpace(apiErr.Code))
+	if strings.Contains(code, "notsupportedendpoint") {
+		return true
+	}
+	message := strings.ToLower(strings.TrimSpace(apiErr.Message))
+	return strings.Contains(message, "not supported endpoint") || strings.Contains(message, "endpoint cant operate this region")
 }

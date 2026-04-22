@@ -35,42 +35,43 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		logger.Error("GetEC2Regions failed.")
 		return list, err
 	}
+
+	seedErrs := map[string]error{}
 	tracker := processbar.NewRegionTracker()
-	defer tracker.Finish()
-	got, regionErrs := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, region string) ([]schema.Host, error) {
-		items, err := paginate.Fetch[schema.Host, string](ctx, func(ctx context.Context, token string) (paginate.Page[schema.Host, string], error) {
-			resp, err := client.DescribeInstances(ctx, region, token, 1000)
-			if err != nil {
-				return paginate.Page[schema.Host, string]{}, err
-			}
-			hosts := make([]schema.Host, 0, len(resp.Instances))
-			for _, instance := range resp.Instances {
-				ip4 := instance.PublicIP
-				host := schema.Host{
-					HostName:    pickHostName(instance.Tags),
-					ID:          instance.InstanceID,
-					State:       instance.State,
-					PublicIPv4:  ip4,
-					PrivateIpv4: instance.PrivateIP,
-					DNSName:     instance.PublicDNSName,
-					Public:      ip4 != "",
-					Region:      region,
-				}
-				hosts = append(hosts, host)
-			}
-			return paginate.Page[schema.Host, string]{
-				Items: hosts,
-				Next:  resp.NextToken,
-				Done:  resp.NextToken == "",
-			}, nil
-		})
-		if err != nil {
-			return nil, err
+	trackerUsed := false
+	defer func() {
+		if trackerUsed {
+			tracker.Finish()
 		}
-		return items, nil
+	}()
+	if d.Region == "all" && len(regions) > 0 {
+		probeRegion := regions[0]
+		probeItems, probeErr := d.listRegion(ctx, client, probeRegion)
+		if probeErr != nil {
+			if api.IsAccessDenied(probeErr) {
+				return list, probeErr
+			}
+			seedErrs[probeRegion] = probeErr
+			tracker.Update(probeRegion, 0)
+			trackerUsed = true
+		} else {
+			list = append(list, probeItems...)
+			tracker.Update(probeRegion, len(probeItems))
+			trackerUsed = true
+		}
+		regions = regions[1:]
+	}
+	if len(regions) == 0 {
+		d.partialErr = regionrun.Wrap(seedErrs)
+		return list, nil
+	}
+
+	trackerUsed = true
+	got, regionErrs := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, region string) ([]schema.Host, error) {
+		return d.listRegion(ctx, client, region)
 	})
 	list = append(list, got...)
-	d.partialErr = regionrun.Wrap(regionErrs)
+	d.partialErr = regionrun.Wrap(mergeRegionErrors(seedErrs, regionErrs))
 	return list, nil
 }
 
@@ -105,6 +106,57 @@ func (d *Driver) requireClient() (*api.Client, error) {
 		return nil, errNilAPIClient
 	}
 	return d.Client, nil
+}
+
+func (d *Driver) listRegion(ctx context.Context, client *api.Client, region string) ([]schema.Host, error) {
+	items, err := paginate.Fetch[schema.Host, string](ctx, func(ctx context.Context, token string) (paginate.Page[schema.Host, string], error) {
+		resp, err := client.DescribeInstances(ctx, region, token, 1000)
+		if err != nil {
+			return paginate.Page[schema.Host, string]{}, err
+		}
+		hosts := make([]schema.Host, 0, len(resp.Instances))
+		for _, instance := range resp.Instances {
+			ip4 := instance.PublicIP
+			host := schema.Host{
+				HostName:    pickHostName(instance.Tags),
+				ID:          instance.InstanceID,
+				State:       instance.State,
+				PublicIPv4:  ip4,
+				PrivateIpv4: instance.PrivateIP,
+				DNSName:     instance.PublicDNSName,
+				Public:      ip4 != "",
+				Region:      region,
+			}
+			hosts = append(hosts, host)
+		}
+		return paginate.Page[schema.Host, string]{
+			Items: hosts,
+			Next:  resp.NextToken,
+			Done:  resp.NextToken == "",
+		}, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+func mergeRegionErrors(base, extra map[string]error) map[string]error {
+	if len(base) == 0 && len(extra) == 0 {
+		return nil
+	}
+	merged := make(map[string]error, len(base)+len(extra))
+	for region, err := range base {
+		if err != nil {
+			merged[region] = err
+		}
+	}
+	for region, err := range extra {
+		if err != nil {
+			merged[region] = err
+		}
+	}
+	return merged
 }
 
 func pickHostName(tags []api.EC2Tag) string {

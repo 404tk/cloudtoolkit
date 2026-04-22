@@ -99,3 +99,19 @@ func ErrorCode(err error) string {
 	}
 	return ""
 }
+
+func IsAccessDenied(err error) bool {
+	if err == nil {
+		return false
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	code := strings.ToLower(strings.TrimSpace(apiErr.Code))
+	if strings.Contains(code, "accessdenied") || strings.Contains(code, "unauthorizedoperation") || strings.Contains(code, "unauthorized") {
+		return true
+	}
+	message := strings.ToLower(strings.TrimSpace(apiErr.Message))
+	return strings.Contains(message, "not authorized") || strings.Contains(message, "access denied") || strings.Contains(message, "unauthorized")
+}

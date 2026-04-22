@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -84,4 +85,20 @@ func bodySnippet(body []byte) string {
 		return trimmed[:256] + "..."
 	}
 	return trimmed
+}
+
+func IsAccessDenied(err error) bool {
+	if err == nil {
+		return false
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	code := strings.ToLower(strings.TrimSpace(apiErr.Code))
+	if strings.Contains(code, "unauthorizedoperation") || strings.Contains(code, "accessdenied") {
+		return true
+	}
+	message := strings.ToLower(strings.TrimSpace(apiErr.Message))
+	return strings.Contains(message, "not authorized") || strings.Contains(message, "access denied") || strings.Contains(message, "unauthorized")
 }

@@ -3,6 +3,7 @@ package sls
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -123,6 +124,22 @@ type Error struct {
 
 func (err *Error) Error() string {
 	return fmt.Sprintf("Status: %d Code: %s Message: %s", err.StatusCode, err.Code, err.Message)
+}
+
+func IsAccessDenied(err error) bool {
+	if err == nil {
+		return false
+	}
+	var slsErr *Error
+	if !errors.As(err, &slsErr) {
+		return false
+	}
+	code := strings.ToLower(strings.TrimSpace(slsErr.Code))
+	if strings.Contains(code, "accessdenied") || strings.Contains(code, "forbidden") || strings.Contains(code, "unauthorized") || strings.Contains(code, "nopermission") {
+		return true
+	}
+	message := strings.ToLower(strings.TrimSpace(slsErr.Message))
+	return strings.Contains(message, "not authorized") || strings.Contains(message, "access denied") || strings.Contains(message, "forbidden") || strings.Contains(message, "no permission")
 }
 
 func buildError(resp *http.Response) error {

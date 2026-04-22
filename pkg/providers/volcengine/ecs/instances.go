@@ -56,42 +56,42 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		logger.Error("List regions failed.")
 		return list, err
 	}
+
+	seedErrs := map[string]error{}
 	tracker := processbar.NewRegionTracker()
-	defer tracker.Finish()
+	trackerUsed := false
+	defer func() {
+		if trackerUsed {
+			tracker.Finish()
+		}
+	}()
+	if d.Region == "all" && len(regions) > 0 {
+		probeRegion := regions[0]
+		probeItems, probeErr := d.listRegion(ctx, client, probeRegion)
+		if probeErr != nil {
+			if api.IsAccessDenied(probeErr) {
+				return list, probeErr
+			}
+			seedErrs[probeRegion] = probeErr
+			tracker.Update(probeRegion, 0)
+			trackerUsed = true
+		} else {
+			list = append(list, probeItems...)
+			tracker.Update(probeRegion, len(probeItems))
+			trackerUsed = true
+		}
+		regions = regions[1:]
+	}
+	if len(regions) == 0 {
+		return list, regionrun.Wrap(seedErrs)
+	}
+
+	trackerUsed = true
 	got, regionErrs := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
-		return paginate.Fetch[schema.Host, string](ctx, func(ctx context.Context, token string) (paginate.Page[schema.Host, string], error) {
-			resp, err := client.DescribeInstances(ctx, r, 100, token)
-			if err != nil {
-				return paginate.Page[schema.Host, string]{}, err
-			}
-			items := make([]schema.Host, 0, len(resp.Result.Instances))
-			for _, i := range resp.Result.Instances {
-				ipv4 := i.EipAddress.IPAddress
-				var privateIPv4 string
-				if len(i.NetworkInterfaces) > 0 {
-					privateIPv4 = i.NetworkInterfaces[0].PrimaryIPAddress
-				}
-				items = append(items, schema.Host{
-					HostName:    i.Hostname,
-					ID:          i.InstanceID,
-					State:       i.Status,
-					PublicIPv4:  ipv4,
-					PrivateIpv4: privateIPv4,
-					OSType:      i.OSType,
-					Public:      ipv4 != "",
-					Region:      r,
-				})
-			}
-			done := len(resp.Result.Instances) < 100 || strings.TrimSpace(resp.Result.NextToken) == ""
-			return paginate.Page[schema.Host, string]{
-				Items: items,
-				Next:  resp.Result.NextToken,
-				Done:  done,
-			}, nil
-		})
+		return d.listRegion(ctx, client, r)
 	})
 	list = append(list, got...)
-	return list, regionrun.Wrap(regionErrs)
+	return list, regionrun.Wrap(mergeRegionErrors(seedErrs, regionErrs))
 }
 
 func (d *Driver) requireClient() (*api.Client, error) {
@@ -116,6 +116,57 @@ func (d *Driver) getRegions(ctx context.Context, client *api.Client) ([]string, 
 		}
 	}
 	return regions, nil
+}
+
+func (d *Driver) listRegion(ctx context.Context, client *api.Client, region string) ([]schema.Host, error) {
+	return paginate.Fetch[schema.Host, string](ctx, func(ctx context.Context, token string) (paginate.Page[schema.Host, string], error) {
+		resp, err := client.DescribeInstances(ctx, region, 100, token)
+		if err != nil {
+			return paginate.Page[schema.Host, string]{}, err
+		}
+		items := make([]schema.Host, 0, len(resp.Result.Instances))
+		for _, i := range resp.Result.Instances {
+			ipv4 := i.EipAddress.IPAddress
+			var privateIPv4 string
+			if len(i.NetworkInterfaces) > 0 {
+				privateIPv4 = i.NetworkInterfaces[0].PrimaryIPAddress
+			}
+			items = append(items, schema.Host{
+				HostName:    i.Hostname,
+				ID:          i.InstanceID,
+				State:       i.Status,
+				PublicIPv4:  ipv4,
+				PrivateIpv4: privateIPv4,
+				OSType:      i.OSType,
+				Public:      ipv4 != "",
+				Region:      region,
+			})
+		}
+		done := len(resp.Result.Instances) < 100 || strings.TrimSpace(resp.Result.NextToken) == ""
+		return paginate.Page[schema.Host, string]{
+			Items: items,
+			Next:  resp.Result.NextToken,
+			Done:  done,
+		}, nil
+	})
+}
+
+func mergeRegionErrors(base, extra map[string]error) map[string]error {
+	if len(base) == 0 && len(extra) == 0 {
+		return nil
+	}
+	merged := make(map[string]error, len(base)+len(extra))
+	for region, err := range base {
+		if err != nil {
+			merged[region] = err
+		}
+	}
+	for region, err := range extra {
+		if err != nil {
+			merged[region] = err
+		}
+	}
+	return merged
 }
 
 func (d *Driver) requestRegion() string {

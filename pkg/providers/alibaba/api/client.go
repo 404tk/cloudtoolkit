@@ -14,17 +14,18 @@ import (
 )
 
 type Request struct {
-	Product    string
-	Version    string
-	Action     string
-	Region     string
-	Method     string
-	Query      url.Values
-	Headers    http.Header
-	Idempotent bool
-	Scheme     string
-	Host       string
-	Path       string
+	Product      string
+	Version      string
+	Action       string
+	Region       string
+	Method       string
+	Query        url.Values
+	Headers      http.Header
+	Idempotent   bool
+	Scheme       string
+	Host         string
+	Path         string
+	SkipRegionID bool
 }
 
 type Option func(*Client)
@@ -139,8 +140,10 @@ func (c *Client) Do(ctx context.Context, req Request, resp any) error {
 	params.Set("SignatureType", "")
 	params.Set("SignatureNonce", c.nonce())
 	params.Set("AccessKeyId", c.credential.AccessKeyID)
-	if _, ok := params["RegionId"]; !ok {
-		params.Set("RegionId", region)
+	if !req.SkipRegionID {
+		if _, ok := params["RegionId"]; !ok {
+			params.Set("RegionId", region)
+		}
 	}
 	if c.credential.SecurityToken != "" {
 		params.Set("SecurityToken", c.credential.SecurityToken)
@@ -154,7 +157,7 @@ func (c *Client) Do(ctx context.Context, req Request, resp any) error {
 		return err
 	}
 
-	scheme, host, path, err := c.resolveEndpoint(req, region)
+	scheme, host, path, err := c.resolveEndpoint(ctx, req, region)
 	if err != nil {
 		return err
 	}
@@ -166,26 +169,27 @@ func (c *Client) Do(ctx context.Context, req Request, resp any) error {
 	}
 	headers := c.buildHeaders(req.Headers)
 
-	httpResp, err := c.retryPolicy.Do(ctx, req.Idempotent, func() (*http.Response, error) {
-		httpReq, err := http.NewRequestWithContext(ctx, method, requestURL.String(), nil)
-		if err != nil {
-			return nil, err
+	body, statusCode, err := c.doRequest(ctx, req.Idempotent, method, requestURL, headers, host)
+	if err != nil {
+		return err
+	}
+	if err := DecodeError(statusCode, body); err != nil {
+		if req.Host == "" && IsNotSupportedEndpoint(err) {
+			if resolved := c.resolveEndpointByLocation(ctx, req.Product, region); resolved != "" && resolved != host {
+				requestURL.Host = resolved
+				body, statusCode, err = c.doRequest(ctx, req.Idempotent, method, requestURL, headers, resolved)
+				if err != nil {
+					return err
+				}
+				if err := DecodeError(statusCode, body); err != nil {
+					return err
+				}
+			} else {
+				return err
+			}
+		} else {
+			return err
 		}
-		httpReq.Host = host
-		httpReq.Header = headers.Clone()
-		return c.httpClient.Do(httpReq)
-	})
-	if err != nil {
-		return err
-	}
-	defer closeResponse(httpResp)
-
-	body, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return fmt.Errorf("read alibaba response: %w", err)
-	}
-	if err := DecodeError(httpResp.StatusCode, body); err != nil {
-		return err
 	}
 	if resp == nil || len(body) == 0 {
 		return nil
@@ -196,7 +200,29 @@ func (c *Client) Do(ctx context.Context, req Request, resp any) error {
 	return nil
 }
 
-func (c *Client) resolveEndpoint(req Request, region string) (string, string, string, error) {
+func (c *Client) doRequest(ctx context.Context, idempotent bool, method string, requestURL url.URL, headers http.Header, host string) ([]byte, int, error) {
+	httpResp, err := c.retryPolicy.Do(ctx, idempotent, func() (*http.Response, error) {
+		httpReq, err := http.NewRequestWithContext(ctx, method, requestURL.String(), nil)
+		if err != nil {
+			return nil, err
+		}
+		httpReq.Host = host
+		httpReq.Header = headers.Clone()
+		return c.httpClient.Do(httpReq)
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	defer closeResponse(httpResp)
+
+	body, err := io.ReadAll(httpResp.Body)
+	if err != nil {
+		return nil, 0, fmt.Errorf("read alibaba response: %w", err)
+	}
+	return body, httpResp.StatusCode, nil
+}
+
+func (c *Client) resolveEndpoint(ctx context.Context, req Request, region string) (string, string, string, error) {
 	scheme := "https"
 	path := "/"
 	host := ""
@@ -219,10 +245,15 @@ func (c *Client) resolveEndpoint(req Request, region string) (string, string, st
 		host = req.Host
 	}
 	if host == "" {
-		var err error
-		host, err = resolveEndpointHost(req.Product, region)
+		resolution, err := resolveEndpointHost(req.Product, region)
 		if err != nil {
 			return "", "", "", err
+		}
+		host = resolution.Host
+		if resolution.TryLocation {
+			if resolved := c.resolveEndpointByLocation(ctx, req.Product, region); resolved != "" {
+				host = resolved
+			}
 		}
 	}
 	return scheme, host, path, nil

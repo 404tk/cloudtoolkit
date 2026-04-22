@@ -33,3 +33,10 @@ func TestDecodeErrorIgnoresSuccessfulResponseWithoutErrorEnvelope(t *testing.T) 
 		t.Fatalf("expected nil error, got %v", err)
 	}
 }
+
+func TestIsAccessDenied(t *testing.T) {
+	err := &APIError{Code: "UnauthorizedOperation", Message: "You are not authorized to perform operation."}
+	if !IsAccessDenied(err) {
+		t.Fatal("expected access denied match")
+	}
+}

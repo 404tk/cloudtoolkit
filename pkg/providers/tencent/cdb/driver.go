@@ -87,3 +87,21 @@ func unsupportedRegion(err error) bool {
 	}
 	return strings.Contains(err.Error(), "UnsupportedRegion")
 }
+
+func mergeRegionErrors(base, extra map[string]error) map[string]error {
+	if len(base) == 0 && len(extra) == 0 {
+		return nil
+	}
+	merged := make(map[string]error, len(base)+len(extra))
+	for region, err := range base {
+		if err != nil {
+			merged[region] = err
+		}
+	}
+	for region, err := range extra {
+		if err != nil {
+			merged[region] = err
+		}
+	}
+	return merged
+}

@@ -119,30 +119,42 @@ func (d *Driver) listInstances(
 		return list, nil
 	}
 
+	seedErrs := map[string]error{}
 	tracker := processbar.NewRegionTracker()
-	defer tracker.Finish()
+	trackerUsed := false
+	defer func() {
+		if trackerUsed {
+			tracker.Finish()
+		}
+	}()
+	if d.Region == "all" && len(regions) > 0 {
+		probeRegion := regions[0]
+		probeItems, probeErr := d.listRegion(ctx, probeRegion, fetch)
+		if probeErr != nil {
+			if api.IsAccessDenied(probeErr) {
+				return list, probeErr
+			}
+			seedErrs[probeRegion] = probeErr
+			tracker.Update(probeRegion, 0)
+			trackerUsed = true
+		} else {
+			list = append(list, probeItems...)
+			tracker.Update(probeRegion, len(probeItems))
+			trackerUsed = true
+		}
+		regions = regions[1:]
+	}
+	if len(regions) == 0 {
+		d.partialErr = regionrun.Wrap(seedErrs)
+		return list, nil
+	}
+
+	trackerUsed = true
 	got, regionErrs := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, region string) ([]schema.Database, error) {
-		return paginate.Fetch[schema.Database, int32](ctx, func(ctx context.Context, pageNumber int32) (paginate.Page[schema.Database, int32], error) {
-			if pageNumber == 0 {
-				pageNumber = 1
-			}
-			items, total, err := fetch(ctx, region, pageNumber)
-			if err != nil {
-				return paginate.Page[schema.Database, int32]{}, err
-			}
-			done := len(items) == 0 || int32(len(items)) < pageSize
-			if total > 0 {
-				done = pageNumber*pageSize >= total
-			}
-			return paginate.Page[schema.Database, int32]{
-				Items: items,
-				Next:  pageNumber + 1,
-				Done:  done,
-			}, nil
-		})
+		return d.listRegion(ctx, region, fetch)
 	})
 	list = append(list, got...)
-	d.partialErr = regionrun.Wrap(regionErrs)
+	d.partialErr = regionrun.Wrap(mergeRegionErrors(seedErrs, regionErrs))
 	return list, nil
 }
 
@@ -176,6 +188,49 @@ func (d *Driver) requestRegion() string {
 		return api.DefaultRegion
 	}
 	return region
+}
+
+func (d *Driver) listRegion(
+	ctx context.Context,
+	region string,
+	fetch func(ctx context.Context, region string, pageNumber int32) ([]schema.Database, int32, error),
+) ([]schema.Database, error) {
+	return paginate.Fetch[schema.Database, int32](ctx, func(ctx context.Context, pageNumber int32) (paginate.Page[schema.Database, int32], error) {
+		if pageNumber == 0 {
+			pageNumber = 1
+		}
+		items, total, err := fetch(ctx, region, pageNumber)
+		if err != nil {
+			return paginate.Page[schema.Database, int32]{}, err
+		}
+		done := len(items) == 0 || int32(len(items)) < pageSize
+		if total > 0 {
+			done = pageNumber*pageSize >= total
+		}
+		return paginate.Page[schema.Database, int32]{
+			Items: items,
+			Next:  pageNumber + 1,
+			Done:  done,
+		}, nil
+	})
+}
+
+func mergeRegionErrors(base, extra map[string]error) map[string]error {
+	if len(base) == 0 && len(extra) == 0 {
+		return nil
+	}
+	merged := make(map[string]error, len(base)+len(extra))
+	for region, err := range base {
+		if err != nil {
+			merged[region] = err
+		}
+	}
+	for region, err := range extra {
+		if err != nil {
+			merged[region] = err
+		}
+	}
+	return merged
 }
 
 func pickAddress(addresses []api.RDSAddressObject) (string, string) {

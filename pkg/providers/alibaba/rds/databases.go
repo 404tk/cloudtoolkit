@@ -69,43 +69,95 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 			return list, nil
 		}
 	}
+
+	seedErrs := map[string]error{}
 	tracker := processbar.NewRegionTracker()
-	defer tracker.Finish()
+	trackerUsed := false
+	defer func() {
+		if trackerUsed {
+			tracker.Finish()
+		}
+	}()
+	if d.Region == "all" && len(regions) > 0 {
+		probeRegion := regions[0]
+		probeItems, probeErr := d.listRegion(ctx, client, probeRegion)
+		if probeErr != nil {
+			if api.IsAccessDenied(probeErr) {
+				return list, probeErr
+			}
+			seedErrs[probeRegion] = probeErr
+			tracker.Update(probeRegion, 0)
+			trackerUsed = true
+		} else {
+			list = append(list, probeItems...)
+			tracker.Update(probeRegion, len(probeItems))
+			trackerUsed = true
+		}
+		regions = regions[1:]
+	}
+	if len(regions) == 0 {
+		d.partialErr = regionrun.Wrap(seedErrs)
+		return list, nil
+	}
+
+	trackerUsed = true
 	got, regionErrs := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Database, error) {
-		return paginate.Fetch(ctx, func(ctx context.Context, page int) (paginate.Page[schema.Database, int], error) {
-			if page == 0 {
-				page = 1
-			}
-			response, err := client.DescribeRDSInstances(ctx, r, page, 100)
-			if err != nil {
-				return paginate.Page[schema.Database, int]{}, err
-			}
-			items := make([]schema.Database, 0, len(response.Items.DBInstance))
-			for _, dbInstance := range response.Items.DBInstance {
-				items = append(items, schema.Database{
-					InstanceId:    dbInstance.DBInstanceID,
-					Engine:        dbInstance.Engine,
-					EngineVersion: dbInstance.EngineVersion,
-					Region:        dbInstance.RegionID,
-					Address:       dbInstance.ConnectionString,
-					NetworkType:   dbInstance.InstanceNetworkType,
-					DBNames:       describeDatabases(ctx, client, r, dbInstance.DBInstanceID),
-				})
-			}
-			return paginate.Page[schema.Database, int]{
-				Items: items,
-				Next:  page + 1,
-				Done:  isLastPage(page, response.PageRecordCount, response.TotalRecordCount, len(response.Items.DBInstance)),
-			}, nil
-		})
+		return d.listRegion(ctx, client, r)
 	})
 	list = append(list, got...)
-	d.partialErr = regionrun.Wrap(regionErrs)
+	d.partialErr = regionrun.Wrap(mergeRegionErrors(seedErrs, regionErrs))
 	return list, nil
 }
 
 func (d *Driver) PartialError() error {
 	return d.partialErr
+}
+
+func (d *Driver) listRegion(ctx context.Context, client *api.Client, region string) ([]schema.Database, error) {
+	return paginate.Fetch(ctx, func(ctx context.Context, page int) (paginate.Page[schema.Database, int], error) {
+		if page == 0 {
+			page = 1
+		}
+		response, err := client.DescribeRDSInstances(ctx, region, page, 100)
+		if err != nil {
+			return paginate.Page[schema.Database, int]{}, err
+		}
+		items := make([]schema.Database, 0, len(response.Items.DBInstance))
+		for _, dbInstance := range response.Items.DBInstance {
+			items = append(items, schema.Database{
+				InstanceId:    dbInstance.DBInstanceID,
+				Engine:        dbInstance.Engine,
+				EngineVersion: dbInstance.EngineVersion,
+				Region:        dbInstance.RegionID,
+				Address:       dbInstance.ConnectionString,
+				NetworkType:   dbInstance.InstanceNetworkType,
+				DBNames:       describeDatabases(ctx, client, region, dbInstance.DBInstanceID),
+			})
+		}
+		return paginate.Page[schema.Database, int]{
+			Items: items,
+			Next:  page + 1,
+			Done:  isLastPage(page, response.PageRecordCount, response.TotalRecordCount, len(response.Items.DBInstance)),
+		}, nil
+	})
+}
+
+func mergeRegionErrors(base, extra map[string]error) map[string]error {
+	if len(base) == 0 && len(extra) == 0 {
+		return nil
+	}
+	merged := make(map[string]error, len(base)+len(extra))
+	for region, err := range base {
+		if err != nil {
+			merged[region] = err
+		}
+	}
+	for region, err := range extra {
+		if err != nil {
+			merged[region] = err
+		}
+	}
+	return merged
 }
 
 func describeRegions(ctx context.Context, client *api.Client) ([]string, error) {

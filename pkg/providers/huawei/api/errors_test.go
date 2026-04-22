@@ -48,3 +48,9 @@ func TestIsNotFound(t *testing.T) {
 		t.Fatal("unexpected IsNotFound match")
 	}
 }
+
+func TestIsAccessDenied(t *testing.T) {
+	if !IsAccessDenied(&APIError{Code: "IAM.0002", Message: "forbidden", StatusCode: 403}) {
+		t.Fatal("expected access denied match")
+	}
+}

@@ -3,6 +3,7 @@ package cdb
 import (
 	"context"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/api"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -33,8 +34,55 @@ func (d *Driver) ListMariaDB(ctx context.Context) ([]schema.Database, error) {
 		addRegion(&regions, normalizedRegion(d.Region))
 	}
 
+	seedErrs := map[string]error{}
 	tracker := processbar.NewRegionTracker()
-	defer tracker.Finish()
+	trackerUsed := false
+	defer func() {
+		if trackerUsed {
+			tracker.Finish()
+		}
+	}()
+	if d.Region == "all" && len(regions) > 0 {
+		probeRegion := regions[0]
+		response, probeErr := client.DescribeMariaDBInstances(ctx, probeRegion)
+		if probeErr != nil {
+			switch {
+			case unsupportedRegion(probeErr):
+				tracker.Update(probeRegion, 0)
+				trackerUsed = true
+			case api.IsAccessDenied(probeErr):
+				return list, probeErr
+			default:
+				seedErrs[probeRegion] = probeErr
+				tracker.Update(probeRegion, 0)
+				trackerUsed = true
+			}
+		} else {
+			for _, instance := range response.Response.Instances {
+				_db := schema.Database{
+					InstanceId:    derefString(instance.InstanceID),
+					Engine:        "MariaDB",
+					EngineVersion: derefString(instance.DBVersion),
+					Region:        derefString(instance.Region),
+				}
+				if derefInt64(instance.WanStatus) == 1 {
+					_db.Address = formatAddressInt64(instance.WanDomain, instance.WanPort)
+				} else {
+					_db.Address = formatAddressInt64(instance.Vip, instance.Vport)
+				}
+				list = append(list, _db)
+			}
+			tracker.Update(probeRegion, len(response.Response.Instances))
+			trackerUsed = true
+		}
+		regions = regions[1:]
+	}
+	if len(regions) == 0 {
+		d.partialErr = regionrun.Wrap(seedErrs)
+		return list, nil
+	}
+
+	trackerUsed = true
 	got, regionErrs := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Database, error) {
 		var regionList []schema.Database
 		response, err := client.DescribeMariaDBInstances(ctx, r)
@@ -58,6 +106,6 @@ func (d *Driver) ListMariaDB(ctx context.Context) ([]schema.Database, error) {
 		return regionList, nil
 	})
 	list = append(list, got...)
-	d.partialErr = regionrun.Wrap(regionErrs)
+	d.partialErr = regionrun.Wrap(mergeRegionErrors(seedErrs, regionErrs))
 	return list, nil
 }

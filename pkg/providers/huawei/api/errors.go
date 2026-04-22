@@ -109,6 +109,22 @@ func IsNotFound(err error) bool {
 		strings.HasSuffix(code, ".NotFound")
 }
 
+func IsAccessDenied(err error) bool {
+	if err == nil {
+		return false
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	code := strings.ToLower(strings.TrimSpace(apiErr.Code))
+	if strings.Contains(code, "accessdenied") || strings.Contains(code, "forbidden") || strings.Contains(code, "unauthorized") || strings.Contains(code, "nopermission") {
+		return true
+	}
+	message := strings.ToLower(strings.TrimSpace(apiErr.Message))
+	return strings.Contains(message, "not authorized") || strings.Contains(message, "access denied") || strings.Contains(message, "forbidden") || strings.Contains(message, "permission")
+}
+
 func withRequestID(err error, requestID string) error {
 	requestID = strings.TrimSpace(requestID)
 	if requestID == "" {

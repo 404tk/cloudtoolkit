@@ -7,6 +7,11 @@ import (
 
 const DefaultRegion = "cn-hangzhou"
 
+type endpointResolution struct {
+	Host        string
+	TryLocation bool
+}
+
 func NormalizeRegion(region string) string {
 	region = strings.TrimSpace(region)
 	if region == "" || strings.EqualFold(region, "all") {
@@ -15,37 +20,67 @@ func NormalizeRegion(region string) string {
 	return region
 }
 
-func resolveEndpointHost(product, region string) (string, error) {
+func resolveEndpointHost(product, region string) (endpointResolution, error) {
 	switch strings.ToLower(strings.TrimSpace(product)) {
 	case "sts":
 		switch region {
 		case "cn-north-2-gov-1":
-			return "sts-vpc.cn-north-2-gov-1.aliyuncs.com", nil
+			return endpointResolution{Host: "sts-vpc.cn-north-2-gov-1.aliyuncs.com"}, nil
 		case "cn-shenzhen-finance-1":
-			return "sts-vpc.cn-shenzhen-finance-1.aliyuncs.com", nil
+			return endpointResolution{Host: "sts-vpc.cn-shenzhen-finance-1.aliyuncs.com"}, nil
 		default:
-			return "sts.aliyuncs.com", nil
+			return endpointResolution{Host: "sts.aliyuncs.com"}, nil
 		}
 	case "bssopenapi":
 		if _, ok := bssOverseasRegions[region]; ok {
-			return "business.ap-southeast-1.aliyuncs.com", nil
+			return endpointResolution{Host: "business.ap-southeast-1.aliyuncs.com"}, nil
 		}
-		return "business.aliyuncs.com", nil
+		return endpointResolution{Host: "business.aliyuncs.com"}, nil
 	case "alidns":
-		return "alidns.aliyuncs.com", nil
+		return endpointResolution{Host: "alidns.aliyuncs.com"}, nil
 	case "ram":
-		return "ram.aliyuncs.com", nil
+		return endpointResolution{Host: "ram.aliyuncs.com"}, nil
 	case "ecs":
-		return "ecs.aliyuncs.com", nil
+		if host, ok := ecsRegionalEndpoints[region]; ok {
+			return endpointResolution{Host: host}, nil
+		}
+		return endpointResolution{
+			Host:        ecsGlobalEndpoint,
+			TryLocation: true,
+		}, nil
 	case "rds":
-		return "rds.aliyuncs.com", nil
+		return endpointResolution{Host: "rds.aliyuncs.com"}, nil
 	case "dysmsapi":
-		return "dysmsapi.aliyuncs.com", nil
+		return endpointResolution{Host: "dysmsapi.aliyuncs.com"}, nil
 	case "sas":
-		return "tds.aliyuncs.com", nil
+		return endpointResolution{Host: "tds.aliyuncs.com"}, nil
 	default:
-		return "", fmt.Errorf("alibaba client: unsupported product %q", product)
+		return endpointResolution{}, fmt.Errorf("alibaba client: unsupported product %q", product)
 	}
+}
+
+const ecsGlobalEndpoint = "ecs-cn-hangzhou.aliyuncs.com"
+
+var ecsRegionalEndpoints = map[string]string{
+	"ap-northeast-1": "ecs.ap-northeast-1.aliyuncs.com",
+	"ap-south-1":     "ecs.ap-south-1.aliyuncs.com",
+	"ap-southeast-1": "ecs-cn-hangzhou.aliyuncs.com",
+	"ap-southeast-2": "ecs.ap-southeast-2.aliyuncs.com",
+	"ap-southeast-3": "ecs.ap-southeast-3.aliyuncs.com",
+	"ap-southeast-5": "ecs.ap-southeast-5.aliyuncs.com",
+	"cn-beijing":     "ecs-cn-hangzhou.aliyuncs.com",
+	"cn-hangzhou":    "ecs-cn-hangzhou.aliyuncs.com",
+	"cn-hongkong":    "ecs-cn-hangzhou.aliyuncs.com",
+	"cn-huhehaote":   "ecs.cn-huhehaote.aliyuncs.com",
+	"cn-qingdao":     "ecs-cn-hangzhou.aliyuncs.com",
+	"cn-shanghai":    "ecs-cn-hangzhou.aliyuncs.com",
+	"cn-shenzhen":    "ecs-cn-hangzhou.aliyuncs.com",
+	"cn-zhangjiakou": "ecs.cn-zhangjiakou.aliyuncs.com",
+	"eu-central-1":   "ecs.eu-central-1.aliyuncs.com",
+	"eu-west-1":      "ecs.eu-west-1.aliyuncs.com",
+	"me-east-1":      "ecs.me-east-1.aliyuncs.com",
+	"us-east-1":      "ecs-cn-hangzhou.aliyuncs.com",
+	"us-west-1":      "ecs-cn-hangzhou.aliyuncs.com",
 }
 
 var bssOverseasRegions = map[string]struct{}{

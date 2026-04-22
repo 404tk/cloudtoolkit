@@ -30,3 +30,10 @@ func TestDecodeErrorIgnoresSuccessWithoutError(t *testing.T) {
 		t.Fatalf("expected nil error, got %v", err)
 	}
 }
+
+func TestIsAccessDenied(t *testing.T) {
+	err := &APIError{Code: "AccessDenied", Message: "User is not authorized to perform: ecs:DescribeInstances"}
+	if !IsAccessDenied(err) {
+		t.Fatalf("expected access denied match")
+	}
+}

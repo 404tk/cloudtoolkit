@@ -49,37 +49,88 @@ func (d *Driver) ListProjects(ctx context.Context) ([]schema.Log, error) {
 		regions = append(regions, d.Region)
 	}
 
+	seedErrs := map[string]error{}
 	tracker := processbar.NewRegionTracker()
-	defer tracker.Finish()
+	trackerUsed := false
+	defer func() {
+		if trackerUsed {
+			tracker.Finish()
+		}
+	}()
+	if d.Region == "all" && len(regions) > 0 {
+		probeRegion := regions[0]
+		probeItems, probeErr := d.listRegionProjects(ctx, probeRegion)
+		if probeErr != nil {
+			if IsAccessDenied(probeErr) {
+				return list, probeErr
+			}
+			seedErrs[probeRegion] = probeErr
+			tracker.Update(probeRegion, 0)
+			trackerUsed = true
+		} else {
+			list = append(list, probeItems...)
+			tracker.Update(probeRegion, len(probeItems))
+			trackerUsed = true
+		}
+		regions = regions[1:]
+	}
+	if len(regions) == 0 {
+		d.partialErr = regionrun.Wrap(seedErrs)
+		return list, nil
+	}
+
+	trackerUsed = true
 	got, regionErrs := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Log, error) {
-		client := d.newClient(r)
-		return paginate.Fetch(ctx, func(ctx context.Context, offset int32) (paginate.Page[schema.Log, int32], error) {
-			resp, err := client.ListProjects(ListProjectRequest{Offset: offset, Size: 500})
-			if err != nil {
-				return paginate.Page[schema.Log, int32]{}, err
-			}
-			items := make([]schema.Log, 0, len(resp.Projects))
-			for _, project := range resp.Projects {
-				timestamp, _ := strconv.ParseInt(*project.LastModifyTime, 10, 64)
-				items = append(items, schema.Log{
-					ProjectName:    *project.ProjectName,
-					Region:         *project.Region,
-					Description:    *project.Description,
-					LastModifyTime: time.Unix(timestamp, 0).Format("2006-01-02 15:04:05"),
-				})
-			}
-			return paginate.Page[schema.Log, int32]{
-				Items: items,
-				Next:  offset + 500,
-				Done:  len(resp.Projects) < 500,
-			}, nil
-		})
+		return d.listRegionProjects(ctx, r)
 	})
 	list = append(list, got...)
-	d.partialErr = regionrun.Wrap(regionErrs)
+	d.partialErr = regionrun.Wrap(mergeRegionErrors(seedErrs, regionErrs))
 	return list, nil
 }
 
 func (d *Driver) PartialError() error {
 	return d.partialErr
+}
+
+func (d *Driver) listRegionProjects(ctx context.Context, region string) ([]schema.Log, error) {
+	client := d.newClient(region)
+	return paginate.Fetch(ctx, func(ctx context.Context, offset int32) (paginate.Page[schema.Log, int32], error) {
+		resp, err := client.ListProjects(ListProjectRequest{Offset: offset, Size: 500})
+		if err != nil {
+			return paginate.Page[schema.Log, int32]{}, err
+		}
+		items := make([]schema.Log, 0, len(resp.Projects))
+		for _, project := range resp.Projects {
+			timestamp, _ := strconv.ParseInt(*project.LastModifyTime, 10, 64)
+			items = append(items, schema.Log{
+				ProjectName:    *project.ProjectName,
+				Region:         *project.Region,
+				Description:    *project.Description,
+				LastModifyTime: time.Unix(timestamp, 0).Format("2006-01-02 15:04:05"),
+			})
+		}
+		return paginate.Page[schema.Log, int32]{
+			Items: items,
+			Next:  offset + 500,
+			Done:  len(resp.Projects) < 500,
+		}, nil
+	})
+}
+
+func mergeRegionErrors(base, extra map[string]error) map[string]error {
+	if len(base) == 0 && len(extra) == 0 {
+		return nil
+	}
+	merged := make(map[string]error, len(base)+len(extra))
+	for region, err := range base {
+		if err != nil {
+			merged[region] = err
+		}
+	}
+	for region, err := range extra {
+		if err != nil {
+			merged[region] = err
+		}
+	}
+	return merged
 }

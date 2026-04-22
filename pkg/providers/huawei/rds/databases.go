@@ -39,10 +39,48 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 	default:
 		logger.Info("List RDS instances ...")
 	}
+
+	regions := append([]string(nil), d.Regions...)
+	regionErrs := make([]string, 0, len(regions))
 	tracker := processbar.NewRegionTracker()
-	defer tracker.Finish()
-	var regionErrs []string
-	for _, r := range d.Regions {
+	trackerUsed := false
+	defer func() {
+		if trackerUsed {
+			tracker.Finish()
+		}
+	}()
+	if len(regions) > 0 {
+		probeRegion := regions[0]
+		probeItems, probeErr := d.listRegionDatabases(ctx, probeRegion)
+		if probeErr != nil {
+			switch {
+			case api.IsProjectNotFound(probeErr):
+				logger.Warning("Skip RDS region", probeRegion, ":", probeErr.Error())
+				tracker.Update(probeRegion, 0)
+				trackerUsed = true
+			case api.IsAccessDenied(probeErr):
+				return list, probeErr
+			default:
+				regionErrs = append(regionErrs, fmt.Sprintf("%s: %s", probeRegion, probeErr))
+				tracker.Update(probeRegion, 0)
+				trackerUsed = true
+			}
+		} else {
+			list = append(list, probeItems...)
+			tracker.Update(probeRegion, len(probeItems))
+			trackerUsed = true
+		}
+		regions = regions[1:]
+	}
+	if len(regions) == 0 {
+		if len(regionErrs) > 0 {
+			return list, fmt.Errorf("%s", strings.Join(regionErrs, "; "))
+		}
+		return list, nil
+	}
+
+	trackerUsed = true
+	for _, r := range regions {
 		instances, err := d.listRegionDatabases(ctx, r)
 		if err != nil {
 			tracker.Update(r, 0)

@@ -50,32 +50,84 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	} else {
 		regions = append(regions, normalizedRegion(d.Region))
 	}
+
+	seedErrs := map[string]error{}
 	tracker := processbar.NewRegionTracker()
-	defer tracker.Finish()
+	trackerUsed := false
+	defer func() {
+		if trackerUsed {
+			tracker.Finish()
+		}
+	}()
+	if d.Region == "all" && len(regions) > 0 {
+		probeRegion := regions[0]
+		probeItems, probeErr := d.listRegion(ctx, client, probeRegion)
+		if probeErr != nil {
+			if api.IsAccessDenied(probeErr) {
+				return list, probeErr
+			}
+			seedErrs[probeRegion] = probeErr
+			tracker.Update(probeRegion, 0)
+			trackerUsed = true
+		} else {
+			list = append(list, probeItems...)
+			tracker.Update(probeRegion, len(probeItems))
+			trackerUsed = true
+		}
+		regions = regions[1:]
+	}
+	if len(regions) == 0 {
+		d.partialErr = regionrun.Wrap(seedErrs)
+		return list, nil
+	}
+
+	trackerUsed = true
 	got, regionErrs := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
-		return paginate.Fetch(ctx, func(ctx context.Context, offset int64) (paginate.Page[schema.Host, int64], error) {
-			response, err := client.DescribeCVMInstances(ctx, r, offset, 100)
-			if err != nil {
-				return paginate.Page[schema.Host, int64]{}, err
-			}
-			items := make([]schema.Host, 0, len(response.Response.InstanceSet))
-			for _, instance := range response.Response.InstanceSet {
-				items = append(items, mapHost(instance, r))
-			}
-			return paginate.Page[schema.Host, int64]{
-				Items: items,
-				Next:  offset + int64(len(response.Response.InstanceSet)),
-				Done:  doneByTotal(offset, int64(len(response.Response.InstanceSet)), derefInt64(response.Response.TotalCount), 100),
-			}, nil
-		})
+		return d.listRegion(ctx, client, r)
 	})
 	list = append(list, got...)
-	d.partialErr = regionrun.Wrap(regionErrs)
+	d.partialErr = regionrun.Wrap(mergeRegionErrors(seedErrs, regionErrs))
 	return list, nil
 }
 
 func (d *Driver) PartialError() error {
 	return d.partialErr
+}
+
+func (d *Driver) listRegion(ctx context.Context, client *api.Client, region string) ([]schema.Host, error) {
+	return paginate.Fetch(ctx, func(ctx context.Context, offset int64) (paginate.Page[schema.Host, int64], error) {
+		response, err := client.DescribeCVMInstances(ctx, region, offset, 100)
+		if err != nil {
+			return paginate.Page[schema.Host, int64]{}, err
+		}
+		items := make([]schema.Host, 0, len(response.Response.InstanceSet))
+		for _, instance := range response.Response.InstanceSet {
+			items = append(items, mapHost(instance, region))
+		}
+		return paginate.Page[schema.Host, int64]{
+			Items: items,
+			Next:  offset + int64(len(response.Response.InstanceSet)),
+			Done:  doneByTotal(offset, int64(len(response.Response.InstanceSet)), derefInt64(response.Response.TotalCount), 100),
+		}, nil
+	})
+}
+
+func mergeRegionErrors(base, extra map[string]error) map[string]error {
+	if len(base) == 0 && len(extra) == 0 {
+		return nil
+	}
+	merged := make(map[string]error, len(base)+len(extra))
+	for region, err := range base {
+		if err != nil {
+			merged[region] = err
+		}
+	}
+	for region, err := range extra {
+		if err != nil {
+			merged[region] = err
+		}
+	}
+	return merged
 }
 
 func mapHost(instance api.CVMInstanceInfo, region string) schema.Host {
