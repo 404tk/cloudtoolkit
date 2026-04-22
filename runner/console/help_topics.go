@@ -445,6 +445,9 @@ func renderProviderHelp(ctx HelpContext) {
 		required = []string{"No provider is currently selected."}
 	}
 	writeLines(&b, "Required options:", required)
+	writeLines(&b, "Available commands:", []string{
+		commandListSummary(HelpModeProvider, ctx.DemoReplay),
+	})
 	writeLines(&b, "Next recommended commands:", providerRecommendedCommands(ctx))
 	writeLines(&b, "Responsible use:", []string{
 		"Validate only in owned, lab, or explicitly authorized environments.",
@@ -614,6 +617,9 @@ func providerRequiredOptionLines() []string {
 }
 
 func providerRecommendedCommands(ctx HelpContext) []string {
+	canExit := commandAvailable(HelpModeProvider, ctx.DemoReplay, "exit")
+	canDemo := commandAvailable(HelpModeProvider, ctx.DemoReplay, "demo")
+
 	if config == nil {
 		return []string{
 			"use <provider>",
@@ -632,13 +638,13 @@ func providerRecommendedCommands(ctx HelpContext) []string {
 	}
 	if len(missing) > 0 {
 		commands := []string{"show options"}
-		if ctx.DemoReplay {
+		if canExit {
 			commands = append(commands, "exit")
 		}
 		for _, key := range missing {
 			commands = append(commands, fmt.Sprintf("set %s <value>", key))
 		}
-		if !ctx.DemoReplay {
+		if canDemo {
 			commands = append(commands, "demo")
 		}
 		commands = append(commands,
@@ -653,10 +659,10 @@ func providerRecommendedCommands(ctx HelpContext) []string {
 		"set payload <payload-name>",
 		"help payload <payload-name>",
 	}
-	if ctx.DemoReplay {
+	if canExit {
 		commands = append([]string{"exit"}, commands...)
 	}
-	if !ctx.DemoReplay {
+	if canDemo {
 		commands = append(commands, "demo")
 	}
 	if ctx.Payload == "instance-cmd-check" {
@@ -729,6 +735,10 @@ func demoReplayStatus(enabled bool) string {
 		return "enabled"
 	}
 	return "disabled"
+}
+
+func commandListSummary(mode HelpMode, demoReplay bool) string {
+	return strings.Join(commandNamesForContext(mode, demoReplay), ", ")
 }
 
 func providerHelpModeLabel(ctx HelpContext) string {

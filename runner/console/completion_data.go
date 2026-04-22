@@ -46,20 +46,20 @@ var commandSuggestionDescriptions = map[string]string{
 	"shell": "open an authorized instance shell",
 }
 
-var rootCommandSuggestions = buildCommandSuggestions([]string{
+var rootCommandNames = []string{
 	"help",
 	"use",
 	"sessions",
 	"note",
 	"clear",
 	"exit",
-})
+}
 
-var shellCommandSuggestions = buildCommandSuggestions([]string{
+var shellCommandNames = []string{
 	"help",
 	"clear",
 	"exit",
-})
+}
 
 var sessionsCommandSuggestions = []prompt.Suggest{
 	{Text: "-i", Description: "interact with a cached session by ID"},
@@ -67,7 +67,7 @@ var sessionsCommandSuggestions = []prompt.Suggest{
 	{Text: "-c", Description: "check one cached session or all sessions"},
 }
 
-var providerCommandSuggestionsData = buildCommandSuggestions([]string{
+var providerCommandNames = []string{
 	"help",
 	"show",
 	"set",
@@ -79,7 +79,7 @@ var providerCommandSuggestionsData = buildCommandSuggestions([]string{
 	"use",
 	"clear",
 	"exit",
-})
+}
 
 var showTopicSuggestionsData = []prompt.Suggest{
 	{Text: "options", Description: "display provider configuration"},
@@ -191,6 +191,7 @@ func completionContextForMode(mode HelpMode) CompletionContext {
 		ctx.Provider = ""
 		ctx.Payload = ""
 		ctx.InstanceID = ""
+		ctx.DemoReplay = false
 	case HelpModeShell:
 		if ctx.Payload == "" {
 			ctx.Payload = "instance-cmd-check"
@@ -211,17 +212,44 @@ func buildCommandSuggestions(commands []string) []prompt.Suggest {
 	return suggestions
 }
 
-func mockCommandSuggestions() []prompt.Suggest {
-	return buildCommandSuggestions([]string{
-		"help",
-		"show",
-		"set",
-		"run",
-		"shell",
-		"note",
-		"clear",
-		"exit",
-	})
+func commandNamesForContext(mode HelpMode, demoReplay bool) []string {
+	switch mode {
+	case HelpModeProvider:
+		return providerCommandNamesForState(demoReplay)
+	case HelpModeShell:
+		return append([]string(nil), shellCommandNames...)
+	default:
+		return append([]string(nil), rootCommandNames...)
+	}
+}
+
+func providerCommandNamesForState(demoReplay bool) []string {
+	if !demoReplay {
+		return append([]string(nil), providerCommandNames...)
+	}
+
+	names := make([]string, 0, len(providerCommandNames))
+	for _, name := range providerCommandNames {
+		switch name {
+		case "demo", "note", "use":
+			continue
+		}
+		names = append(names, name)
+	}
+	return names
+}
+
+func commandSuggestionsForContext(ctx CompletionContext) []prompt.Suggest {
+	return buildCommandSuggestions(commandNamesForContext(ctx.Mode, ctx.DemoReplay))
+}
+
+func commandAvailable(mode HelpMode, demoReplay bool, command string) bool {
+	for _, name := range commandNamesForContext(mode, demoReplay) {
+		if name == command {
+			return true
+		}
+	}
+	return false
 }
 
 func noteSuggestions(args []string, word string) []prompt.Suggest {

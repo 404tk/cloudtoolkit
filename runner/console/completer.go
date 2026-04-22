@@ -54,19 +54,19 @@ func completeForMode(d prompt.Document, mode HelpMode) []prompt.Suggest {
 	case HelpModeProvider:
 		return providerSuggestions(ctx, args, word)
 	case HelpModeShell:
-		return shellSuggestions(args, word)
+		return shellSuggestions(ctx, args, word)
 	default:
-		return rootSuggestions(args, word)
+		return rootSuggestions(ctx, args, word)
 	}
 }
 
-func rootSuggestions(args []string, word string) []prompt.Suggest {
+func rootSuggestions(ctx CompletionContext, args []string, word string) []prompt.Suggest {
 	if len(args) <= 1 {
-		return prompt.FilterHasPrefix(rootCommandSuggestions, word, true)
+		return prompt.FilterHasPrefix(commandSuggestionsForContext(ctx), word, true)
 	}
 	switch args[0] {
 	case "help":
-		return helpSuggestions(args, word)
+		return helpSuggestions(ctx, args, word)
 	case "use":
 		if len(args) == 2 {
 			return prompt.FilterContains(modules, word, true)
@@ -81,14 +81,11 @@ func rootSuggestions(args []string, word string) []prompt.Suggest {
 
 func providerSuggestions(ctx CompletionContext, args []string, word string) []prompt.Suggest {
 	if len(args) <= 1 {
-		if ctx.DemoReplay {
-			return prompt.FilterHasPrefix(mockCommandSuggestions(), word, true)
-		}
-		return prompt.FilterHasPrefix(providerCommandSuggestionsData, word, true)
+		return prompt.FilterHasPrefix(commandSuggestionsForContext(ctx), word, true)
 	}
 	switch args[0] {
 	case "help":
-		return helpSuggestions(args, word)
+		return helpSuggestions(ctx, args, word)
 	case "use":
 		if len(args) == 2 {
 			return prompt.FilterContains(modules, word, true)
@@ -107,13 +104,13 @@ func providerSuggestions(ctx CompletionContext, args []string, word string) []pr
 	return []prompt.Suggest{}
 }
 
-func shellSuggestions(args []string, word string) []prompt.Suggest {
+func shellSuggestions(ctx CompletionContext, args []string, word string) []prompt.Suggest {
 	if len(args) <= 1 {
-		return prompt.FilterHasPrefix(shellCommandSuggestions, word, true)
+		return prompt.FilterHasPrefix(commandSuggestionsForContext(ctx), word, true)
 	}
 	switch args[0] {
 	case "help":
-		return helpSuggestions(args, word)
+		return helpSuggestions(ctx, args, word)
 	}
 	return []prompt.Suggest{}
 }
@@ -163,9 +160,9 @@ func completionArgs(d prompt.Document) []string {
 	return args
 }
 
-func helpSuggestions(args []string, word string) []prompt.Suggest {
+func helpSuggestions(ctx CompletionContext, args []string, word string) []prompt.Suggest {
 	if len(args) == 2 {
-		return prompt.FilterContains(helpTopicSuggestions(), word, true)
+		return prompt.FilterContains(helpTopicSuggestions(ctx), word, true)
 	}
 	if len(args) == 3 && (args[1] == "payload" || args[1] == "metadata") {
 		return prompt.FilterContains(payloadSuggestions(), word, true)
@@ -173,9 +170,10 @@ func helpSuggestions(args []string, word string) []prompt.Suggest {
 	return []prompt.Suggest{}
 }
 
-func helpTopicSuggestions() []prompt.Suggest {
-	suggestions := make([]prompt.Suggest, 0, len(helpTopicOrder))
-	for _, key := range helpTopicOrder {
+func helpTopicSuggestions(ctx CompletionContext) []prompt.Suggest {
+	keys := helpTopicKeysForContext(ctx)
+	suggestions := make([]prompt.Suggest, 0, len(keys))
+	for _, key := range keys {
 		if topic, ok := helpTopics[key]; ok {
 			suggestions = append(suggestions, prompt.Suggest{
 				Text:        key,
@@ -184,6 +182,36 @@ func helpTopicSuggestions() []prompt.Suggest {
 		}
 	}
 	return suggestions
+}
+
+func helpTopicKeysForContext(ctx CompletionContext) []string {
+	keys := make([]string, 0, len(helpTopicOrder))
+	seen := make(map[string]struct{}, len(helpTopicOrder))
+
+	appendKey := func(key string) {
+		if _, ok := helpTopics[key]; !ok {
+			return
+		}
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		keys = append(keys, key)
+	}
+
+	for _, key := range commandNamesForContext(ctx.Mode, ctx.DemoReplay) {
+		appendKey(key)
+	}
+	if ctx.Mode == HelpModeProvider && ctx.DemoReplay {
+		appendKey("demo")
+	}
+	appendKey("payload")
+	appendKey("metadata")
+
+	for _, key := range helpTopicOrder {
+		appendKey(key)
+	}
+	return keys
 }
 
 func optionSuggestions(ctx CompletionContext) []prompt.Suggest {
