@@ -21,23 +21,37 @@ import (
 )
 
 type Provider struct {
-	credential _auth.Credential
-	region     string
-	apiClient  *_api.Client
+	credential       _auth.Credential
+	region           string
+	apiClient        *_api.Client
+	tosClientOptions []tos.Option
 }
 
 // New creates a new provider client for volcengine API.
 func New(options schema.Options) (*Provider, error) {
-	return newProvider(options)
+	return NewWithConfig(options, ClientConfig{})
 }
 
-func newProvider(options schema.Options, clientOptions ..._api.Option) (*Provider, error) {
+type ClientConfig struct {
+	APIOptions          []_api.Option
+	TOSOptions          []tos.Option
+	SkipCredentialCache bool
+}
+
+// NewWithConfig creates a new provider client with injected transport options.
+// This keeps payload behavior intact while allowing replay/test clients to flow
+// through the real provider and driver stack.
+func NewWithConfig(options schema.Options, cfg ClientConfig) (*Provider, error) {
+	return newProvider(options, cfg)
+}
+
+func newProvider(options schema.Options, cfg ClientConfig) (*Provider, error) {
 	credential, err := _auth.FromOptions(options)
 	if err != nil {
 		return nil, err
 	}
 	region, _ := options.GetMetadata(utils.Region)
-	apiClient := _api.NewClient(credential, clientOptions...)
+	apiClient := _api.NewClient(credential, cfg.APIOptions...)
 
 	payload, _ := options.GetMetadata(utils.Payload)
 	if payload == "cloudlist" {
@@ -46,13 +60,16 @@ func newProvider(options schema.Options, clientOptions ..._api.Option) (*Provide
 			return nil, err
 		}
 		logger.Warning("Current project:", name)
-		cache.Cfg.CredInsert(name, options)
+		if !cfg.SkipCredentialCache {
+			cache.Cfg.CredInsert(name, options)
+		}
 	}
 
 	return &Provider{
-		credential: credential,
-		region:     region,
-		apiClient:  apiClient,
+		credential:       credential,
+		region:           region,
+		apiClient:        apiClient,
+		tosClientOptions: append([]tos.Option(nil), cfg.TOSOptions...),
 	}, nil
 }
 
@@ -219,8 +236,5 @@ func (p *Provider) bucketInfos(ctx context.Context, driver *tos.Driver, bucketNa
 }
 
 func (p *Provider) newTOSDriver(region string) *tos.Driver {
-	return &tos.Driver{
-		Cred:   p.credential,
-		Region: region,
-	}
+	return tos.NewDriver(p.credential, region, p.tosClientOptions...)
 }

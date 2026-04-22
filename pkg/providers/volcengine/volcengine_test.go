@@ -70,7 +70,9 @@ func TestProviderResourcesDatabaseUsesRDSDrivers(t *testing.T) {
 	provider, err := newProvider(testOptions(map[string]string{
 		utils.Provider: "volcengine",
 		utils.Region:   "all",
-	}), testClientOptions(server.URL)...)
+	}), ClientConfig{
+		APIOptions: testClientOptions(server.URL),
+	})
 	if err != nil {
 		t.Fatalf("newProvider() error = %v", err)
 	}
@@ -171,7 +173,9 @@ func TestProviderResourcesDomainUsesDNSDriver(t *testing.T) {
 	provider, err := newProvider(testOptions(map[string]string{
 		utils.Provider: "volcengine",
 		utils.Region:   "cn-guangzhou",
-	}), testClientOptions(server.URL)...)
+	}), ClientConfig{
+		APIOptions: testClientOptions(server.URL),
+	})
 	if err != nil {
 		t.Fatalf("newProvider() error = %v", err)
 	}

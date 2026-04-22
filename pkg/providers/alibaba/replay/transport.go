@@ -69,8 +69,8 @@ func (t *transport) handleRPC(req *http.Request) (*http.Response, error) {
 
 	host := strings.ToLower(req.URL.Hostname())
 	action := strings.TrimSpace(req.URL.Query().Get("Action"))
-	switch host {
-	case "sts.aliyuncs.com":
+	switch rpcProductFromHost(host) {
+	case "sts":
 		if action == "GetCallerIdentity" {
 			return jsonResponse(req, http.StatusOK, api.GetCallerIdentityResponse{
 				IdentityType: "RAMUser",
@@ -81,7 +81,7 @@ func (t *transport) handleRPC(req *http.Request) (*http.Response, error) {
 				Arn:          demoCallerArn(),
 			}), nil
 		}
-	case "business.aliyuncs.com":
+	case "bssopenapi":
 		if action == "QueryAccountBalance" {
 			return jsonResponse(req, http.StatusOK, api.QueryAccountBalanceResponse{
 				Code:      "Success",
@@ -93,21 +93,49 @@ func (t *transport) handleRPC(req *http.Request) (*http.Response, error) {
 				},
 			}), nil
 		}
-	case "ecs.aliyuncs.com":
+	case "ecs":
 		return t.handleECS(req, action)
-	case "ram.aliyuncs.com":
+	case "ram":
 		return t.handleRAM(req, action)
-	case "rds.aliyuncs.com":
+	case "rds":
 		return t.handleRDS(req, action)
-	case "tds.aliyuncs.com":
+	case "sas":
 		return t.handleSAS(req, action)
-	case "alidns.aliyuncs.com":
+	case "alidns":
 		return t.handleDNS(req, action)
-	case "dysmsapi.aliyuncs.com":
+	case "dysmsapi":
 		return t.handleSMS(req, action)
+	case "location":
+		return t.handleLocation(req, action)
 	}
 
 	return rpcErrorResponse(req, http.StatusNotFound, "InvalidAction.NotFound", fmt.Sprintf("Unsupported replay action: %s", action)), nil
+}
+
+func (t *transport) handleLocation(req *http.Request, action string) (*http.Response, error) {
+	if action != "DescribeEndpoints" {
+		return rpcErrorResponse(req, http.StatusNotFound, "InvalidAction.NotFound", fmt.Sprintf("Unsupported Location replay action: %s", action)), nil
+	}
+
+	serviceCode := strings.TrimSpace(req.URL.Query().Get("ServiceCode"))
+	region := strings.TrimSpace(req.URL.Query().Get("Id"))
+	if region == "" {
+		region = api.DefaultRegion
+	}
+	host := ""
+	switch serviceCode {
+	case "ecs":
+		host = replayECSEndpoint(region)
+	}
+	return jsonResponse(req, http.StatusOK, map[string]any{
+		"RequestId": "req-location-endpoints",
+		"Success":   true,
+		"Endpoints": map[string]any{
+			"Endpoint": []map[string]string{
+				{"Endpoint": host},
+			},
+		},
+	}), nil
 }
 
 func (t *transport) handleECS(req *http.Request, action string) (*http.Response, error) {
@@ -904,6 +932,68 @@ func isSLSHost(req *http.Request) bool {
 		return false
 	}
 	return strings.Contains(strings.ToLower(req.URL.Hostname()), ".log.aliyuncs.com")
+}
+
+func rpcProductFromHost(host string) string {
+	host = normalizeRPCReplayHost(host)
+	switch {
+	case host == "sts.aliyuncs.com" || strings.HasPrefix(host, "sts-vpc."):
+		return "sts"
+	case host == "location-readonly.aliyuncs.com":
+		return "location"
+	case host == "business.aliyuncs.com" || strings.HasPrefix(host, "business."):
+		return "bssopenapi"
+	case host == "ram.aliyuncs.com":
+		return "ram"
+	case host == "alidns.aliyuncs.com":
+		return "alidns"
+	case host == "dysmsapi.aliyuncs.com":
+		return "dysmsapi"
+	case host == "tds.aliyuncs.com":
+		return "sas"
+	case isECSRPCHost(host):
+		return "ecs"
+	case isRDSRPCHost(host):
+		return "rds"
+	default:
+		return ""
+	}
+}
+
+func isECSRPCHost(host string) bool {
+	host = normalizeRPCReplayHost(host)
+	return host == "ecs.aliyuncs.com" ||
+		strings.HasPrefix(host, "ecs-") ||
+		strings.HasPrefix(host, "ecs.") ||
+		strings.HasPrefix(host, "ecs-vpc.")
+}
+
+func isRDSRPCHost(host string) bool {
+	host = normalizeRPCReplayHost(host)
+	return host == "rds.aliyuncs.com" ||
+		strings.HasPrefix(host, "rds-") ||
+		strings.HasPrefix(host, "rds.") ||
+		strings.HasPrefix(host, "rds-vpc.")
+}
+
+func replayECSEndpoint(region string) string {
+	region = strings.TrimSpace(region)
+	if region == "" {
+		region = api.DefaultRegion
+	}
+	switch {
+	case strings.HasPrefix(region, "cn-"):
+		return "ecs-" + region + ".aliyuncs.com"
+	default:
+		return "ecs." + region + ".aliyuncs.com"
+	}
+}
+
+func normalizeRPCReplayHost(host string) string {
+	host = strings.ToLower(strings.TrimSpace(host))
+	host = strings.TrimSuffix(host, ":443")
+	host = strings.TrimSuffix(host, ":80")
+	return host
 }
 
 func requestHost(req *http.Request) string {

@@ -16,6 +16,14 @@ type Driver struct {
 	clientOptions []Option
 }
 
+func NewDriver(cred auth.Credential, region string, opts ...Option) *Driver {
+	return &Driver{
+		Cred:          cred,
+		Region:        region,
+		clientOptions: append([]Option(nil), opts...),
+	}
+}
+
 func (d *Driver) NewClient() (*Client, error) {
 	if err := d.Cred.Validate(); err != nil {
 		return nil, err

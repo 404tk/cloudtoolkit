@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	demoreplay "github.com/404tk/cloudtoolkit/pkg/providers/replay"
 	"github.com/404tk/cloudtoolkit/runner/payloads"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/argparse"
@@ -212,10 +213,10 @@ func buildCommandSuggestions(commands []string) []prompt.Suggest {
 	return suggestions
 }
 
-func commandNamesForContext(mode HelpMode, demoReplay bool) []string {
+func commandNamesForContext(mode HelpMode, demoReplay bool, provider string) []string {
 	switch mode {
 	case HelpModeProvider:
-		return providerCommandNamesForState(demoReplay)
+		return providerCommandNamesForState(demoReplay, provider)
 	case HelpModeShell:
 		return append([]string(nil), shellCommandNames...)
 	default:
@@ -223,16 +224,19 @@ func commandNamesForContext(mode HelpMode, demoReplay bool) []string {
 	}
 }
 
-func providerCommandNamesForState(demoReplay bool) []string {
-	if !demoReplay {
-		return append([]string(nil), providerCommandNames...)
-	}
-
+func providerCommandNamesForState(demoReplay bool, provider string) []string {
 	names := make([]string, 0, len(providerCommandNames))
+	demoSupported := demoreplay.SupportsProvider(provider)
 	for _, name := range providerCommandNames {
 		switch name {
-		case "demo", "note", "use":
-			continue
+		case "demo":
+			if demoReplay || !demoSupported {
+				continue
+			}
+		case "note", "use":
+			if demoReplay {
+				continue
+			}
 		}
 		names = append(names, name)
 	}
@@ -240,11 +244,11 @@ func providerCommandNamesForState(demoReplay bool) []string {
 }
 
 func commandSuggestionsForContext(ctx CompletionContext) []prompt.Suggest {
-	return buildCommandSuggestions(commandNamesForContext(ctx.Mode, ctx.DemoReplay))
+	return buildCommandSuggestions(commandNamesForContext(ctx.Mode, ctx.DemoReplay, ctx.Provider))
 }
 
-func commandAvailable(mode HelpMode, demoReplay bool, command string) bool {
-	for _, name := range commandNamesForContext(mode, demoReplay) {
+func commandAvailable(mode HelpMode, demoReplay bool, provider, command string) bool {
+	for _, name := range commandNamesForContext(mode, demoReplay, provider) {
 		if name == command {
 			return true
 		}

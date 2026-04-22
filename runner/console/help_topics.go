@@ -182,10 +182,10 @@ var helpTopics = map[string]helpTopic{
 			"If the credentials do not match, mock mode returns a natural authentication failure and does not silently fall through to live provider execution.",
 		},
 		Examples: []string{
-			"use alibaba",
+			"use <provider>",
 			"demo",
-			"set accesskey LTAIxxxxxxxxxxxxEXAMPLE",
-			"set secretkey EXAMPLExxxxxxxxxxxxxxxxKEY",
+			"set accesskey <demo-access-key>",
+			"set secretkey <demo-secret-key>",
 			"run",
 			"exit",
 		},
@@ -446,7 +446,7 @@ func renderProviderHelp(ctx HelpContext) {
 	}
 	writeLines(&b, "Required options:", required)
 	writeLines(&b, "Available commands:", []string{
-		commandListSummary(HelpModeProvider, ctx.DemoReplay),
+		commandListSummary(HelpModeProvider, ctx.DemoReplay, ctx.Provider),
 	})
 	writeLines(&b, "Next recommended commands:", providerRecommendedCommands(ctx))
 	writeLines(&b, "Responsible use:", []string{
@@ -617,8 +617,8 @@ func providerRequiredOptionLines() []string {
 }
 
 func providerRecommendedCommands(ctx HelpContext) []string {
-	canExit := commandAvailable(HelpModeProvider, ctx.DemoReplay, "exit")
-	canDemo := commandAvailable(HelpModeProvider, ctx.DemoReplay, "demo")
+	canExit := commandAvailable(HelpModeProvider, ctx.DemoReplay, ctx.Provider, "exit")
+	canDemo := commandAvailable(HelpModeProvider, ctx.DemoReplay, ctx.Provider, "demo")
 
 	if config == nil {
 		return []string{
@@ -737,8 +737,8 @@ func demoReplayStatus(enabled bool) string {
 	return "disabled"
 }
 
-func commandListSummary(mode HelpMode, demoReplay bool) string {
-	return strings.Join(commandNamesForContext(mode, demoReplay), ", ")
+func commandListSummary(mode HelpMode, demoReplay bool, provider string) string {
+	return strings.Join(commandNamesForContext(mode, demoReplay, provider), ", ")
 }
 
 func providerHelpModeLabel(ctx HelpContext) string {

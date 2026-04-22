@@ -1,46 +1,23 @@
 package replay
 
-import "sync"
-
-type replayState struct {
-	Active   bool
-	Provider string
-}
-
-var (
-	replayStateMu sync.RWMutex
-	currentState  replayState
-)
+import demoreplay "github.com/404tk/cloudtoolkit/pkg/providers/replay"
 
 func Enable(provider string) {
-	replayStateMu.Lock()
-	defer replayStateMu.Unlock()
-	currentState = replayState{
-		Active:   true,
-		Provider: normalizeProvider(provider),
-	}
+	demoreplay.Enable(provider)
 }
 
 func Disable() {
-	replayStateMu.Lock()
-	defer replayStateMu.Unlock()
-	currentState = replayState{}
+	demoreplay.Disable()
 }
 
 func IsActive() bool {
-	replayStateMu.RLock()
-	defer replayStateMu.RUnlock()
-	return currentState.Active && currentState.Provider != ""
+	return demoreplay.IsActive()
 }
 
 func ActiveProvider() string {
-	replayStateMu.RLock()
-	defer replayStateMu.RUnlock()
-	return currentState.Provider
+	return demoreplay.ActiveProvider()
 }
 
 func IsActiveForProvider(provider string) bool {
-	replayStateMu.RLock()
-	defer replayStateMu.RUnlock()
-	return currentState.Active && currentState.Provider != "" && currentState.Provider == normalizeProvider(provider)
+	return demoreplay.IsActiveForProvider(provider)
 }

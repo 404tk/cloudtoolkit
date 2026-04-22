@@ -199,7 +199,7 @@ func helpTopicKeysForContext(ctx CompletionContext) []string {
 		keys = append(keys, key)
 	}
 
-	for _, key := range commandNamesForContext(ctx.Mode, ctx.DemoReplay) {
+	for _, key := range commandNamesForContext(ctx.Mode, ctx.DemoReplay, ctx.Provider) {
 		appendKey(key)
 	}
 	if ctx.Mode == HelpModeProvider && ctx.DemoReplay {

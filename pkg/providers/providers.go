@@ -11,8 +11,10 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/gcp"
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud"
+	demoreplay "github.com/404tk/cloudtoolkit/pkg/providers/replay"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine"
+	volcreplay "github.com/404tk/cloudtoolkit/pkg/providers/volcengine/replay"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 )
 
@@ -30,7 +32,7 @@ var catalog = []entry{
 	{
 		info: Info{Name: "alibaba", Desc: "Alibaba Cloud"},
 		new: func(block schema.Options) (schema.Provider, error) {
-			if alireplay.IsActiveForProvider("alibaba") {
+			if demoreplay.IsActiveForProvider("alibaba") {
 				return alibaba.NewWithConfig(block, alireplay.ClientConfig())
 			}
 			return alibaba.New(block)
@@ -63,6 +65,9 @@ var catalog = []entry{
 	{
 		info: Info{Name: "volcengine", Desc: "Volcengine"},
 		new: func(block schema.Options) (schema.Provider, error) {
+			if demoreplay.IsActiveForProvider("volcengine") {
+				return volcengine.NewWithConfig(block, volcreplay.ClientConfig())
+			}
 			return volcengine.New(block)
 		},
 	},

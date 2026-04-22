@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	replay "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/replay"
+	"github.com/404tk/cloudtoolkit/pkg/providers/replay"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/go-prompt"

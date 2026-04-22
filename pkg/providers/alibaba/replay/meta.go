@@ -1,6 +1,10 @@
 package replay
 
-import "strings"
+import (
+	"strings"
+
+	demoreplay "github.com/404tk/cloudtoolkit/pkg/providers/replay"
+)
 
 type Credentials struct {
 	AccessKey string
@@ -8,19 +12,19 @@ type Credentials struct {
 }
 
 func SupportsProvider(provider string) bool {
-	return normalizeProvider(provider) == "alibaba"
+	return strings.TrimSpace(provider) == "alibaba"
 }
 
 func CredentialsFor(provider string) (Credentials, bool) {
 	if !SupportsProvider(provider) {
 		return Credentials{}, false
 	}
+	creds, ok := demoreplay.CredentialsFor("alibaba")
+	if !ok {
+		return Credentials{}, false
+	}
 	return Credentials{
-		AccessKey: DemoAccessKeyID,
-		SecretKey: DemoAccessKeySecret,
+		AccessKey: creds.AccessKey,
+		SecretKey: creds.SecretKey,
 	}, true
-}
-
-func normalizeProvider(provider string) string {
-	return strings.TrimSpace(provider)
 }
