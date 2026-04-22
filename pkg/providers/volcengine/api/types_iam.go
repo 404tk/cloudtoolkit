@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -50,8 +51,40 @@ type GetLoginProfileResponse struct {
 }
 
 type IAMLoginProfile struct {
-	UserName      string `json:"UserName"`
-	LastLoginDate string `json:"LastLoginDate"`
+	UserName              string `json:"UserName"`
+	LastLoginDate         string `json:"LastLoginDate"`
+	LoginAllowed          bool   `json:"LoginAllowed"`
+	PasswordResetRequired bool   `json:"PasswordResetRequired"`
+}
+
+type CreateUserResponse struct {
+	ResponseMetadata ResponseMetadata `json:"ResponseMetadata"`
+	Result           struct {
+		User IAMUserMetadata `json:"User"`
+	} `json:"Result"`
+}
+
+type CreateLoginProfileResponse struct {
+	ResponseMetadata ResponseMetadata `json:"ResponseMetadata"`
+	Result           struct {
+		LoginProfile IAMLoginProfile `json:"LoginProfile"`
+	} `json:"Result"`
+}
+
+type DeleteLoginProfileResponse struct {
+	ResponseMetadata ResponseMetadata `json:"ResponseMetadata"`
+}
+
+type AttachUserPolicyResponse struct {
+	ResponseMetadata ResponseMetadata `json:"ResponseMetadata"`
+}
+
+type DetachUserPolicyResponse struct {
+	ResponseMetadata ResponseMetadata `json:"ResponseMetadata"`
+}
+
+type DeleteUserResponse struct {
+	ResponseMetadata ResponseMetadata `json:"ResponseMetadata"`
 }
 
 func (c *Client) ListProjects(ctx context.Context, region string) (ListProjectsResponse, error) {
@@ -99,6 +132,121 @@ func (c *Client) GetLoginProfile(ctx context.Context, region, userName string) (
 		Path:       "/",
 		Query:      query,
 		Idempotent: true,
+	}, &out)
+	return out, err
+}
+
+func (c *Client) CreateUser(ctx context.Context, region, userName, displayName string) (CreateUserResponse, error) {
+	query := url.Values{}
+	query.Set("UserName", strings.TrimSpace(userName))
+	if displayName = strings.TrimSpace(displayName); displayName != "" {
+		query.Set("DisplayName", displayName)
+	}
+	var out CreateUserResponse
+	err := c.DoOpenAPI(ctx, Request{
+		Service: "iam",
+		Version: iamUserAPIVersion,
+		Action:  "CreateUser",
+		Method:  http.MethodGet,
+		Region:  region,
+		Path:    "/",
+		Query:   query,
+	}, &out)
+	return out, err
+}
+
+func (c *Client) CreateLoginProfile(ctx context.Context, region, userName, password string) (CreateLoginProfileResponse, error) {
+	body, err := json.Marshal(struct {
+		UserName              string `json:"UserName"`
+		Password              string `json:"Password"`
+		LoginAllowed          bool   `json:"LoginAllowed"`
+		PasswordResetRequired bool   `json:"PasswordResetRequired"`
+	}{
+		UserName:              strings.TrimSpace(userName),
+		Password:              password,
+		LoginAllowed:          true,
+		PasswordResetRequired: false,
+	})
+	if err != nil {
+		return CreateLoginProfileResponse{}, err
+	}
+	var out CreateLoginProfileResponse
+	err = c.DoOpenAPI(ctx, Request{
+		Service: "iam",
+		Version: iamUserAPIVersion,
+		Action:  "CreateLoginProfile",
+		Method:  http.MethodPost,
+		Region:  region,
+		Path:    "/",
+		Body:    body,
+	}, &out)
+	return out, err
+}
+
+func (c *Client) DeleteLoginProfile(ctx context.Context, region, userName string) (DeleteLoginProfileResponse, error) {
+	query := url.Values{}
+	query.Set("UserName", strings.TrimSpace(userName))
+	var out DeleteLoginProfileResponse
+	err := c.DoOpenAPI(ctx, Request{
+		Service: "iam",
+		Version: iamUserAPIVersion,
+		Action:  "DeleteLoginProfile",
+		Method:  http.MethodGet,
+		Region:  region,
+		Path:    "/",
+		Query:   query,
+	}, &out)
+	return out, err
+}
+
+func (c *Client) AttachUserPolicy(ctx context.Context, region, userName, policyName, policyType string) (AttachUserPolicyResponse, error) {
+	query := url.Values{}
+	query.Set("UserName", strings.TrimSpace(userName))
+	query.Set("PolicyName", strings.TrimSpace(policyName))
+	query.Set("PolicyType", strings.TrimSpace(policyType))
+	var out AttachUserPolicyResponse
+	err := c.DoOpenAPI(ctx, Request{
+		Service: "iam",
+		Version: iamUserAPIVersion,
+		Action:  "AttachUserPolicy",
+		Method:  http.MethodGet,
+		Region:  region,
+		Path:    "/",
+		Query:   query,
+	}, &out)
+	return out, err
+}
+
+func (c *Client) DetachUserPolicy(ctx context.Context, region, userName, policyName, policyType string) (DetachUserPolicyResponse, error) {
+	query := url.Values{}
+	query.Set("UserName", strings.TrimSpace(userName))
+	query.Set("PolicyName", strings.TrimSpace(policyName))
+	query.Set("PolicyType", strings.TrimSpace(policyType))
+	var out DetachUserPolicyResponse
+	err := c.DoOpenAPI(ctx, Request{
+		Service: "iam",
+		Version: iamUserAPIVersion,
+		Action:  "DetachUserPolicy",
+		Method:  http.MethodGet,
+		Region:  region,
+		Path:    "/",
+		Query:   query,
+	}, &out)
+	return out, err
+}
+
+func (c *Client) DeleteUser(ctx context.Context, region, userName string) (DeleteUserResponse, error) {
+	query := url.Values{}
+	query.Set("UserName", strings.TrimSpace(userName))
+	var out DeleteUserResponse
+	err := c.DoOpenAPI(ctx, Request{
+		Service: "iam",
+		Version: iamUserAPIVersion,
+		Action:  "DeleteUser",
+		Method:  http.MethodGet,
+		Region:  region,
+		Path:    "/",
+		Query:   query,
 	}, &out)
 	return out, err
 }

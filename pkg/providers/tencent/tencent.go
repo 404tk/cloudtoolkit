@@ -211,7 +211,7 @@ func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {
 
 func (p *Provider) lookupHost(instanceID string) (schema.Host, bool) {
 	for _, host := range tat.GetCacheHostList() {
-		if host.ID == instanceID {
+		if host.ID == instanceID || host.HostName == instanceID {
 			return host, true
 		}
 	}

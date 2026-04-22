@@ -11,8 +11,10 @@ import (
 )
 
 type Driver struct {
-	Client *api.Client
-	Region string
+	Client   *api.Client
+	Region   string
+	UserName string
+	Password string
 }
 
 func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
@@ -46,9 +48,9 @@ func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 
 			lresp, err := client.GetLoginProfile(ctx, region, user.UserName)
 			if err == nil {
-				_user.EnableLogin = true
+				_user.EnableLogin = lresp.Result.LoginProfile.LoginAllowed
 				ldate := lresp.Result.LoginProfile.LastLoginDate
-				if ldate != "" && ldate != "19700101T000000Z" {
+				if _user.EnableLogin && ldate != "" && ldate != "19700101T000000Z" {
 					lastLoginDate, _ := time.Parse("20060102T150405Z", ldate)
 					_user.LastLogin = lastLoginDate.String()
 				}

@@ -257,7 +257,7 @@ func (p *Provider) DBManagement(action, instanceID string) {
 
 func (p *Provider) lookupHost(instanceID string) (schema.Host, bool) {
 	for _, host := range _ecs.GetCacheHostList() {
-		if host.ID == instanceID {
+		if host.ID == instanceID || host.HostName == instanceID {
 			return host, true
 		}
 	}

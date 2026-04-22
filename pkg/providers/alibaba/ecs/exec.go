@@ -117,7 +117,7 @@ func (d *Driver) pollLimit() int {
 	if d.maxPolls > 0 {
 		return d.maxPolls
 	}
-	return 5
+	return 20
 }
 
 func (d *Driver) sleepFor(delay time.Duration) {

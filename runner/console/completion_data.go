@@ -153,7 +153,7 @@ var regionSuggestionsByProvider = map[string][]prompt.Suggest{
 var metadataTemplatesByPayload = map[string][]prompt.Suggest{
 	"iam-user-check": {
 		{Text: "add <username> <password>", Description: "create a validation IAM user"},
-		{Text: "del <username> <password>", Description: "remove a validation IAM user"},
+		{Text: "del <username>", Description: "remove a validation IAM user"},
 	},
 	"bucket-check": {
 		{Text: "list <bucket-name>", Description: "review bucket contents in an authorized environment"},

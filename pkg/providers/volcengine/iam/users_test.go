@@ -34,12 +34,12 @@ func TestDriverListUsersPaginatesAndHandlesLoginProfileFallback(t *testing.T) {
 		case "GetLoginProfile":
 			switch values.Get("UserName") {
 			case "user-000":
-				_, _ = w.Write([]byte(`{"ResponseMetadata":{"RequestId":"req-login"},"Result":{"LoginProfile":{"UserName":"user-000","LastLoginDate":"20260419T120100Z"}}}`))
+				_, _ = w.Write([]byte(`{"ResponseMetadata":{"RequestId":"req-login"},"Result":{"LoginProfile":{"UserName":"user-000","LoginAllowed":true,"LastLoginDate":"20260419T120100Z"}}}`))
 			case "user-100":
 				w.WriteHeader(http.StatusNotFound)
 				_, _ = w.Write([]byte(`{"ResponseMetadata":{"RequestId":"req-miss","Error":{"Code":"EntityNotExist.User","Message":"not found"}}}`))
 			default:
-				_, _ = w.Write([]byte(`{"ResponseMetadata":{"RequestId":"req-zero"},"Result":{"LoginProfile":{"UserName":"other","LastLoginDate":"19700101T000000Z"}}}`))
+				_, _ = w.Write([]byte(`{"ResponseMetadata":{"RequestId":"req-zero"},"Result":{"LoginProfile":{"UserName":"other","LoginAllowed":false,"LastLoginDate":"19700101T000000Z"}}}`))
 			}
 		default:
 			t.Fatalf("unexpected action: %s", values.Get("Action"))

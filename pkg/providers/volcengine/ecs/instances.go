@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/api"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/paginate"
@@ -14,15 +16,36 @@ import (
 )
 
 type Driver struct {
-	Client *api.Client
-	Region string
+	Client       *api.Client
+	Region       string
+	pollInterval time.Duration
+	maxPolls     int
+	sleep        func(time.Duration)
 }
 
 var errNilAPIClient = errors.New("volcengine ecs: nil api client")
 
+var (
+	cacheHostList []schema.Host
+	hostCacheMu   sync.RWMutex
+)
+
+func SetCacheHostList(hosts []schema.Host) {
+	hostCacheMu.Lock()
+	defer hostCacheMu.Unlock()
+	cacheHostList = hosts
+}
+
+func GetCacheHostList() []schema.Host {
+	hostCacheMu.RLock()
+	defer hostCacheMu.RUnlock()
+	return cacheHostList
+}
+
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 	list := []schema.Host{}
 	logger.Info("List ECS instances ...")
+	defer func() { SetCacheHostList(list) }()
 	client, err := d.requireClient()
 	if err != nil {
 		return list, err

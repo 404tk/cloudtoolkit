@@ -2,6 +2,8 @@ package volcengine
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
 
 	_api "github.com/404tk/cloudtoolkit/pkg/providers/volcengine/api"
 	_auth "github.com/404tk/cloudtoolkit/pkg/providers/volcengine/auth"
@@ -77,4 +79,51 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	}
 
 	return list, list.Err()
+}
+
+func (p *Provider) UserManagement(action, username, password string) {
+	driver := &iam.Driver{
+		Client:   p.apiClient,
+		Region:   p.region,
+		UserName: username,
+		Password: password,
+	}
+
+	switch action {
+	case "add":
+		driver.AddUser()
+	case "del":
+		driver.DelUser()
+	default:
+		logger.Error("Please set metadata like \"add username password\" or \"del username\"")
+	}
+}
+
+func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {
+	host, ok := p.lookupHost(instanceID)
+	if !ok {
+		logger.Error("Unable to resolve instance metadata, run `cloudlist` first and retry.")
+		return
+	}
+
+	command, err := base64.StdEncoding.DecodeString(cmd)
+	if err != nil {
+		logger.Error(err.Error())
+		return
+	}
+
+	driver := &ecs.Driver{Client: p.apiClient, Region: host.Region}
+	output := driver.RunCommand(instanceID, host.OSType, string(command))
+	if output != "" {
+		fmt.Println(output)
+	}
+}
+
+func (p *Provider) lookupHost(instanceID string) (schema.Host, bool) {
+	for _, host := range ecs.GetCacheHostList() {
+		if host.ID == instanceID || host.HostName == instanceID {
+			return host, true
+		}
+	}
+	return schema.Host{}, false
 }
