@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"strings"
 
 	_api "github.com/404tk/cloudtoolkit/pkg/providers/volcengine/api"
 	_auth "github.com/404tk/cloudtoolkit/pkg/providers/volcengine/auth"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/billing"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/ecs"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/iam"
+	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/tos"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
@@ -17,8 +19,9 @@ import (
 )
 
 type Provider struct {
-	region    string
-	apiClient *_api.Client
+	credential _auth.Credential
+	region     string
+	apiClient  *_api.Client
 }
 
 // New creates a new provider client for volcengine API.
@@ -41,8 +44,9 @@ func New(options schema.Options) (*Provider, error) {
 	}
 
 	return &Provider{
-		region:    region,
-		apiClient: apiClient,
+		credential: credential,
+		region:     region,
+		apiClient:  apiClient,
 	}, nil
 }
 
@@ -72,6 +76,10 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			list.AddError("account", err)
 		case "database":
 		case "bucket":
+			d := p.newTOSDriver(p.region)
+			storages, err := d.GetBuckets(ctx)
+			schema.AppendAssets(&list, storages)
+			list.AddError("bucket", err)
 		case "sms":
 		case "log":
 		default:
@@ -96,6 +104,28 @@ func (p *Provider) UserManagement(action, username, password string) {
 		driver.DelUser()
 	default:
 		logger.Error("Please set metadata like \"add username password\" or \"del username\"")
+	}
+}
+
+func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
+	driver := p.newTOSDriver(p.region)
+	switch action {
+	case "list":
+		infos, err := p.bucketInfos(context.Background(), driver, bucketName)
+		if err != nil {
+			logger.Error("List buckets failed:", err)
+			return
+		}
+		driver.ListObjects(ctx, infos)
+	case "total":
+		infos, err := p.bucketInfos(context.Background(), driver, bucketName)
+		if err != nil {
+			logger.Error("List buckets failed:", err)
+			return
+		}
+		driver.TotalObjects(ctx, infos)
+	default:
+		logger.Error("`list all` or `total all`.")
 	}
 }
 
@@ -126,4 +156,48 @@ func (p *Provider) lookupHost(instanceID string) (schema.Host, bool) {
 		}
 	}
 	return schema.Host{}, false
+}
+
+func (p *Provider) bucketInfos(ctx context.Context, driver *tos.Driver, bucketName string) (map[string]string, error) {
+	infos := make(map[string]string)
+	bucketName = strings.TrimSpace(bucketName)
+	region := strings.TrimSpace(p.region)
+	switch {
+	case bucketName == "":
+		return nil, fmt.Errorf("empty bucket name")
+	case bucketName == "all":
+		buckets, err := driver.GetBuckets(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, bucket := range buckets {
+			infos[bucket.BucketName] = bucket.Region
+		}
+		if len(infos) == 0 {
+			return nil, fmt.Errorf("no buckets found")
+		}
+		return infos, nil
+	case region != "" && region != "all":
+		infos[bucketName] = region
+		return infos, nil
+	default:
+		buckets, err := driver.GetBuckets(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, bucket := range buckets {
+			if bucket.BucketName == bucketName {
+				infos[bucket.BucketName] = bucket.Region
+				return infos, nil
+			}
+		}
+		return nil, fmt.Errorf("bucket %s region not found; set region explicitly or use `list all` first", bucketName)
+	}
+}
+
+func (p *Provider) newTOSDriver(region string) *tos.Driver {
+	return &tos.Driver{
+		Cred:   p.credential,
+		Region: region,
+	}
 }
