@@ -58,7 +58,7 @@ CloudToolKit is intended to help defenders verify:
 | AWS | EC2, S3, IAM | iam-user-check, bucket-check |
 | Azure | Virtual Machines, Blob Storage | - |
 | GCP | Compute Engine, Cloud DNS, IAM | - |
-| Volcengine | ECS, IAM, TOS, RDS | iam-user-check, bucket-check, instance-cmd-check |
+| Volcengine | ECS, IAM, TOS, RDS, DNS | iam-user-check, bucket-check, instance-cmd-check |
 | JDCloud | VM, IAM, OSS | - |
 
 ## Quick Start

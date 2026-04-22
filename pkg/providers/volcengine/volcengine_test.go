@@ -125,6 +125,84 @@ func TestProviderResourcesDatabaseUsesRDSDrivers(t *testing.T) {
 	}
 }
 
+func TestProviderResourcesDomainUsesDNSDriver(t *testing.T) {
+	restoreCloudlist := setCloudlist([]string{"domain"})
+	defer restoreCloudlist()
+
+	logger.SetOutput(io.Discard)
+	t.Cleanup(func() {
+		logger.SetOutput(nil)
+	})
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		values, err := url.ParseQuery(r.URL.RawQuery)
+		if err != nil {
+			t.Fatalf("ParseQuery() error = %v", err)
+		}
+		if service := signedService(t, r); service != "dns" {
+			t.Fatalf("unexpected service: %s", service)
+		}
+		switch values.Get("Action") {
+		case "ListZones":
+			assertJSONBody(t, r, map[string]any{
+				"PageNumber": float64(1),
+				"PageSize":   float64(100),
+			})
+			_, _ = w.Write([]byte(`{"Total":2,"Zones":[{"ZoneName":"example.com","ZID":101},{"ZoneName":"example.org","ZID":102}]}`))
+		case "ListRecords":
+			body := decodeJSONBody(t, r)
+			if body["PageNumber"] != float64(1) || body["PageSize"] != float64(100) {
+				t.Fatalf("unexpected ListRecords body: %v", body)
+			}
+			switch body["ZID"] {
+			case float64(101):
+				_, _ = w.Write([]byte(`{"PageNumber":1,"PageSize":100,"TotalCount":2,"Records":[{"Host":"@","Type":"A","Value":"1.1.1.1","Enable":true},{"Host":"www","Type":"CNAME","Value":"target.example.com","Enable":false}]}`))
+			case float64(102):
+				_, _ = w.Write([]byte(`{"PageNumber":1,"PageSize":100,"TotalCount":1,"Records":[{"Host":"api","Type":"A","Value":"2.2.2.2","Enable":true}]}`))
+			default:
+				t.Fatalf("unexpected ZID: %v", body["ZID"])
+			}
+		default:
+			t.Fatalf("unexpected action: %s", values.Get("Action"))
+		}
+	}))
+	defer server.Close()
+
+	provider, err := newProvider(testOptions(map[string]string{
+		utils.Provider: "volcengine",
+		utils.Region:   "cn-guangzhou",
+	}), testClientOptions(server.URL)...)
+	if err != nil {
+		t.Fatalf("newProvider() error = %v", err)
+	}
+
+	resources, err := provider.Resources(context.Background())
+	if err != nil {
+		t.Fatalf("Resources() error = %v", err)
+	}
+	if len(resources.Errors) != 0 {
+		t.Fatalf("unexpected resource errors: %+v", resources.Errors)
+	}
+
+	got := map[string]schema.Domain{}
+	for _, asset := range resources.Assets {
+		domain, ok := asset.(schema.Domain)
+		if !ok {
+			t.Fatalf("unexpected asset type: %T", asset)
+		}
+		got[domain.DomainName] = domain
+	}
+	if len(got) != 2 {
+		t.Fatalf("unexpected domain count: %d", len(got))
+	}
+	if len(got["example.com"].Records) != 2 || got["example.com"].Records[1].Status != "DISABLE" {
+		t.Fatalf("unexpected example.com records: %+v", got["example.com"])
+	}
+	if len(got["example.org"].Records) != 1 || got["example.org"].Records[0].Value != "2.2.2.2" {
+		t.Fatalf("unexpected example.org records: %+v", got["example.org"])
+	}
+}
+
 func testOptions(overrides map[string]string) schema.Options {
 	options := schema.Options{
 		utils.AccessKey: "AKID",
@@ -157,6 +235,19 @@ func setCloudlist(values []string) func() {
 
 func assertJSONBody(t *testing.T, r *http.Request, want map[string]any) {
 	t.Helper()
+	got := decodeJSONBody(t, r)
+	if len(got) != len(want) {
+		t.Fatalf("unexpected body map length: got=%v want=%v", got, want)
+	}
+	for key, wantValue := range want {
+		if got[key] != wantValue {
+			t.Fatalf("unexpected body field %s: got=%v want=%v", key, got[key], wantValue)
+		}
+	}
+}
+
+func decodeJSONBody(t *testing.T, r *http.Request) map[string]any {
+	t.Helper()
 	defer r.Body.Close()
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -166,14 +257,7 @@ func assertJSONBody(t *testing.T, r *http.Request, want map[string]any) {
 	if err := json.Unmarshal(body, &got); err != nil {
 		t.Fatalf("Unmarshal() error = %v body=%s", err, string(body))
 	}
-	if len(got) != len(want) {
-		t.Fatalf("unexpected body map length: got=%v want=%v", got, want)
-	}
-	for key, wantValue := range want {
-		if got[key] != wantValue {
-			t.Fatalf("unexpected body field %s: got=%v want=%v", key, got[key], wantValue)
-		}
-	}
+	return got
 }
 
 func signedService(t *testing.T, r *http.Request) string {

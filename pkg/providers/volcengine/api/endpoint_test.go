@@ -12,6 +12,7 @@ func TestResolveEndpoint(t *testing.T) {
 	}{
 		{name: "global iam", service: "iam", region: "cn-beijing", want: "https://iam.volcengineapi.com"},
 		{name: "global billing", service: "billing", region: "", want: "https://billing.volcengineapi.com"},
+		{name: "global dns", service: "dns", region: "cn-beijing", want: "https://dns.volcengineapi.com"},
 		{name: "regional ecs", service: "ecs", region: "cn-shanghai", want: "https://ecs.cn-shanghai.volcengineapi.com"},
 		{name: "regional rds mysql alias", service: "rds_mysql", region: "cn-beijing", want: "https://rds-mysql.cn-beijing.volcengineapi.com"},
 		{name: "regional rds postgresql alias", service: "rds_postgresql", region: "cn-guangzhou", want: "https://rds-postgresql.cn-guangzhou.volcengineapi.com"},

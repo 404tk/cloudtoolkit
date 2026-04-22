@@ -9,6 +9,7 @@ import (
 	_api "github.com/404tk/cloudtoolkit/pkg/providers/volcengine/api"
 	_auth "github.com/404tk/cloudtoolkit/pkg/providers/volcengine/auth"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/billing"
+	_dns "github.com/404tk/cloudtoolkit/pkg/providers/volcengine/dns"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/ecs"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/iam"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/rds"
@@ -74,6 +75,10 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			schema.AppendAssets(&list, hosts)
 			list.AddError("host", err)
 		case "domain":
+			d := &_dns.Driver{Client: p.apiClient}
+			domains, err := d.GetDomains(ctx)
+			schema.AppendAssets(&list, domains)
+			list.AddError("domain", err)
 		case "account":
 			d := &iam.Driver{Client: p.apiClient, Region: p.region}
 			users, err := d.ListUsers(ctx)
