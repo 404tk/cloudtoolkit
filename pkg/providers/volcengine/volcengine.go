@@ -11,6 +11,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/billing"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/ecs"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/iam"
+	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/rds"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/tos"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
@@ -26,12 +27,16 @@ type Provider struct {
 
 // New creates a new provider client for volcengine API.
 func New(options schema.Options) (*Provider, error) {
+	return newProvider(options)
+}
+
+func newProvider(options schema.Options, clientOptions ..._api.Option) (*Provider, error) {
 	credential, err := _auth.FromOptions(options)
 	if err != nil {
 		return nil, err
 	}
 	region, _ := options.GetMetadata(utils.Region)
-	apiClient := _api.NewClient(credential)
+	apiClient := _api.NewClient(credential, clientOptions...)
 
 	payload, _ := options.GetMetadata(utils.Payload)
 	if payload == "cloudlist" {
@@ -75,6 +80,19 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			schema.AppendAssets(&list, users)
 			list.AddError("account", err)
 		case "database":
+			d := &rds.Driver{Client: p.apiClient, Region: p.region}
+			mysqls, err := d.ListMySQL(ctx)
+			schema.AppendAssets(&list, mysqls)
+			list.AddError("database/mysql", err)
+			list.AddError("database/mysql", d.PartialError())
+			postgres, err := d.ListPostgreSQL(ctx)
+			schema.AppendAssets(&list, postgres)
+			list.AddError("database/postgresql", err)
+			list.AddError("database/postgresql", d.PartialError())
+			mssqls, err := d.ListSQLServer(ctx)
+			schema.AppendAssets(&list, mssqls)
+			list.AddError("database/sqlserver", err)
+			list.AddError("database/sqlserver", d.PartialError())
 		case "bucket":
 			d := p.newTOSDriver(p.region)
 			storages, err := d.GetBuckets(ctx)
