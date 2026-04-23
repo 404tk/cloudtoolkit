@@ -9,13 +9,27 @@ import (
 )
 
 type Driver struct {
-	Credential auth.Credential
-	Client     *Client
+	Credential    auth.Credential
+	Client        *Client
+	clientOptions []Option
+}
+
+// NewDriver creates a COS driver with optional client injections.
+func NewDriver(cred auth.Credential, opts ...Option) *Driver {
+	return &Driver{
+		Credential:    cred,
+		clientOptions: append([]Option(nil), opts...),
+	}
+}
+
+// SetClientOptions replaces the client options used by lazy client creation.
+func (d *Driver) SetClientOptions(opts ...Option) {
+	d.clientOptions = append([]Option(nil), opts...)
 }
 
 func (d *Driver) client() *Client {
 	if d.Client == nil {
-		d.Client = NewClient(d.Credential)
+		d.Client = NewClient(d.Credential, d.clientOptions...)
 	}
 	return d.Client
 }

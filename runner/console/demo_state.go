@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/replay"
+	tencentreplay "github.com/404tk/cloudtoolkit/pkg/providers/tencent/replay"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/go-prompt"
@@ -12,6 +13,7 @@ import (
 
 func resetDemoReplay() {
 	replay.Disable()
+	tencentreplay.Reset()
 }
 
 func enableDemoReplay(provider string) {

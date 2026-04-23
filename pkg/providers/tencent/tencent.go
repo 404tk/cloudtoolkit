@@ -27,21 +27,38 @@ type Provider struct {
 	apiCredential auth.Credential
 	apiClient     *api.Client
 	clientOptions []api.Option
+	cosClientOpts []cos.Option
 	region        string
 }
 
 // New creates a new provider client for tencent API
 func New(options schema.Options) (*Provider, error) {
-	return newProvider(options)
+	return NewWithConfig(options, ClientConfig{})
+}
+
+// ClientConfig injects transport options while preserving provider behavior.
+type ClientConfig struct {
+	APIOptions          []api.Option
+	COSOptions          []cos.Option
+	SkipCredentialCache bool
+}
+
+// NewWithConfig creates a provider with injected client configuration.
+func NewWithConfig(options schema.Options, cfg ClientConfig) (*Provider, error) {
+	return newProviderWithConfig(options, cfg)
 }
 
 func newProvider(options schema.Options, clientOptions ...api.Option) (*Provider, error) {
+	return newProviderWithConfig(options, ClientConfig{APIOptions: clientOptions})
+}
+
+func newProviderWithConfig(options schema.Options, cfg ClientConfig) (*Provider, error) {
 	credential, err := auth.FromOptions(options)
 	if err != nil {
 		return nil, err
 	}
 	region, _ := options.GetMetadata(utils.Region)
-	opts := append([]api.Option(nil), clientOptions...)
+	opts := append([]api.Option(nil), cfg.APIOptions...)
 	apiClient := api.NewClient(credential, opts...)
 
 	payload, _ := options.GetMetadata(utils.Payload)
@@ -60,7 +77,9 @@ func newProvider(options schema.Options, clientOptions ...api.Option) (*Provider
 			return nil, err
 		}
 		msg := "Current account ARN: " + response.Response.Arn
-		cache.Cfg.CredInsert(response.Response.Type, options)
+		if !cfg.SkipCredentialCache {
+			cache.Cfg.CredInsert(response.Response.Type, options)
+		}
 		logger.Warning(msg)
 	}
 
@@ -68,6 +87,7 @@ func newProvider(options schema.Options, clientOptions ...api.Option) (*Provider
 		apiCredential: credential,
 		apiClient:     apiClient,
 		clientOptions: opts,
+		cosClientOpts: append([]cos.Option(nil), cfg.COSOptions...),
 		region:        region,
 	}, nil
 }
@@ -134,7 +154,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			list.AddError("database/sqlserver", err)
 			list.AddError("database/sqlserver", cdbprovider.PartialError())
 		case "bucket":
-			cosprovider := &cos.Driver{Credential: p.apiCredential}
+			cosprovider := p.newCOSDriver()
 			storages, err := cosprovider.GetBuckets(ctx)
 			schema.AppendAssets(&list, storages)
 			list.AddError("bucket", err)
@@ -169,7 +189,7 @@ func (p *Provider) UserManagement(action, username, password string) {
 }
 
 func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
-	cosprovider := &cos.Driver{Credential: p.apiCredential}
+	cosprovider := p.newCOSDriver()
 	switch action {
 	case "list":
 		infos, err := p.bucketInfos(context.Background(), cosprovider, bucketName)
@@ -253,4 +273,8 @@ func (p *Provider) bucketInfos(ctx context.Context, driver *cos.Driver, bucketNa
 		}
 		return nil, fmt.Errorf("bucket %s region not found; set region explicitly or use `list all` first", bucketName)
 	}
+}
+
+func (p *Provider) newCOSDriver() *cos.Driver {
+	return cos.NewDriver(p.apiCredential, p.cosClientOpts...)
 }

@@ -52,6 +52,18 @@ var providers = map[string]providerMeta{
 			"instance-cmd-check",
 		},
 	},
+	"tencent": {
+		Credentials: Credentials{
+			AccessKey: "AKIDz8krbsJ5yKBZQpn74WFkmLPx3EXAMPLE",
+			SecretKey: "Gu5t9xGARNpq86cd98joQYCN3EXAMPLE",
+		},
+		Payloads: []string{
+			"cloudlist",
+			"iam-user-check",
+			"bucket-check",
+			"instance-cmd-check",
+		},
+	},
 }
 
 func Enable(provider string) {
