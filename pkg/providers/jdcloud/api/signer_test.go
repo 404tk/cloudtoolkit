@@ -55,3 +55,42 @@ func TestSignIgnoresUserAgentButSignsCustomHeaders(t *testing.T) {
 		t.Fatalf("canonical request missing custom header: %s", got.CanonicalRequest)
 	}
 }
+
+func TestSignEscapesReservedPathCharsLikeJDCloudSDK(t *testing.T) {
+	got, err := Sign(SignInput{
+		Method:      http.MethodPost,
+		Host:        "iam.jdcloud-api.com",
+		Path:        "/v1/subUser/demo-user:attachSubUserPolicy",
+		ContentType: "application/json",
+		Service:     "iam",
+		Region:      "jdcloud-api",
+		AccessKey:   "AKID",
+		SecretKey:   "SECRET",
+		Nonce:       "ebf8b26d-c3be-402f-9f10-f8b6573fd823",
+		Timestamp:   time.Date(2026, 4, 19, 12, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("Sign() error = %v", err)
+	}
+	if !strings.Contains(got.CanonicalRequest, "/v1/subUser/demo-user%3AattachSubUserPolicy") {
+		t.Fatalf("expected colon percent-encoded in canonical request, got: %s", got.CanonicalRequest)
+	}
+}
+
+func TestEscapePathTable(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{"", ""},
+		{"/v1/subUsers", "/v1/subUsers"},
+		{"/v1/subUser/demo-user:attachSubUserPolicy", "/v1/subUser/demo-user%3AattachSubUserPolicy"},
+		{"/v1/regions/cn-north-1/instances", "/v1/regions/cn-north-1/instances"},
+		{"/v1/a b/c", "/v1/a%20b/c"},
+	}
+	for _, tc := range cases {
+		if got := EscapePath(tc.in); got != tc.want {
+			t.Fatalf("EscapePath(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}

@@ -5,14 +5,24 @@ import (
 	"errors"
 	"net/url"
 	"strconv"
+	"strings"
+	"sync"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/api"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/paginate"
+	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
 const vmPageSize = 100
+
+var knownJDCloudVMRegions = []string{
+	"cn-north-1",
+	"cn-east-2",
+	"cn-east-1",
+	"cn-south-1",
+}
 
 type pageCursor struct {
 	PageNumber int
@@ -22,6 +32,26 @@ type pageCursor struct {
 type Driver struct {
 	Client *api.Client
 	Region string
+}
+
+var (
+	cacheHostList []schema.Host
+	hostCacheMu   sync.RWMutex
+)
+
+// SetCacheHostList stores the hosts enumerated by GetResource so the console
+// shell layer can later resolve a host's region + osType without re-listing.
+func SetCacheHostList(hosts []schema.Host) {
+	hostCacheMu.Lock()
+	defer hostCacheMu.Unlock()
+	cacheHostList = append([]schema.Host(nil), hosts...)
+}
+
+// GetCacheHostList returns a snapshot of the last enumerated host list.
+func GetCacheHostList() []schema.Host {
+	hostCacheMu.RLock()
+	defer hostCacheMu.RUnlock()
+	return append([]schema.Host(nil), cacheHostList...)
 }
 
 func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
@@ -34,12 +64,29 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		return list, errors.New("jdcloud vm: nil api client")
 	}
 
-	if d.Region == "all" {
-		logger.Warning("JDCloud region=all falls back to cn-north-1")
+	var err error
+	regions := d.requestRegions()
+	if len(regions) == 1 {
+		list, err = d.listRegion(ctx, regions[0])
+	} else {
+		got, regionErrs := regionrun.ForEach(ctx, regions, 0, nil, func(ctx context.Context, region string) ([]schema.Host, error) {
+			return d.listRegion(ctx, region)
+		})
+		list = append(list, got...)
+		err = regionrun.Wrap(regionErrs)
 	}
-	region := d.requestRegion()
 
-	got, err := paginate.Fetch[schema.Host, pageCursor](ctx, func(ctx context.Context, cursor pageCursor) (paginate.Page[schema.Host, pageCursor], error) {
+	if len(list) > 0 || err == nil {
+		SetCacheHostList(list)
+	}
+	if err != nil {
+		logger.Error("List instances failed.")
+	}
+	return list, err
+}
+
+func (d *Driver) listRegion(ctx context.Context, region string) ([]schema.Host, error) {
+	return paginate.Fetch[schema.Host, pageCursor](ctx, func(ctx context.Context, cursor pageCursor) (paginate.Page[schema.Host, pageCursor], error) {
 		pageNumber := cursor.PageNumber
 		if pageNumber <= 0 {
 			pageNumber = 1
@@ -94,16 +141,19 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 			Done: done,
 		}, nil
 	})
-	if err != nil {
-		logger.Error("List instances failed.")
-		return list, err
+}
+
+func (d *Driver) requestRegions() []string {
+	if strings.EqualFold(strings.TrimSpace(d.Region), "all") {
+		return append([]string(nil), knownJDCloudVMRegions...)
 	}
-	return append(list, got...), nil
+	return []string{d.requestRegion()}
 }
 
 func (d *Driver) requestRegion() string {
-	if d.Region == "" || d.Region == "all" {
+	region := strings.TrimSpace(d.Region)
+	if region == "" || strings.EqualFold(region, "all") {
 		return "cn-north-1"
 	}
-	return d.Region
+	return region
 }

@@ -39,6 +39,9 @@ func (cfg *InitCfg) CredInsert(user string, data map[string]string) {
 	defer cfg.mu.Unlock()
 	for k, v := range cfg.Creds {
 		if v.UUID == uuid {
+			cfg.Creds[k].User = truncateString(user, 20)
+			cfg.Creds[k].AccessKey = truncateString(accessKey, 35)
+			cfg.Creds[k].Provider = provider
 			cfg.Creds[k].JsonData = string(b)
 			return
 		}

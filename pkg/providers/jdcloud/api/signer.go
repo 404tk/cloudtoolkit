@@ -185,11 +185,54 @@ func canonicalQuery(values url.Values) string {
 }
 
 func canonicalURI(path string) string {
-	u, err := url.Parse(strings.TrimSpace(path))
-	if err != nil || u.Path == "" {
+	path = strings.TrimSpace(path)
+	if path == "" {
 		return "/"
 	}
-	return u.EscapedPath()
+	u, err := url.Parse(path)
+	if err != nil || u.Path == "" {
+		return EscapePath(path)
+	}
+	return EscapePath(u.Path)
+}
+
+// EscapePath percent-encodes every byte that is not in the RFC 3986 unreserved
+// set (A-Z / a-z / 0-9 / '-' / '.' / '_' / '~') or '/'. This matches JDCloud's
+// official SDK (`core.EscapePath(path, false)`) so the canonical URI fed into
+// the signer is byte-identical to what the service recomputes, including
+// reserved characters like ':' that Go's default EscapedPath leaves alone.
+func EscapePath(path string) string {
+	if path == "" {
+		return ""
+	}
+	var b strings.Builder
+	b.Grow(len(path))
+	for i := 0; i < len(path); i++ {
+		c := path[i]
+		if isUnreservedPathByte(c) || c == '/' {
+			b.WriteByte(c)
+			continue
+		}
+		const hex = "0123456789ABCDEF"
+		b.WriteByte('%')
+		b.WriteByte(hex[c>>4])
+		b.WriteByte(hex[c&0x0f])
+	}
+	return b.String()
+}
+
+func isUnreservedPathByte(c byte) bool {
+	switch {
+	case c >= 'A' && c <= 'Z':
+		return true
+	case c >= 'a' && c <= 'z':
+		return true
+	case c >= '0' && c <= '9':
+		return true
+	case c == '-' || c == '.' || c == '_' || c == '~':
+		return true
+	}
+	return false
 }
 
 func normalizeHost(host string) string {

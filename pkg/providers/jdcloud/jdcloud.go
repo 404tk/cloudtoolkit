@@ -2,9 +2,11 @@ package jdcloud
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 
 	_api "github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/api"
+	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/assistant"
 	_auth "github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/auth"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/iam"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/oss"
@@ -12,10 +14,12 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
 type Provider struct {
 	region    string
+	accessKey string
 	apiClient *_api.Client
 }
 
@@ -30,15 +34,24 @@ func New(options schema.Options) (*Provider, error) {
 	payload, _ := options.GetMetadata(utils.Payload)
 
 	if payload == "cloudlist" {
-		d := &iam.Driver{Client: apiClient}
-		if !d.Validator(credential.AccessKey) {
+		d := &iam.Driver{Client: apiClient, AccessKey: credential.AccessKey}
+		pin, ok := d.Validator()
+		if !ok {
 			return nil, fmt.Errorf("invalid accesskey")
 		}
-		cache.Cfg.CredInsert("default", options)
+		if pin != "" {
+			logger.Warning(fmt.Sprintf("Current user: %s", pin))
+		}
+		sessionUser := pin
+		if sessionUser == "" {
+			sessionUser = "default"
+		}
+		cache.Cfg.CredInsert(sessionUser, options)
 	}
 
 	return &Provider{
 		region:    region,
+		accessKey: credential.AccessKey,
 		apiClient: apiClient,
 	}, nil
 }
@@ -79,4 +92,55 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	}
 
 	return list, list.Err()
+}
+
+// UserManagement powers the iam-user-check payload. JDCloud's CreateSubUser is
+// atomic (name + password + consoleLogin in one call), so we only need an
+// AttachSubUserPolicy follow-up to grant administrator privilege.
+func (p *Provider) UserManagement(action, username, password string) {
+	driver := &iam.Driver{
+		Client:    p.apiClient,
+		AccessKey: p.accessKey,
+		UserName:  username,
+		Password:  password,
+	}
+	switch action {
+	case "add":
+		driver.AddUser()
+	case "del":
+		driver.DelUser()
+	default:
+		logger.Error("Please set metadata like \"add username password\" or \"del username\"")
+	}
+}
+
+// ExecuteCloudVMCommand routes through JDCloud Cloud Assistant (assistant.jdcloud-api.com).
+// Region must be a real VM region (cn-north-1 / cn-east-2 / ...); we resolve it
+// from the host cache populated by `cloudlist` so `shell <instance-id>` works
+// regardless of the session's current region setting.
+func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {
+	host, ok := p.lookupHost(instanceID)
+	if !ok {
+		logger.Error("Unable to resolve instance metadata, run `cloudlist` first and retry.")
+		return
+	}
+	command, err := base64.StdEncoding.DecodeString(cmd)
+	if err != nil {
+		logger.Error(err.Error())
+		return
+	}
+	driver := &assistant.Driver{Client: p.apiClient, Region: host.Region}
+	output := driver.RunCommand(instanceID, host.OSType, string(command))
+	if output != "" {
+		fmt.Println(output)
+	}
+}
+
+func (p *Provider) lookupHost(instanceID string) (schema.Host, bool) {
+	for _, host := range vm.GetCacheHostList() {
+		if host.ID == instanceID || host.HostName == instanceID {
+			return host, true
+		}
+	}
+	return schema.Host{}, false
 }

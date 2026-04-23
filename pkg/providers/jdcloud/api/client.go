@@ -169,9 +169,16 @@ func (c *Client) DoJSON(ctx context.Context, req Request, out any) error {
 		return err
 	}
 	requestURL := url.URL{
-		Scheme:   scheme,
-		Host:     networkHost,
-		Path:     fullPath,
+		Scheme: scheme,
+		Host:   networkHost,
+		Path:   fullPath,
+		// RawPath pins the wire-form of the path to the same byte sequence the
+		// signer hashed. Without this, net/http serialises via the stdlib's
+		// EscapedPath rules which leave sub-delims like ':' unescaped, while
+		// JDCloud signs/validates with the stricter rule set in
+		// signer.EscapePath — the mismatch surfaces as "sign result is not
+		// same" on paths such as /subUser/{name}:attachSubUserPolicy.
+		RawPath:  EscapePath(fullPath),
 		RawQuery: canonicalQuery(query),
 	}
 

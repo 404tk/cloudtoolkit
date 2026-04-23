@@ -20,7 +20,10 @@ type pageCursor struct {
 }
 
 type Driver struct {
-	Client *api.Client
+	Client    *api.Client
+	AccessKey string
+	UserName  string
+	Password  string
 }
 
 func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
@@ -96,34 +99,20 @@ func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 	return append(list, got...), nil
 }
 
-func (d *Driver) Validator(_ string) bool {
+func (d *Driver) Validator() (string, bool) {
 	if d.Client == nil {
-		return false
+		return "", false
 	}
 
-	query := url.Values{}
-	query.Set("pageNumber", "1")
-	query.Set("pageSize", "1")
-
-	var resp api.DescribeSubUsersResponse
-	err := d.Client.DoJSON(context.Background(), api.Request{
-		Service: "iam",
-		// IAM is global. An empty region makes the signer fall back to the
-		// jdcloud-api scope expected by this endpoint.
-		Region:  "",
-		Method:  "GET",
-		Version: "v1",
-		Path:    "/subUsers",
-		Query:   query,
-	}, &resp)
+	pin, err := describeUserPin(context.Background(), d.Client, d.AccessKey)
 	if err == nil {
-		return true
+		return pin, true
 	}
 
 	var apiErr *api.APIError
 	if errors.As(err, &apiErr) && apiErr.IsAuthFailure() {
-		return false
+		return "", false
 	}
 	logger.Warning("JDCloud IAM probe inconclusive:", err.Error())
-	return true
+	return "", true
 }

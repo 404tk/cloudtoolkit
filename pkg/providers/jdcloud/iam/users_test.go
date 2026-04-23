@@ -54,57 +54,71 @@ func TestDriverListUsersMapsUsers(t *testing.T) {
 	}
 }
 
-func TestDriverValidatorTreats404AsValid(t *testing.T) {
+func TestDriverValidateCredentialReturnsPin(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/subUsers" {
+		if r.URL.Path != "/v1/regions/cn-north-1/user:describeUserPin" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
-		if got := r.URL.Query().Get("pageNumber"); got != "1" {
-			t.Fatalf("unexpected pageNumber: %s", got)
+		if got := r.URL.Query().Get("accessKey"); got != "AKID" {
+			t.Fatalf("unexpected accessKey: %s", got)
 		}
-		if got := r.URL.Query().Get("pageSize"); got != "1" {
-			t.Fatalf("unexpected pageSize: %s", got)
-		}
-		w.WriteHeader(http.StatusNotFound)
-		_, _ = w.Write([]byte(`{"requestId":"req-404","error":{"status":"NOT_FOUND","code":404,"message":"not found"}}`))
+		_, _ = w.Write([]byte(`{"requestId":"req-pin","result":{"pin":"jd_master_demo"}}`))
 	}))
 	defer server.Close()
 
-	driver := &Driver{Client: newTestClient(server.URL)}
-	if !driver.Validator("missing-user") {
-		t.Fatal("expected validator to accept 404 as reachable credential")
+	driver := &Driver{Client: newTestClient(server.URL), AccessKey: "AKID"}
+	pin, ok := driver.Validator()
+	if !ok {
+		t.Fatal("expected credential to validate")
+	}
+	if pin != "jd_master_demo" {
+		t.Fatalf("unexpected pin: %q", pin)
 	}
 }
 
-func TestDriverValidatorTreats403AsValid(t *testing.T) {
+func TestDriverValidateCredentialTreats403AsValid(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/subUsers" {
+		if r.URL.Path != "/v1/regions/cn-north-1/user:describeUserPin" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("accessKey"); got != "AKID" {
+			t.Fatalf("unexpected accessKey: %s", got)
 		}
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = w.Write([]byte(`{"requestId":"req-403","error":{"status":"HTTP_FORBIDDEN","code":403,"message":"this api is not allowed [gw]"}}`))
 	}))
 	defer server.Close()
 
-	driver := &Driver{Client: newTestClient(server.URL)}
-	if !driver.Validator("forbidden-user") {
+	driver := &Driver{Client: newTestClient(server.URL), AccessKey: "AKID"}
+	pin, ok := driver.Validator()
+	if !ok {
 		t.Fatal("expected validator to accept inconclusive 403 gateway response")
+	}
+	if pin != "" {
+		t.Fatalf("expected empty pin on inconclusive probe, got %q", pin)
 	}
 }
 
-func TestDriverValidatorRejects401(t *testing.T) {
+func TestDriverValidateCredentialRejects401(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/v1/subUsers" {
+		if r.URL.Path != "/v1/regions/cn-north-1/user:describeUserPin" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("accessKey"); got != "AKID" {
+			t.Fatalf("unexpected accessKey: %s", got)
 		}
 		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = w.Write([]byte(`{"requestId":"req-401","error":{"status":"HTTP_UNAUTHORIZED","code":401,"message":"unauthorized"}}`))
 	}))
 	defer server.Close()
 
-	driver := &Driver{Client: newTestClient(server.URL)}
-	if driver.Validator("unauthorized-user") {
+	driver := &Driver{Client: newTestClient(server.URL), AccessKey: "AKID"}
+	pin, ok := driver.Validator()
+	if ok {
 		t.Fatal("expected validator to reject 401 auth failure")
+	}
+	if pin != "" {
+		t.Fatalf("expected empty pin on auth failure, got %q", pin)
 	}
 }
 
