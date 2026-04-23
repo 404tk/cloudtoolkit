@@ -21,9 +21,10 @@ import (
 )
 
 type Provider struct {
-	region    string
-	accessKey string
-	apiClient *_api.Client
+	credential _auth.Credential
+	region     string
+	accessKey  string
+	apiClient  *_api.Client
 }
 
 // New creates a new provider client for JDCloud API.
@@ -53,9 +54,10 @@ func New(options schema.Options) (*Provider, error) {
 	}
 
 	return &Provider{
-		region:    region,
-		accessKey: credential.AccessKey,
-		apiClient: apiClient,
+		credential: credential,
+		region:     region,
+		accessKey:  credential.AccessKey,
+		apiClient:  apiClient,
 	}, nil
 }
 
@@ -96,7 +98,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			list.AddError("account", err)
 		case "database":
 		case "bucket":
-			d := &oss.Driver{Client: p.apiClient}
+			d := p.newOSSDriver(p.region)
 			storages, err := d.ListBuckets(ctx)
 			schema.AppendAssets(&list, storages)
 			list.AddError("bucket", err)
@@ -126,6 +128,28 @@ func (p *Provider) UserManagement(action, username, password string) {
 		driver.DelUser()
 	default:
 		logger.Error("Please set metadata like \"add username password\" or \"del username\"")
+	}
+}
+
+func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
+	driver := p.newOSSDriver(p.region)
+	switch action {
+	case "list":
+		infos, err := p.bucketInfos(context.Background(), driver, bucketName)
+		if err != nil {
+			logger.Error("List buckets failed:", err)
+			return
+		}
+		driver.ListObjects(ctx, infos)
+	case "total":
+		infos, err := p.bucketInfos(context.Background(), driver, bucketName)
+		if err != nil {
+			logger.Error("List buckets failed:", err)
+			return
+		}
+		driver.TotalObjects(ctx, infos)
+	default:
+		logger.Error("`list all` or `total all`.")
 	}
 }
 
@@ -162,4 +186,51 @@ func (p *Provider) lookupHost(instanceID string) (schema.Host, bool) {
 		}
 	}
 	return schema.Host{}, false
+}
+
+func (p *Provider) newOSSDriver(region string) *oss.Driver {
+	return &oss.Driver{
+		Client:     p.apiClient,
+		Credential: p.credential,
+		Region:     region,
+	}
+}
+
+func (p *Provider) bucketInfos(ctx context.Context, driver *oss.Driver, bucketName string) (map[string]string, error) {
+	infos := make(map[string]string)
+	bucketName = strings.TrimSpace(bucketName)
+	region := strings.TrimSpace(p.region)
+	switch {
+	case bucketName == "":
+		return nil, fmt.Errorf("empty bucket name")
+	case bucketName == "all":
+		buckets, err := driver.ListBuckets(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, bucket := range buckets {
+			bucketRegion := strings.TrimSpace(bucket.Region)
+			if bucketRegion == "" {
+				bucketRegion, err = driver.ResolveBucketRegion(ctx, bucket.BucketName)
+				if err != nil {
+					return nil, err
+				}
+			}
+			infos[bucket.BucketName] = bucketRegion
+		}
+		if len(infos) == 0 {
+			return nil, fmt.Errorf("no buckets found")
+		}
+		return infos, nil
+	case region != "" && !strings.EqualFold(region, "all"):
+		infos[bucketName] = region
+		return infos, nil
+	default:
+		resolved, err := driver.ResolveBucketRegion(ctx, bucketName)
+		if err != nil {
+			return nil, fmt.Errorf("bucket %s region not found; set region explicitly or use `list all` first", bucketName)
+		}
+		infos[bucketName] = resolved
+		return infos, nil
+	}
 }
