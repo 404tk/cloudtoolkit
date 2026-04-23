@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	_api "github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/api"
+	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/asset"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/assistant"
 	_auth "github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/auth"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/iam"
@@ -70,6 +71,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	for _, product := range utils.Cloudlist {
 		switch product {
 		case "balance":
+			(&asset.Driver{Client: p.apiClient, Region: p.region}).QueryAccountBalance(ctx)
 		case "host":
 			vmDriver := &vm.Driver{Client: p.apiClient, Region: p.region}
 			vmHosts, vmErr := vmDriver.GetResource(ctx)
