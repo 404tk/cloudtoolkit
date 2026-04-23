@@ -44,11 +44,7 @@ func (d *Driver) RunCommand(instanceID, osType, cmd string) string {
 		return ""
 	}
 
-	commandType, ok := resolveCommandType(osType)
-	if !ok {
-		logger.Error("Unknown ostype", osType)
-		return ""
-	}
+	commandType := resolveCommandType(osType)
 
 	commandContent := base64.StdEncoding.EncodeToString([]byte(cmd))
 	commandName := buildCommandName("ctk")
@@ -238,14 +234,14 @@ func invocationErrorInfo(inv api.Invocation) string {
 	return ""
 }
 
-func resolveCommandType(osType string) (string, bool) {
+func resolveCommandType(osType string) string {
 	switch strings.ToLower(strings.TrimSpace(osType)) {
 	case "linux":
-		return "shell", true
+		return "shell"
 	case "windows":
-		return "powershell", true
+		return "powershell"
 	default:
-		return "", false
+		return "shell"
 	}
 }
 

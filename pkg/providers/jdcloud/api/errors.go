@@ -108,6 +108,18 @@ func ErrorCode(err error) int {
 	return 0
 }
 
+func IsInvalidRegion(err error) bool {
+	if err == nil {
+		return false
+	}
+	var apiErr *APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	return apiErr.Code == http.StatusBadRequest &&
+		strings.Contains(strings.ToLower(apiErr.Message), "invalid regionid")
+}
+
 func annotateError(err error, service, action string) error {
 	if err == nil {
 		return nil

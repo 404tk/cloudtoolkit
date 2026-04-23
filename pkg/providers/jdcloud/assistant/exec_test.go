@@ -160,10 +160,32 @@ func TestDriverRunCommandRejectsEmptyRegion(t *testing.T) {
 	}
 }
 
-func TestDriverRunCommandRejectsUnknownOSType(t *testing.T) {
-	var actions []string
+func TestDriverRunCommandDefaultsUnknownOSTypeToShell(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		actions = append(actions, r.URL.Path)
+		switch r.URL.Path {
+		case "/v1/regions/cn-north-1/createCommand":
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read body: %v", err)
+			}
+			var req api.CreateCommandRequest
+			if err := json.Unmarshal(body, &req); err != nil {
+				t.Fatalf("decode createCommand body: %v", err)
+			}
+			if req.CommandType != "shell" {
+				t.Fatalf("unexpected command type: %q", req.CommandType)
+			}
+			_, _ = w.Write([]byte(`{"requestId":"req-create","result":{"commandId":"cmd-1"}}`))
+		case "/v1/regions/cn-north-1/invokeCommand":
+			_, _ = w.Write([]byte(`{"requestId":"req-invoke","result":{"invokeId":"inv-1"}}`))
+		case "/v1/regions/cn-north-1/describeInvocations":
+			outputB64 := base64.StdEncoding.EncodeToString([]byte("ok\n"))
+			_, _ = w.Write([]byte(`{"requestId":"req-poll","result":{"invocations":[{"status":"finish","invokeId":"inv-1","invocationInstances":[{"instanceId":"i-1","status":"finish","output":"` + outputB64 + `"}]}]}}`))
+		case "/v1/regions/cn-north-1/deleteCommands":
+			_, _ = w.Write([]byte(`{"requestId":"req-delete","result":{"commandId":"cmd-1"}}`))
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
 	}))
 	defer server.Close()
 
@@ -174,11 +196,8 @@ func TestDriverRunCommandRejectsUnknownOSType(t *testing.T) {
 		maxPolls:     1,
 		sleep:        func(time.Duration) {},
 	}
-	if got := driver.RunCommand("i-1", "solaris", "uname -a"); got != "" {
-		t.Fatalf("expected empty output, got %q", got)
-	}
-	if len(actions) != 0 {
-		t.Fatalf("expected no API calls for unknown osType, got: %v", actions)
+	if got := driver.RunCommand("i-1", "solaris", "uname -a"); got != "ok\n" {
+		t.Fatalf("expected successful shell fallback, got %q", got)
 	}
 }
 
@@ -186,18 +205,17 @@ func TestResolveCommandType(t *testing.T) {
 	cases := []struct {
 		osType string
 		want   string
-		ok     bool
 	}{
-		{"linux", "shell", true},
-		{"LINUX", "shell", true},
-		{" Windows ", "powershell", true},
-		{"", "", false},
-		{"freebsd", "", false},
+		{"linux", "shell"},
+		{"LINUX", "shell"},
+		{" Windows ", "powershell"},
+		{"", "shell"},
+		{"freebsd", "shell"},
 	}
 	for _, tc := range cases {
-		got, ok := resolveCommandType(tc.osType)
-		if got != tc.want || ok != tc.ok {
-			t.Fatalf("resolveCommandType(%q) = (%q, %v), want (%q, %v)", tc.osType, got, ok, tc.want, tc.ok)
+		got := resolveCommandType(tc.osType)
+		if got != tc.want {
+			t.Fatalf("resolveCommandType(%q) = %q, want %q", tc.osType, got, tc.want)
 		}
 	}
 }

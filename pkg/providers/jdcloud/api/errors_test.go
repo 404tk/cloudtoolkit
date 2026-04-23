@@ -53,3 +53,17 @@ func TestDecodeErrorNilOnSuccess(t *testing.T) {
 		t.Fatalf("expected nil error, got %v", err)
 	}
 }
+
+func TestIsInvalidRegion(t *testing.T) {
+	err := &APIError{
+		HTTPStatus: http.StatusBadRequest,
+		Code:       http.StatusBadRequest,
+		Message:    "Invalid RegionId 'cn-east-2'",
+	}
+	if !IsInvalidRegion(err) {
+		t.Fatal("expected invalid region error to be detected")
+	}
+	if IsInvalidRegion(&APIError{HTTPStatus: http.StatusBadRequest, Code: http.StatusBadRequest, Message: "other bad request"}) {
+		t.Fatal("unexpected invalid region match")
+	}
+}

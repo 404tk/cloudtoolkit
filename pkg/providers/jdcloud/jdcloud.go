@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"strings"
 
 	_api "github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/api"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/assistant"
 	_auth "github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/auth"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/iam"
+	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/lavm"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/oss"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/vm"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
@@ -69,10 +71,21 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 		switch product {
 		case "balance":
 		case "host":
-			d := &vm.Driver{Client: p.apiClient, Region: p.region}
-			hosts, err := d.GetResource(ctx)
-			schema.AppendAssets(&list, hosts)
-			list.AddError("host", err)
+			vmDriver := &vm.Driver{Client: p.apiClient, Region: p.region}
+			vmHosts, vmErr := vmDriver.GetResource(ctx)
+			schema.AppendAssets(&list, vmHosts)
+			list.AddError("host/vm", vmErr)
+
+			lavmDriver := &lavm.Driver{Client: p.apiClient, Region: p.region}
+			lavmHosts, lavmErr := lavmDriver.GetResource(ctx)
+			schema.AppendAssets(&list, lavmHosts)
+			list.AddError("host/lavm", lavmErr)
+
+			allHosts := append([]schema.Host{}, vmHosts...)
+			allHosts = append(allHosts, lavmHosts...)
+			if len(allHosts) > 0 || (vmErr == nil && lavmErr == nil) {
+				vm.SetCacheHostList(allHosts)
+			}
 		case "domain":
 		case "account":
 			d := &iam.Driver{Client: p.apiClient}
@@ -119,6 +132,10 @@ func (p *Provider) UserManagement(action, username, password string) {
 // from the host cache populated by `cloudlist` so `shell <instance-id>` works
 // regardless of the session's current region setting.
 func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {
+	if strings.HasPrefix(instanceID, "lavm-") {
+		logger.Error("JDCloud shell currently supports VM only")
+		return
+	}
 	host, ok := p.lookupHost(instanceID)
 	if !ok {
 		logger.Error("Unable to resolve instance metadata, run `cloudlist` first and retry.")
