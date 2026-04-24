@@ -9,6 +9,7 @@ const (
 	SecretKey     = "secretkey"
 	SecurityToken = "token"
 	Region        = "region"
+	ProjectID     = "projectId"
 	Version       = "version"
 )
 

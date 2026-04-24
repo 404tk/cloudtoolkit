@@ -15,6 +15,14 @@ var standardProviderConfigDefaults = map[string]string{
 	utils.Version:       "",
 }
 
+var providerConfigDefaultsWithProjectID = map[string]string{
+	utils.AccessKey:     "",
+	utils.SecretKey:     "",
+	utils.SecurityToken: "",
+	utils.Region:        "all",
+	utils.ProjectID:     "",
+}
+
 var providerConfigDefaults = map[string]map[string]string{
 	"alibaba":    standardProviderConfigDefaults,
 	"tencent":    standardProviderConfigDefaults,
@@ -22,6 +30,7 @@ var providerConfigDefaults = map[string]map[string]string{
 	"aws":        standardProviderConfigDefaults,
 	"volcengine": standardProviderConfigDefaults,
 	"jdcloud":    standardProviderConfigDefaults,
+	"ucloud":     providerConfigDefaultsWithProjectID,
 	"azure": {
 		utils.AzureClientId:       "",
 		utils.AzureClientSecret:   "",

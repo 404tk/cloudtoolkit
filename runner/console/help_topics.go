@@ -316,6 +316,7 @@ var helpOptionOrder = []string{
 	utils.SecretKey,
 	utils.SecurityToken,
 	utils.Region,
+	utils.ProjectID,
 	utils.Version,
 	utils.AzureClientId,
 	utils.AzureClientSecret,

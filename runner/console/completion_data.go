@@ -149,6 +149,17 @@ var regionSuggestionsByProvider = map[string][]prompt.Suggest{
 		{Text: "cn-east-1", Description: "Suqian"},
 		{Text: "cn-south-1", Description: "Guangzhou"},
 	},
+	"ucloud": {
+		{Text: "all", Description: "enumerate all accessible regions"},
+		{Text: "cn-bj2", Description: "Beijing"},
+		{Text: "cn-sh2", Description: "Shanghai"},
+		{Text: "cn-gd", Description: "Guangzhou"},
+		{Text: "hk", Description: "Hong Kong"},
+		{Text: "sg", Description: "Singapore"},
+		{Text: "us-ca", Description: "Los Angeles"},
+		{Text: "th-bkk", Description: "Bangkok"},
+		{Text: "ge-fra", Description: "Frankfurt"},
+	},
 }
 
 var metadataTemplatesByPayload = map[string][]prompt.Suggest{

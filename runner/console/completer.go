@@ -23,6 +23,7 @@ var optionsDesc = map[string]string{
 	utils.SecretKey:             "Secret",
 	utils.SecurityToken:         "Security Token (Optional)",
 	utils.Region:                "Region (Default: all)",
+	utils.ProjectID:             "Project ID (Optional; defaults to the account default project)",
 	utils.Version:               "International or custom edition (Optional)",
 	utils.AzureClientId:         "Key ID",
 	utils.AzureClientSecret:     "Secret",

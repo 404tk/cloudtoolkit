@@ -14,6 +14,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/replay"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent"
 	txreplay "github.com/404tk/cloudtoolkit/pkg/providers/tencent/replay"
+	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine"
 	volcreplay "github.com/404tk/cloudtoolkit/pkg/providers/volcengine/replay"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
@@ -85,6 +86,12 @@ var catalog = []entry{
 		info: Info{Name: "gcp", Desc: "Google Cloud Platform"},
 		new: func(block schema.Options) (schema.Provider, error) {
 			return gcp.New(block)
+		},
+	},
+	{
+		info: Info{Name: "ucloud", Desc: "UCloud"},
+		new: func(block schema.Options) (schema.Provider, error) {
+			return ucloud.New(block)
 		},
 	},
 }
