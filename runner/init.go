@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/404tk/cloudtoolkit/utils"
@@ -30,6 +31,7 @@ type Config struct {
 		ListPolicies   bool   `yaml:"list_policies"`
 		LogDir         string `yaml:"log_dir"`
 		TimeoutMinutes int    `yaml:"timeout_minutes"`
+		LogFormat      string `yaml:"log_format"`
 	} `yaml:"common"`
 	Cloudlist                 []string              `yaml:"cloudlist"`
 	IAMUserCheck              userValidationConfig  `yaml:"iam-user-check"`
@@ -106,6 +108,7 @@ func InitConfig() {
 	} else {
 		utils.RunTimeout = 10 * time.Minute
 	}
+	logger.SetFormat(logger.Format(strings.ToLower(strings.TrimSpace(cfg.Common.LogFormat))))
 
 	iamUserCheck := firstUserValidationConfig(
 		cfg.IAMUserCheck,
@@ -134,6 +137,7 @@ const defaultConfigFile = `common:
   list_policies: false
   log_dir: logs
   timeout_minutes: 10
+  log_format: text  # text | json — json emits one JSON Line per record for SIEM ingestion
 
 cloudlist:
   - balance
