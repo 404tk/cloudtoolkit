@@ -26,7 +26,7 @@ CloudToolKit is intended to help defenders verify:
 
 ## Features
 
-- **Multi-Cloud Coverage** - Alibaba, Tencent, Huawei, AWS, Azure, GCP, Volcengine, and JDCloud
+- **Multi-Cloud Coverage** - Alibaba, Tencent, Huawei, AWS, Azure, GCP, Volcengine, JDCloud, and UCloud
 - **Cloud Asset Inventory** - Hosts, databases, storage buckets, domains, IAM users, and related cloud resources
 - **Defender-Side Validation Payloads** - `iam-user-check`, `bucket-check`, `instance-cmd-check`, `event-check`, and `rds-account-check`
 - **Interactive CLI** - Tab completion, session management, and credential caching
@@ -60,6 +60,7 @@ CloudToolKit is intended to help defenders verify:
 | GCP | Compute Engine, Cloud DNS, IAM | - |
 | Volcengine | ECS, IAM, TOS, RDS, DNS | iam-user-check, bucket-check, instance-cmd-check |
 | JDCloud | VM, LAVM, IAM, OSS | iam-user-check, bucket-check, instance-cmd-check |
+| UCloud | UHost, US3, UDB, UDNS | - |
 
 ## Quick Start
 
