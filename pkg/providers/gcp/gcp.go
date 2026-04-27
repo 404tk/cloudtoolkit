@@ -2,6 +2,7 @@ package gcp
 
 import (
 	"context"
+	"encoding/base64"
 	"time"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/gcp/api"
@@ -37,6 +38,12 @@ func New(options schema.Options) (*Provider, error) {
 	httpClient := api.NewHTTPClient()
 	ts := auth.NewTokenSource(cred, httpClient)
 	client := api.NewClient(ts, api.WithHTTPClient(httpClient))
+	provider := &Provider{
+		cred:        cred,
+		tokenSource: ts,
+		apiClient:   client,
+		projects:    []string{cred.ProjectID},
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -47,20 +54,20 @@ func New(options schema.Options) (*Provider, error) {
 	payload, _ := options.GetMetadata(utils.Payload)
 	if payload == "cloudlist" {
 		logger.Warning("Current project:", cred.ProjectID)
-		cache.Cfg.CredInsert(cred.ProjectID, options)
+		cache.Cfg.CredInsert(cred.ProjectID, provider, options)
 	}
 
-	return &Provider{
-		cred:        cred,
-		tokenSource: ts,
-		apiClient:   client,
-		projects:    []string{cred.ProjectID},
-	}, nil
+	return provider, nil
 }
 
 // Name returns the name of the provider
 func (p *Provider) Name() string {
 	return "gcp"
+}
+
+func (p *Provider) CredentialKey(opts map[string]string) string {
+	tojson, _ := base64.StdEncoding.DecodeString(opts[utils.GCPserviceAccountJSON])
+	return utils.Md5Encode(string(tojson))
 }
 
 // Resources returns the provider for an resource deployment source.

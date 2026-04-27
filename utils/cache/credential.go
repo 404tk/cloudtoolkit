@@ -1,12 +1,15 @@
 package cache
 
 import (
-	"encoding/base64"
 	"encoding/json"
 
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
+
+type CredentialKeyer interface {
+	CredentialKey(opts map[string]string) string
+}
 
 type Credential struct {
 	UUID      string
@@ -17,17 +20,10 @@ type Credential struct {
 	Note      string
 }
 
-func (cfg *InitCfg) CredInsert(user string, data map[string]string) {
-	provider := data[utils.Provider]
-	accessKey := data[utils.AccessKey]
-	switch provider {
-	case "azure":
-		accessKey = data[utils.AzureClientId]
-	case "gcp":
-		tojson, _ := base64.StdEncoding.DecodeString(data[utils.GCPserviceAccountJSON])
-		accessKey = utils.Md5Encode(string(tojson))
-	}
-	uuid := utils.Md5Encode(accessKey + provider)
+func (cfg *InitCfg) CredInsert(user string, provider any, data map[string]string) {
+	providerName := data[utils.Provider]
+	accessKey := credentialKey(provider, data)
+	uuid := utils.Md5Encode(accessKey + providerName)
 
 	b, err := json.Marshal(data)
 	if err != nil {
@@ -41,7 +37,7 @@ func (cfg *InitCfg) CredInsert(user string, data map[string]string) {
 		if v.UUID == uuid {
 			cfg.Creds[k].User = truncateString(user, 20)
 			cfg.Creds[k].AccessKey = truncateString(accessKey, 35)
-			cfg.Creds[k].Provider = provider
+			cfg.Creds[k].Provider = providerName
 			cfg.Creds[k].JsonData = string(b)
 			return
 		}
@@ -50,9 +46,16 @@ func (cfg *InitCfg) CredInsert(user string, data map[string]string) {
 		UUID:      uuid,
 		User:      truncateString(user, 20),
 		AccessKey: truncateString(accessKey, 35),
-		Provider:  provider,
+		Provider:  providerName,
 		JsonData:  string(b),
 	})
+}
+
+func credentialKey(provider any, data map[string]string) string {
+	if keyer, ok := provider.(CredentialKeyer); ok {
+		return keyer.CredentialKey(data)
+	}
+	return data[utils.AccessKey]
 }
 
 func (cfg *InitCfg) CredSelect(uuid string) string {

@@ -63,6 +63,12 @@ func New(options schema.Options) (*Provider, error) {
 	if options != nil && strings.TrimSpace(options[utils.ProjectID]) == "" && projectID != "" {
 		options[utils.ProjectID] = projectID
 	}
+	provider := &Provider{
+		credential: credential,
+		region:     region,
+		projectID:  projectID,
+		regions:    regions,
+	}
 
 	if strings.TrimSpace(options[utils.Payload]) == "cloudlist" {
 		display := displayCurrentUser(user)
@@ -74,15 +80,10 @@ func New(options schema.Options) (*Provider, error) {
 		if pj := displayCurrentProject(projectID, projectName); pj != "" {
 			logger.Warning("Current project:", pj)
 		}
-		cache.Cfg.CredInsert(display, options)
+		cache.Cfg.CredInsert(display, provider, options)
 	}
 
-	return &Provider{
-		credential: credential,
-		region:     region,
-		projectID:  projectID,
-		regions:    regions,
-	}, nil
+	return provider, nil
 }
 
 // Name returns the name of the provider.

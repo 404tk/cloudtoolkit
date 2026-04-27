@@ -36,6 +36,11 @@ func New(options schema.Options) (*Provider, error) {
 	version, _ := options.GetMetadata(utils.Version)
 	defaultRegion := resolveBootstrapRegion(region, version)
 	apiClient := _api.NewClient(credential)
+	provider := &Provider{
+		region:        region,
+		defaultRegion: defaultRegion,
+		apiClient:     apiClient,
+	}
 
 	payload, _ := options.GetMetadata(utils.Payload)
 	if payload == "cloudlist" {
@@ -49,14 +54,10 @@ func New(options schema.Options) (*Provider, error) {
 		accountArn := resp.Arn
 		userName := currentUserNameFromARN(accountArn)
 		logger.Warning(fmt.Sprintf("Current user: %s", userName))
-		cache.Cfg.CredInsert(userName, options)
+		cache.Cfg.CredInsert(userName, provider, options)
 	}
 
-	return &Provider{
-		region:        region,
-		defaultRegion: defaultRegion,
-		apiClient:     apiClient,
-	}, nil
+	return provider, nil
 }
 
 // Name returns the name of the provider

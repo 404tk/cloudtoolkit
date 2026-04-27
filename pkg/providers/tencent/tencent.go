@@ -61,6 +61,13 @@ func newProviderWithConfig(options schema.Options, cfg ClientConfig) (*Provider,
 	region, _ := options.GetMetadata(utils.Region)
 	opts := append([]api.Option(nil), cfg.APIOptions...)
 	apiClient := api.NewClient(credential, opts...)
+	provider := &Provider{
+		apiCredential: credential,
+		apiClient:     apiClient,
+		clientOptions: opts,
+		cosClientOpts: append([]cos.Option(nil), cfg.COSOptions...),
+		region:        region,
+	}
 
 	payload, _ := options.GetMetadata(utils.Payload)
 	if payload == "cloudlist" {
@@ -79,18 +86,12 @@ func newProviderWithConfig(options schema.Options, cfg ClientConfig) (*Provider,
 		}
 		msg := "Current account ARN: " + response.Response.Arn
 		if !cfg.SkipCredentialCache {
-			cache.Cfg.CredInsert(response.Response.Type, options)
+			cache.Cfg.CredInsert(response.Response.Type, provider, options)
 		}
 		logger.Warning(msg)
 	}
 
-	return &Provider{
-		apiCredential: credential,
-		apiClient:     apiClient,
-		clientOptions: opts,
-		cosClientOpts: append([]cos.Option(nil), cfg.COSOptions...),
-		region:        region,
-	}, nil
+	return provider, nil
 }
 
 // Name returns the name of the provider

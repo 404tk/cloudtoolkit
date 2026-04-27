@@ -42,6 +42,12 @@ func New(options schema.Options) (*Provider, error) {
 	httpClient := azapi.NewHTTPClient()
 	tokenSource := azauth.NewTokenSource(cred, httpClient)
 	client := azapi.NewClient(tokenSource, endpoints, azapi.WithHTTPClient(httpClient))
+	provider := &Provider{
+		cred:        cred,
+		endpoints:   endpoints,
+		tokenSource: tokenSource,
+		apiClient:   client,
+	}
 
 	subscriptionIDs := make([]string, 0, 1)
 	if cred.SubscriptionID != "" {
@@ -61,7 +67,7 @@ func New(options schema.Options) (*Provider, error) {
 		for _, sub := range allSubscriptions {
 			if payload == "cloudlist" {
 				logger.Warning(fmt.Sprintf("Found Subscription: %s(%s)", sub.DisplayName, sub.SubscriptionID))
-				cache.Cfg.CredInsert(sub.DisplayName, options)
+				cache.Cfg.CredInsert(sub.DisplayName, provider, options)
 			}
 			if sub.SubscriptionID != "" {
 				subscriptionIDs = append(subscriptionIDs, sub.SubscriptionID)
@@ -73,18 +79,17 @@ func New(options schema.Options) (*Provider, error) {
 		return nil, errors.New("No Subscription found.")
 	}
 
-	return &Provider{
-		cred:            cred,
-		endpoints:       endpoints,
-		tokenSource:     tokenSource,
-		apiClient:       client,
-		subscriptionIDs: subscriptionIDs,
-	}, nil
+	provider.subscriptionIDs = subscriptionIDs
+	return provider, nil
 }
 
 // Name returns the name of the provider.
 func (p *Provider) Name() string {
 	return "azure"
+}
+
+func (p *Provider) CredentialKey(opts map[string]string) string {
+	return opts[utils.AzureClientId]
 }
 
 // Resources returns the provider for a resource deployment source.

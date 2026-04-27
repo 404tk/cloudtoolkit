@@ -35,6 +35,7 @@ func New(options schema.Options) (*Provider, error) {
 	}
 	controlPlaneCred := cred
 	domainID := ""
+	provider := &Provider{cred: cred}
 	if controlPlaneCred.Region == "all" {
 		controlPlaneCred.Region = defaultRegion
 	}
@@ -47,7 +48,7 @@ func New(options schema.Options) (*Provider, error) {
 			return nil, err
 		}
 		msg := "Current user: " + userName
-		cache.Cfg.CredInsert(userName, options)
+		cache.Cfg.CredInsert(userName, provider, options)
 		logger.Warning(msg)
 		domainID = probe.DomainID
 	}
@@ -77,11 +78,9 @@ func New(options schema.Options) (*Provider, error) {
 		regions = append(regions, cred.Region)
 	}
 
-	return &Provider{
-		cred:     cred,
-		regions:  regions,
-		domainID: domainID,
-	}, nil
+	provider.regions = regions
+	provider.domainID = domainID
+	return provider, nil
 }
 
 // Name returns the name of the provider
