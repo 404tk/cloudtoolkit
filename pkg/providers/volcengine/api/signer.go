@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
 )
 
 const (
@@ -169,7 +171,7 @@ func canonicalQueryString(values url.Values) string {
 }
 
 func canonicalURI(path string) string {
-	path = ensureLeadingSlash(path)
+	path = httpclient.EnsureLeadingSlash(path)
 	if path == "/" {
 		return "/"
 	}
@@ -178,17 +180,6 @@ func canonicalURI(path string) string {
 		parts[i] = percentEncodeRFC3986(part)
 	}
 	return strings.Join(parts, "/")
-}
-
-func ensureLeadingSlash(path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return "/"
-	}
-	if strings.HasPrefix(path, "/") {
-		return path
-	}
-	return "/" + path
 }
 
 func percentEncodeRFC3986(value string) string {

@@ -1,64 +1,20 @@
-package api
+package httpclient
 
 import (
 	"bytes"
 	"context"
 	"fmt"
 	"io"
-	"math/rand"
 	"net/http"
-	"time"
-
-	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
 )
 
-type Retryer interface {
-	Do(context.Context, bool, func() (*http.Response, error)) (*http.Response, error)
-}
-
-type RetryPolicy = httpclient.RetryPolicy
-
-func DefaultRetryPolicy() RetryPolicy {
-	return RetryPolicy{
-		MaxAttempts: 2,
-		BaseDelay:   200 * time.Millisecond,
-		Sleep:       httpclient.SleepWithContext,
-		Rand:        rand.Float64,
-		Clock:       time.Now,
-		Classifier:  huaweiRetryClassifier,
-	}
-}
-
-func huaweiRetryClassifier(policy httpclient.RetryPolicy, resp *http.Response, err error, attempt int) httpclient.RetryDecision {
-	if err != nil {
-		return httpclient.RetryDecision{Retry: true, Delay: policy.JitterBackoff(attempt)}
-	}
-	if resp == nil || resp.StatusCode < http.StatusInternalServerError {
-		return httpclient.RetryDecision{}
-	}
-	return httpclient.RetryDecision{Retry: true, Delay: policy.JitterBackoff(attempt)}
-}
-
-func executeWithRetry(
+func Execute(
 	ctx context.Context,
 	client *http.Client,
-	retry Retryer,
+	retry RetryPolicy,
 	template *http.Request,
 	idempotent bool,
 ) (*http.Response, []byte, error) {
-	if retry == nil {
-		retry = DefaultRetryPolicy()
-	}
-	switch policy := retry.(type) {
-	case RetryPolicy:
-		return httpclient.Execute(ctx, client, policy, template, idempotent)
-	case *RetryPolicy:
-		if policy != nil {
-			return httpclient.Execute(ctx, client, *policy, template, idempotent)
-		}
-		retry = DefaultRetryPolicy()
-	}
-
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -66,7 +22,7 @@ func executeWithRetry(
 		client = http.DefaultClient
 	}
 	if template == nil {
-		return nil, nil, fmt.Errorf("huawei client: nil request")
+		return nil, nil, fmt.Errorf("httpclient: nil request")
 	}
 
 	body, err := snapshotRequestBody(template)
@@ -83,16 +39,17 @@ func executeWithRetry(
 	})
 	if err != nil || resp == nil {
 		if err == nil && resp == nil {
-			err = fmt.Errorf("huawei client: empty response")
+			err = fmt.Errorf("httpclient: nil response")
 		}
 		return resp, nil, err
 	}
 
-	respBody, err := httpclient.SnapshotBody(resp)
+	respBody, err := SnapshotBody(resp)
 	if err != nil {
-		httpclient.CloseResponse(resp)
+		CloseResponse(resp)
 		return nil, nil, err
 	}
+
 	return resp, respBody, nil
 }
 
@@ -103,13 +60,13 @@ func snapshotRequestBody(req *http.Request) ([]byte, error) {
 	if req.GetBody != nil {
 		rc, err := req.GetBody()
 		if err != nil {
-			return nil, fmt.Errorf("huawei client: get request body: %w", err)
+			return nil, fmt.Errorf("httpclient: get request body: %w", err)
 		}
 		defer rc.Close()
 
 		body, err := io.ReadAll(rc)
 		if err != nil {
-			return nil, fmt.Errorf("huawei client: read request body: %w", err)
+			return nil, fmt.Errorf("httpclient: read request body: %w", err)
 		}
 		return body, nil
 	}
@@ -117,7 +74,7 @@ func snapshotRequestBody(req *http.Request) ([]byte, error) {
 	body, err := io.ReadAll(req.Body)
 	_ = req.Body.Close()
 	if err != nil {
-		return nil, fmt.Errorf("huawei client: read request body: %w", err)
+		return nil, fmt.Errorf("httpclient: read request body: %w", err)
 	}
 
 	req.Body = io.NopCloser(bytes.NewReader(body))

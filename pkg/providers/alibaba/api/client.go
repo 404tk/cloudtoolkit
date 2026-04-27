@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/auth"
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
 )
 
 type Request struct {
@@ -128,7 +129,7 @@ func (c *Client) Do(ctx context.Context, req Request, resp any) error {
 		method = http.MethodPost
 	}
 	region := NormalizeRegion(req.Region)
-	params := cloneValues(req.Query)
+	params := httpclient.CloneValues(req.Query)
 	params.Set("Version", version)
 	params.Set("Action", action)
 	if _, ok := params["Format"]; !ok {
@@ -213,7 +214,7 @@ func (c *Client) doRequest(ctx context.Context, idempotent bool, method string, 
 	if err != nil {
 		return nil, 0, err
 	}
-	defer closeResponse(httpResp)
+	defer httpclient.CloseResponse(httpResp)
 
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
@@ -233,10 +234,10 @@ func (c *Client) resolveEndpoint(ctx context.Context, req Request, region string
 		if c.baseURL.Host != "" {
 			host = c.baseURL.Host
 		}
-		path = joinPath(c.baseURL.Path, path)
+		path = httpclient.JoinPath(c.baseURL.Path, path)
 	}
 	if req.Path != "" {
-		path = joinPath(path, req.Path)
+		path = httpclient.JoinPath(path, req.Path)
 	}
 	if req.Scheme != "" {
 		scheme = req.Scheme
@@ -276,39 +277,6 @@ func (c *Client) buildHeaders(extra http.Header) http.Header {
 		}
 	}
 	return headers
-}
-
-func cloneValues(values url.Values) url.Values {
-	cloned := url.Values{}
-	for key, items := range values {
-		copied := make([]string, len(items))
-		copy(copied, items)
-		cloned[key] = copied
-	}
-	return cloned
-}
-
-func ensureLeadingSlash(path string) string {
-	if path == "" {
-		return "/"
-	}
-	if strings.HasPrefix(path, "/") {
-		return path
-	}
-	return "/" + path
-}
-
-func joinPath(basePath, requestPath string) string {
-	basePath = strings.TrimRight(basePath, "/")
-	requestPath = ensureLeadingSlash(requestPath)
-	switch {
-	case basePath == "":
-		return requestPath
-	case requestPath == "/":
-		return basePath
-	default:
-		return basePath + requestPath
-	}
 }
 
 func isReservedHeader(key string) bool {

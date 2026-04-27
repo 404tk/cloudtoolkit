@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/aws/auth"
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
 )
 
 type Request struct {
@@ -111,7 +112,7 @@ func (c *Client) DoXML(ctx context.Context, req Request, resp any) error {
 		method = http.MethodPost
 	}
 	region := normalizeServiceRegion(service, req.Region)
-	bodyValues := cloneValues(req.Query)
+	bodyValues := httpclient.CloneValues(req.Query)
 	bodyValues.Set("Action", action)
 	bodyValues.Set("Version", version)
 	body := []byte(bodyValues.Encode())
@@ -153,7 +154,7 @@ func (c *Client) DoXML(ctx context.Context, req Request, resp any) error {
 	if err != nil {
 		return err
 	}
-	defer closeResponse(httpResp)
+	defer httpclient.CloseResponse(httpResp)
 
 	responseBody, err := io.ReadAll(httpResp.Body)
 	if err != nil {
@@ -189,8 +190,8 @@ func (c *Client) DoRESTXML(ctx context.Context, req Request, resp any) error {
 	}
 	region := normalizeServiceRegion(service, req.Region)
 	body := append([]byte(nil), req.Body...)
-	query := cloneValues(req.Query)
-	headers := cloneHeader(req.Headers)
+	query := httpclient.CloneValues(req.Query)
+	headers := httpclient.CloneHeader(req.Headers)
 	if service == "s3" && strings.TrimSpace(headers.Get("X-Amz-Content-Sha256")) == "" {
 		headers.Set("X-Amz-Content-Sha256", hashSHA256Hex(body))
 	}
@@ -233,7 +234,7 @@ func (c *Client) DoRESTXML(ctx context.Context, req Request, resp any) error {
 	if err != nil {
 		return err
 	}
-	defer closeResponse(httpResp)
+	defer httpclient.CloseResponse(httpResp)
 
 	responseBody, err := io.ReadAll(httpResp.Body)
 	if err != nil {
@@ -254,7 +255,7 @@ func (c *Client) DoRESTXML(ctx context.Context, req Request, resp any) error {
 func (c *Client) resolveEndpoint(req Request, service, region string) (string, string, string) {
 	scheme := "https"
 	host := defaultHost(service, region)
-	path := ensureLeadingSlash(req.Path)
+	path := httpclient.EnsureLeadingSlash(req.Path)
 
 	if c.baseURL != nil {
 		if c.baseURL.Scheme != "" {
@@ -263,7 +264,7 @@ func (c *Client) resolveEndpoint(req Request, service, region string) (string, s
 		if c.baseURL.Host != "" {
 			host = c.baseURL.Host
 		}
-		path = joinPath(c.baseURL.Path, path)
+		path = httpclient.JoinPath(c.baseURL.Path, path)
 	}
 	if req.Scheme != "" {
 		scheme = req.Scheme
@@ -294,28 +295,6 @@ func (c *Client) buildHeaders(extra http.Header, contentType string, signed Sign
 		}
 	}
 	return headers
-}
-
-func cloneHeader(header http.Header) http.Header {
-	if len(header) == 0 {
-		return http.Header{}
-	}
-	cloned := make(http.Header, len(header))
-	for key, values := range header {
-		cloned[key] = append([]string(nil), values...)
-	}
-	return cloned
-}
-
-func cloneValues(values url.Values) url.Values {
-	if len(values) == 0 {
-		return url.Values{}
-	}
-	cloned := make(url.Values, len(values))
-	for key, rawValues := range values {
-		cloned[key] = append([]string(nil), rawValues...)
-	}
-	return cloned
 }
 
 func normalizeRegion(region string) string {
@@ -356,27 +335,6 @@ func defaultHost(service, region string) string {
 		suffix = "amazonaws.com.cn"
 	}
 	return service + "." + region + "." + suffix
-}
-
-func ensureLeadingSlash(path string) string {
-	if path == "" {
-		return "/"
-	}
-	if strings.HasPrefix(path, "/") {
-		return path
-	}
-	return "/" + path
-}
-
-func joinPath(basePath, requestPath string) string {
-	requestPath = ensureLeadingSlash(requestPath)
-	if basePath == "" || basePath == "/" {
-		return requestPath
-	}
-	if strings.HasSuffix(basePath, "/") {
-		basePath = strings.TrimSuffix(basePath, "/")
-	}
-	return basePath + requestPath
 }
 
 func isReservedHeader(key string) bool {

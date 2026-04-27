@@ -115,3 +115,34 @@ func TestClientDoHonorsCanceledContext(t *testing.T) {
 		t.Fatalf("expected context canceled, got %v", err)
 	}
 }
+
+func TestClientDoRetriesIdempotentActions(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts == 1 {
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = w.Write([]byte(`{"RetCode":0}`))
+			return
+		}
+		_, _ = w.Write([]byte(`{"RetCode":0}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(
+		ucloudauth.New("foo", "bar", ""),
+		WithBaseURL(server.URL),
+		WithRetryPolicy(RetryPolicy{
+			MaxAttempts: 2,
+			BaseDelay:   0,
+			Sleep:       func(context.Context, time.Duration) error { return nil },
+		}),
+	)
+
+	if err := client.Do(context.Background(), Request{Action: "DescribeUHostInstance"}, nil); err != nil {
+		t.Fatalf("Do() error = %v", err)
+	}
+	if attempts != 2 {
+		t.Fatalf("unexpected attempts: %d", attempts)
+	}
+}

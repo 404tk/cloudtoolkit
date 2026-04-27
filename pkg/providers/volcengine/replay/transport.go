@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/api"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/tos"
 )
@@ -534,7 +535,7 @@ func verifyOpenAPIAuth(req *http.Request, body []byte) authFailureKind {
 		Method:       req.Method,
 		Host:         host,
 		Path:         req.URL.Path,
-		Query:        cloneValues(req.URL.Query()),
+		Query:        httpclient.CloneValues(req.URL.Query()),
 		Body:         body,
 		ContentType:  strings.TrimSpace(req.Header.Get("Content-Type")),
 		Service:      parsed.Service,
@@ -886,17 +887,6 @@ func firstNonEmpty(values ...string) string {
 	return ""
 }
 
-func cloneValues(values url.Values) url.Values {
-	if len(values) == 0 {
-		return nil
-	}
-	out := make(url.Values, len(values))
-	for key, items := range values {
-		out[key] = append([]string(nil), items...)
-	}
-	return out
-}
-
 func subtleCompare(left, right string) bool {
 	left = strings.TrimSpace(left)
 	right = strings.TrimSpace(right)
@@ -929,7 +919,7 @@ func canonicalQuery(values url.Values) string {
 }
 
 func canonicalURI(path string) string {
-	path = ensureLeadingSlash(path)
+	path = httpclient.EnsureLeadingSlash(path)
 	if path == "/" {
 		return "/"
 	}
@@ -938,17 +928,6 @@ func canonicalURI(path string) string {
 		parts[i] = percentEncodeRFC3986(part)
 	}
 	return strings.Join(parts, "/")
-}
-
-func ensureLeadingSlash(path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return "/"
-	}
-	if strings.HasPrefix(path, "/") {
-		return path
-	}
-	return "/" + path
 }
 
 func percentEncodeRFC3986(value string) string {

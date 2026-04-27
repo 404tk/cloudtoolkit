@@ -3,14 +3,13 @@ package api
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/gcp/auth"
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
 )
 
 type Request struct {
@@ -53,9 +52,7 @@ func WithHTTPClient(hc *http.Client) Option {
 
 func WithRetryPolicy(p RetryPolicy) Option {
 	return func(c *Client) {
-		if p != nil {
-			c.retryPolicy = p
-		}
+		c.retryPolicy = p
 	}
 }
 
@@ -81,39 +78,26 @@ func (c *Client) Do(ctx context.Context, req Request, out any) error {
 		return err
 	}
 
-	headers := cloneHeader(req.Headers)
+	headers := httpclient.CloneHeader(req.Headers)
 	headers.Set("Authorization", "Bearer "+token.AccessToken)
 	if req.Body != nil && strings.TrimSpace(headers.Get("Content-Type")) == "" {
 		headers.Set("Content-Type", "application/json; charset=UTF-8")
 	}
 
-	httpResp, err := c.retryPolicy.Do(ctx, req.Idempotent, func() (*http.Response, error) {
-		httpReq, err := http.NewRequestWithContext(ctx, method, requestURL, bytes.NewReader(req.Body))
-		if err != nil {
-			return nil, err
-		}
-		httpReq.Header = headers.Clone()
-		return c.httpClient.Do(httpReq)
-	})
+	httpReq, err := http.NewRequestWithContext(ctx, method, requestURL, bytes.NewReader(req.Body))
 	if err != nil {
 		return err
 	}
-	defer closeResponse(httpResp)
+	httpReq.Header = headers.Clone()
 
-	body, err := io.ReadAll(httpResp.Body)
+	httpResp, body, err := httpclient.Execute(ctx, c.httpClient, c.retryPolicy, httpReq, req.Idempotent)
 	if err != nil {
-		return fmt.Errorf("read gcp response: %w", err)
+		return err
 	}
 	if err := DecodeError(httpResp.StatusCode, body); err != nil {
 		return err
 	}
-	if out == nil || len(body) == 0 || httpResp.StatusCode == http.StatusNoContent {
-		return nil
-	}
-	if err := json.Unmarshal(body, out); err != nil {
-		return fmt.Errorf("decode gcp response: %w", err)
-	}
-	return nil
+	return httpclient.DecodeJSON(httpResp, body, "gcp", out)
 }
 
 func resolveURL(baseURL, path string, query url.Values) (string, error) {
@@ -121,47 +105,10 @@ func resolveURL(baseURL, path string, query url.Values) (string, error) {
 	if baseURL == "" {
 		return "", fmt.Errorf("gcp client: empty base url")
 	}
-	parsed, err := url.Parse(baseURL + ensureLeadingSlash(path))
+	parsed, err := url.Parse(baseURL + httpclient.EnsureLeadingSlash(path))
 	if err != nil {
 		return "", err
 	}
-	parsed.RawQuery = cloneValues(query).Encode()
+	parsed.RawQuery = httpclient.CloneValues(query).Encode()
 	return parsed.String(), nil
-}
-
-func cloneHeader(headers http.Header) http.Header {
-	if headers == nil {
-		return http.Header{}
-	}
-	return headers.Clone()
-}
-
-func cloneValues(values url.Values) url.Values {
-	if values == nil {
-		return url.Values{}
-	}
-	cloned := make(url.Values, len(values))
-	for key, items := range values {
-		cloned[key] = append([]string(nil), items...)
-	}
-	return cloned
-}
-
-func ensureLeadingSlash(path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return "/"
-	}
-	if strings.HasPrefix(path, "/") {
-		return path
-	}
-	return "/" + path
-}
-
-func closeResponse(resp *http.Response) {
-	if resp == nil || resp.Body == nil {
-		return
-	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 8<<10))
-	_ = resp.Body.Close()
 }

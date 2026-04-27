@@ -8,15 +8,19 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
 )
 
 func TestRetryPolicyNonIdempotentDoesNotRetry(t *testing.T) {
 	var attempts int
 	policy := retryPolicy{
-		baseDelay: 500 * time.Millisecond,
-		sleep:     func(context.Context, time.Duration) error { return nil },
-		rand:      func() float64 { return 0 },
-		clock:     func() time.Time { return time.Unix(1700000000, 0) },
+		MaxAttempts: 3,
+		BaseDelay:  500 * time.Millisecond,
+		Sleep:      func(context.Context, time.Duration) error { return nil },
+		Rand:       func() float64 { return 0 },
+		Clock:      func() time.Time { return time.Unix(1700000000, 0) },
+		Classifier: gcpRetryClassifier,
 	}
 
 	resp, err := policy.Do(context.Background(), false, func() (*http.Response, error) {
@@ -38,13 +42,15 @@ func TestRetryPolicyIdempotentRetriesTwice(t *testing.T) {
 	var attempts int
 	var slept []time.Duration
 	policy := retryPolicy{
-		baseDelay: 500 * time.Millisecond,
-		sleep: func(_ context.Context, d time.Duration) error {
+		MaxAttempts: 3,
+		BaseDelay: 500 * time.Millisecond,
+		Sleep: func(_ context.Context, d time.Duration) error {
 			slept = append(slept, d)
 			return nil
 		},
-		rand:  func() float64 { return 0 },
-		clock: func() time.Time { return time.Unix(1700000000, 0) },
+		Rand:       func() float64 { return 0 },
+		Clock:      func() time.Time { return time.Unix(1700000000, 0) },
+		Classifier: gcpRetryClassifier,
 	}
 
 	resp, err := policy.Do(context.Background(), true, func() (*http.Response, error) {
@@ -72,13 +78,15 @@ func TestRetryPolicyUsesRetryAfterHeader(t *testing.T) {
 	var attempts int
 	var slept []time.Duration
 	policy := retryPolicy{
-		baseDelay: 500 * time.Millisecond,
-		sleep: func(_ context.Context, d time.Duration) error {
+		MaxAttempts: 3,
+		BaseDelay: 500 * time.Millisecond,
+		Sleep: func(_ context.Context, d time.Duration) error {
 			slept = append(slept, d)
 			return nil
 		},
-		rand:  func() float64 { return 0 },
-		clock: func() time.Time { return time.Unix(1700000000, 0) },
+		Rand:       func() float64 { return 0 },
+		Clock:      func() time.Time { return time.Unix(1700000000, 0) },
+		Classifier: gcpRetryClassifier,
 	}
 
 	_, err := policy.Do(context.Background(), true, func() (*http.Response, error) {
@@ -104,10 +112,12 @@ func TestRetryPolicyContextCancel(t *testing.T) {
 	cancel()
 
 	policy := retryPolicy{
-		baseDelay: 500 * time.Millisecond,
-		sleep:     sleepContext,
-		rand:      func() float64 { return 0 },
-		clock:     func() time.Time { return time.Unix(1700000000, 0) },
+		MaxAttempts: 3,
+		BaseDelay:  500 * time.Millisecond,
+		Sleep:      httpclient.SleepWithContext,
+		Rand:       func() float64 { return 0 },
+		Clock:      func() time.Time { return time.Unix(1700000000, 0) },
+		Classifier: gcpRetryClassifier,
 	}
 
 	_, err := policy.Do(ctx, true, func() (*http.Response, error) {

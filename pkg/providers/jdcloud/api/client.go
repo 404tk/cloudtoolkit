@@ -3,14 +3,13 @@ package api
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/auth"
 )
 
@@ -121,10 +120,10 @@ func (c *Client) DoJSON(ctx context.Context, req Request, out any) error {
 		return fmt.Errorf("jdcloud client: empty host")
 	}
 	signRegion := ResolveSigningRegion(req.Region)
-	requestPath := joinPath("/", version, req.Path)
-	query := cloneValues(req.Query)
+	requestPath := httpclient.JoinPath("/", version, req.Path)
+	query := httpclient.CloneValues(req.Query)
 	body := append([]byte(nil), req.Body...)
-	headers := cloneHeader(req.Headers)
+	headers := httpclient.CloneHeader(req.Headers)
 	contentType := strings.TrimSpace(headers.Get("Content-Type"))
 	if contentType == "" {
 		contentType = "application/json"
@@ -142,7 +141,7 @@ func (c *Client) DoJSON(ctx context.Context, req Request, out any) error {
 		Method:       method,
 		Host:         logicalHost,
 		Path:         requestPath,
-		Query:        cloneValues(query),
+		Query:        httpclient.CloneValues(query),
 		Body:         body,
 		ContentType:  contentType,
 		Service:      service,
@@ -183,34 +182,21 @@ func (c *Client) DoJSON(ctx context.Context, req Request, out any) error {
 	}
 
 	idempotent := req.Idempotent || method == http.MethodGet || method == http.MethodHead || method == http.MethodPut || method == http.MethodDelete
-	httpResp, err := c.retryPolicy.Do(ctx, idempotent, func() (*http.Response, error) {
-		httpReq, err := http.NewRequestWithContext(ctx, method, requestURL.String(), bytes.NewReader(body))
-		if err != nil {
-			return nil, err
-		}
-		httpReq.Host = logicalHost
-		httpReq.Header = finalHeaders.Clone()
-		return c.httpClient.Do(httpReq)
-	})
+	httpReq, err := http.NewRequestWithContext(ctx, method, requestURL.String(), bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
-	defer closeResponse(httpResp)
+	httpReq.Host = logicalHost
+	httpReq.Header = finalHeaders.Clone()
 
-	respBody, err := io.ReadAll(httpResp.Body)
+	httpResp, respBody, err := httpclient.Execute(ctx, c.httpClient, c.retryPolicy, httpReq, idempotent)
 	if err != nil {
-		return fmt.Errorf("read jdcloud response: %w", err)
+		return err
 	}
 	if err := annotateError(DecodeError(httpResp.StatusCode, respBody), service, ""); err != nil {
 		return err
 	}
-	if out == nil || len(respBody) == 0 {
-		return nil
-	}
-	if err := json.Unmarshal(respBody, out); err != nil {
-		return fmt.Errorf("decode jdcloud response: %w", err)
-	}
-	return nil
+	return httpclient.DecodeJSON(httpResp, respBody, "jdcloud", out)
 }
 
 func (c *Client) resolveNetworkEndpoint(logicalHost, requestPath string) (scheme, host, fullPath string, err error) {
@@ -220,53 +206,5 @@ func (c *Client) resolveNetworkEndpoint(logicalHost, requestPath string) (scheme
 	if strings.TrimSpace(c.baseURL.Scheme) == "" || strings.TrimSpace(c.baseURL.Host) == "" {
 		return "", "", "", fmt.Errorf("jdcloud client: invalid base url %q", c.baseURL.String())
 	}
-	return c.baseURL.Scheme, c.baseURL.Host, joinPath(c.baseURL.Path, requestPath), nil
-}
-
-func cloneValues(values url.Values) url.Values {
-	if len(values) == 0 {
-		return url.Values{}
-	}
-	cloned := make(url.Values, len(values))
-	for key, items := range values {
-		cloned[key] = append([]string(nil), items...)
-	}
-	return cloned
-}
-
-func cloneHeader(headers http.Header) http.Header {
-	if len(headers) == 0 {
-		return http.Header{}
-	}
-	return headers.Clone()
-}
-
-func joinPath(parts ...string) string {
-	result := ""
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-		if result == "" {
-			result = ensureLeadingSlash(part)
-			continue
-		}
-		result = strings.TrimRight(result, "/") + "/" + strings.TrimLeft(part, "/")
-	}
-	if result == "" {
-		return "/"
-	}
-	return result
-}
-
-func ensureLeadingSlash(path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return "/"
-	}
-	if strings.HasPrefix(path, "/") {
-		return path
-	}
-	return "/" + path
+	return c.baseURL.Scheme, c.baseURL.Host, httpclient.JoinPath(c.baseURL.Path, requestPath), nil
 }

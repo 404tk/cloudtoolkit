@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/aws/auth"
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
 )
 
 type SignInput struct {
@@ -138,7 +139,7 @@ func buildCanonicalHeaders(host, contentType, amzDate, sessionToken string, payl
 }
 
 func canonicalURI(path string) string {
-	path = ensureLeadingSlash(path)
+	path = httpclient.EnsureLeadingSlash(path)
 	if path == "/" {
 		return path
 	}

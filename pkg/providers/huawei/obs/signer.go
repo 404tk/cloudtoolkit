@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
 )
 
 const (
@@ -173,7 +175,7 @@ func canonicalOBSHeaders(headers map[string]string) string {
 }
 
 func canonicalResource(path string, query url.Values) string {
-	resource := ensureLeadingSlash(path)
+	resource := httpclient.EnsureLeadingSlash(path)
 	if len(query) == 0 {
 		return resource
 	}
@@ -248,15 +250,4 @@ func firstHeaderValue(headers http.Header, name string) string {
 		}
 	}
 	return ""
-}
-
-func ensureLeadingSlash(path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return "/"
-	}
-	if strings.HasPrefix(path, "/") {
-		return path
-	}
-	return "/" + path
 }

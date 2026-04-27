@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/auth"
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
 )
 
 type SignInput struct {
@@ -24,7 +25,7 @@ func (s RPCSigner) Sign(credential auth.Credential, input SignInput) (url.Values
 	if err := credential.Validate(); err != nil {
 		return nil, err
 	}
-	params := cloneValues(input.Params)
+	params := httpclient.CloneValues(input.Params)
 	params.Del("Signature")
 	stringToSign := buildRPCStringToSign(input.Method, params)
 	params.Set("Signature", signHMAC1(stringToSign, credential.AccessKeySecret+"&"))

@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
 	volcapi "github.com/404tk/cloudtoolkit/pkg/providers/volcengine/api"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/auth"
 )
@@ -162,7 +163,7 @@ func (c *Client) doJSON(ctx context.Context, req request, out any) error {
 	if err != nil {
 		return err
 	}
-	defer closeResponse(httpResp)
+	defer httpclient.CloseResponse(httpResp)
 
 	respBody, err := io.ReadAll(httpResp.Body)
 	if err != nil {
@@ -242,13 +243,13 @@ func (c *Client) requestURL(host, path string, query url.Values) (*url.URL, erro
 	base := &url.URL{
 		Scheme: "https",
 		Host:   host,
-		Path:   ensureLeadingSlash(path),
+		Path:   httpclient.EnsureLeadingSlash(path),
 	}
 	if c.baseURL != nil {
 		base = &url.URL{
 			Scheme: c.baseURL.Scheme,
 			Host:   c.baseURL.Host,
-			Path:   joinPath(c.baseURL.Path, ensureLeadingSlash(path)),
+			Path:   httpclient.JoinPath(c.baseURL.Path, httpclient.EnsureLeadingSlash(path)),
 		}
 	}
 	base.RawQuery = canonicalQueryString(query)
@@ -338,7 +339,7 @@ func canonicalQueryString(values url.Values) string {
 }
 
 func canonicalURI(path string) string {
-	path = ensureLeadingSlash(path)
+	path = httpclient.EnsureLeadingSlash(path)
 	if path == "/" {
 		return "/"
 	}
@@ -347,17 +348,6 @@ func canonicalURI(path string) string {
 		parts[i] = percentEncodeRFC3986(part)
 	}
 	return strings.Join(parts, "/")
-}
-
-func ensureLeadingSlash(path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return "/"
-	}
-	if strings.HasPrefix(path, "/") {
-		return path
-	}
-	return "/" + path
 }
 
 func percentEncodeRFC3986(value string) string {
@@ -403,27 +393,6 @@ func hmacSHA256(key []byte, value string) []byte {
 	mac := hmac.New(sha256.New, key)
 	_, _ = mac.Write([]byte(value))
 	return mac.Sum(nil)
-}
-
-func closeResponse(resp *http.Response) {
-	if resp == nil || resp.Body == nil {
-		return
-	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 8<<10))
-	_ = resp.Body.Close()
-}
-
-func joinPath(base, path string) string {
-	switch {
-	case base == "":
-		return path
-	case strings.HasSuffix(base, "/") && strings.HasPrefix(path, "/"):
-		return base + strings.TrimPrefix(path, "/")
-	case strings.HasSuffix(base, "/") || strings.HasPrefix(path, "/"):
-		return base + path
-	default:
-		return base + "/" + path
-	}
 }
 
 var upperhex = "0123456789ABCDEF"

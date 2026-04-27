@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/api"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/auth"
 )
@@ -100,7 +101,7 @@ func (c *Client) ListBuckets(ctx context.Context) (*ListBucketsResponse, error) 
 	if httpResp == nil {
 		return nil, fmt.Errorf("tencent cos client: empty response")
 	}
-	defer closeResponse(httpResp)
+	defer httpclient.CloseResponse(httpResp)
 
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
@@ -166,7 +167,7 @@ func (c *Client) ListObjects(ctx context.Context, bucket, region, marker string,
 	if httpResp == nil {
 		return ListObjectsResponse{}, fmt.Errorf("tencent cos client: empty response")
 	}
-	defer closeResponse(httpResp)
+	defer httpclient.CloseResponse(httpResp)
 
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
@@ -217,12 +218,4 @@ func (c *Client) bucketURL(bucket, region string) (*url.URL, error) {
 		u.Path = "/"
 	}
 	return u, nil
-}
-
-func closeResponse(resp *http.Response) {
-	if resp == nil || resp.Body == nil {
-		return
-	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 8<<10))
-	_ = resp.Body.Close()
 }

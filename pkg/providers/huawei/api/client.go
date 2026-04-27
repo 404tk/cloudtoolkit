@@ -3,9 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -13,6 +11,7 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/auth"
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/endpoint"
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
 )
 
 type Request struct {
@@ -32,7 +31,7 @@ type Option func(*Client)
 type Client struct {
 	credential  auth.Credential
 	httpClient  *http.Client
-	retryPolicy RetryPolicy
+	retryPolicy Retryer
 	now         func() time.Time
 	baseURL     *url.URL
 }
@@ -58,7 +57,7 @@ func WithHTTPClient(hc *http.Client) Option {
 	}
 }
 
-func WithRetryPolicy(p RetryPolicy) Option {
+func WithRetryPolicy(p Retryer) Option {
 	return func(c *Client) {
 		if p != nil {
 			c.retryPolicy = p
@@ -107,7 +106,7 @@ func (c *Client) DoJSON(ctx context.Context, req Request, out any) error {
 	}
 
 	body := append([]byte(nil), req.Body...)
-	headers := cloneHeader(req.Headers)
+	headers := httpclient.CloneHeader(req.Headers)
 	if len(body) > 0 && strings.TrimSpace(headers.Get("Content-Type")) == "" {
 		headers.Set("Content-Type", "application/json;charset=UTF-8")
 	}
@@ -116,7 +115,7 @@ func (c *Client) DoJSON(ctx context.Context, req Request, out any) error {
 		Method:    method,
 		Host:      host,
 		Path:      path,
-		Query:     cloneValues(req.Query),
+		Query:     httpclient.CloneValues(req.Query),
 		Headers:   flattenHeaders(headers),
 		Body:      body,
 		AccessKey: c.credential.AK,
@@ -140,38 +139,25 @@ func (c *Client) DoJSON(ctx context.Context, req Request, out any) error {
 		Scheme:   scheme,
 		Host:     host,
 		Path:     path,
-		RawQuery: cloneValues(req.Query).Encode(),
+		RawQuery: httpclient.CloneValues(req.Query).Encode(),
 	}
 
 	idempotent := req.Idempotent || method == http.MethodGet
-	httpResp, err := c.retryPolicy.Do(ctx, idempotent, func() (*http.Response, error) {
-		httpReq, err := http.NewRequestWithContext(ctx, method, requestURL.String(), bytes.NewReader(body))
-		if err != nil {
-			return nil, err
-		}
-		httpReq.Host = host
-		httpReq.Header = finalHeaders.Clone()
-		return c.httpClient.Do(httpReq)
-	})
+	httpReq, err := http.NewRequestWithContext(ctx, method, requestURL.String(), bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
-	defer closeResponse(httpResp)
+	httpReq.Host = host
+	httpReq.Header = finalHeaders.Clone()
 
-	respBody, err := io.ReadAll(httpResp.Body)
+	httpResp, respBody, err := executeWithRetry(ctx, c.httpClient, c.retryPolicy, httpReq, idempotent)
 	if err != nil {
-		return fmt.Errorf("read huawei response: %w", err)
+		return err
 	}
 	if err := withRequestID(DecodeError(httpResp.StatusCode, respBody), httpResp.Header.Get("X-Request-Id")); err != nil {
 		return err
 	}
-	if out == nil || len(respBody) == 0 {
-		return nil
-	}
-	if err := json.Unmarshal(respBody, out); err != nil {
-		return fmt.Errorf("decode huawei response: %w", err)
-	}
-	return nil
+	return httpclient.DecodeJSON(httpResp, respBody, "huawei", out)
 }
 
 func (c *Client) resolveEndpoint(req Request, service string) (string, string, string, error) {
@@ -189,7 +175,7 @@ func (c *Client) resolveEndpoint(req Request, service string) (string, string, s
 	if u.Scheme == "" || u.Host == "" {
 		return "", "", "", fmt.Errorf("huawei client: invalid endpoint %q", base)
 	}
-	return u.Scheme, u.Host, joinPath(u.Path, ensureLeadingSlash(req.Path)), nil
+	return u.Scheme, u.Host, httpclient.JoinPath(u.Path, req.Path), nil
 }
 
 func flattenHeaders(headers http.Header) map[string]string {
@@ -202,35 +188,6 @@ func flattenHeaders(headers http.Header) map[string]string {
 		flattened[name] = strings.Join(values, ",")
 	}
 	return flattened
-}
-
-func cloneHeader(headers http.Header) http.Header {
-	if headers == nil {
-		return http.Header{}
-	}
-	return headers.Clone()
-}
-
-func cloneValues(values url.Values) url.Values {
-	if values == nil {
-		return url.Values{}
-	}
-	cloned := make(url.Values, len(values))
-	for key, items := range values {
-		cloned[key] = append([]string(nil), items...)
-	}
-	return cloned
-}
-
-func joinPath(basePath, requestPath string) string {
-	switch {
-	case basePath == "", basePath == "/":
-		return ensureLeadingSlash(requestPath)
-	case requestPath == "", requestPath == "/":
-		return ensureLeadingSlash(basePath)
-	default:
-		return strings.TrimRight(basePath, "/") + ensureLeadingSlash(requestPath)
-	}
 }
 
 func isReservedHeader(name string) bool {

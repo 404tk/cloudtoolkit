@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -13,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
 	ucloudauth "github.com/404tk/cloudtoolkit/pkg/providers/ucloud/auth"
 )
 
@@ -22,19 +22,21 @@ const (
 )
 
 type Request struct {
-	Action    string
-	Region    string
-	ProjectID string
-	Params    map[string]any
+	Action     string
+	Region     string
+	ProjectID  string
+	Params     map[string]any
+	Idempotent bool
 }
 
 type Option func(*Client)
 
 type Client struct {
-	baseURL    string
-	credential ucloudauth.Credential
-	httpClient *http.Client
-	projectID  string
+	baseURL     string
+	credential  ucloudauth.Credential
+	httpClient  *http.Client
+	retryPolicy RetryPolicy
+	projectID   string
 }
 
 type APIError struct {
@@ -60,9 +62,10 @@ func (e *APIError) Error() string {
 
 func NewClient(credential ucloudauth.Credential, opts ...Option) *Client {
 	client := &Client{
-		baseURL:    DefaultBaseURL,
-		credential: credential,
-		httpClient: &http.Client{Timeout: 30 * time.Second},
+		baseURL:     DefaultBaseURL,
+		credential:  credential,
+		httpClient:  &http.Client{Timeout: 30 * time.Second},
+		retryPolicy: DefaultRetryPolicy(),
 	}
 	for _, opt := range opts {
 		opt(client)
@@ -90,6 +93,12 @@ func WithHTTPClient(httpClient *http.Client) Option {
 func WithProjectID(projectID string) Option {
 	return func(c *Client) {
 		c.projectID = strings.TrimSpace(projectID)
+	}
+}
+
+func WithRetryPolicy(policy RetryPolicy) Option {
+	return func(c *Client) {
+		c.retryPolicy = policy
 	}
 }
 
@@ -140,17 +149,10 @@ func (c *Client) Do(ctx context.Context, req Request, out any) error {
 		return err
 	}
 
-	httpResp, err := c.httpClient.Do(httpReq)
+	httpResp, body, err := httpclient.Execute(ctx, c.httpClient, c.retryPolicy, httpReq, req.Idempotent || isIdempotentAction(action))
 	if err != nil {
 		return err
 	}
-	defer closeResponse(httpResp)
-
-	body, err := io.ReadAll(httpResp.Body)
-	if err != nil {
-		return fmt.Errorf("read ucloud response: %w", err)
-	}
-
 	return c.decodeResponse(req.Action, httpResp.StatusCode, body, out)
 }
 
@@ -216,18 +218,7 @@ func (c *Client) decodeResponse(action string, statusCode int, body []byte, out 
 		}
 		return nil
 	}
-	if err := json.Unmarshal(body, out); err != nil {
-		return fmt.Errorf("decode ucloud response: %w", err)
-	}
-	return nil
-}
-
-func closeResponse(resp *http.Response) {
-	if resp == nil || resp.Body == nil {
-		return
-	}
-	_, _ = io.Copy(io.Discard, resp.Body)
-	_ = resp.Body.Close()
+	return httpclient.DecodeJSON(nil, body, "ucloud", out)
 }
 
 func encodeForm(params map[string]any) (map[string]string, error) {
@@ -326,4 +317,9 @@ func sortedReflectStringMapKeys(value reflect.Value) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+func isIdempotentAction(action string) bool {
+	action = strings.TrimSpace(action)
+	return strings.HasPrefix(action, "Get") || strings.HasPrefix(action, "List") || strings.HasPrefix(action, "Describe")
 }

@@ -98,15 +98,18 @@ func TestClientRetryAfter429(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := newTestClient(server, retryPolicy{
-		baseDelay: 0,
-		sleep: func(_ context.Context, d time.Duration) error {
+	policy := retryPolicy{
+		MaxAttempts: 3,
+		BaseDelay: 0,
+		Sleep: func(_ context.Context, d time.Duration) error {
 			slept = append(slept, d)
 			return nil
 		},
-		rand:  func() float64 { return 0 },
-		clock: func() time.Time { return time.Unix(1700000000, 0) },
-	})
+		Rand:       func() float64 { return 0 },
+		Clock:      func() time.Time { return time.Unix(1700000000, 0) },
+		Classifier: gcpRetryClassifier,
+	}
+	client := newTestClient(server, &policy)
 
 	var payload map[string]string
 	if err := client.Do(context.Background(), Request{
@@ -191,7 +194,7 @@ func TestClientFallsBackForHTMLErrorBody(t *testing.T) {
 	}
 }
 
-func newTestClient(server *httptest.Server, policy RetryPolicy) *Client {
+func newTestClient(server *httptest.Server, policy *RetryPolicy) *Client {
 	httpClient := server.Client()
 	ts := auth.NewTokenSource(auth.Credential{
 		Type:          "service_account",
@@ -204,7 +207,7 @@ func newTestClient(server *httptest.Server, policy RetryPolicy) *Client {
 	}, httpClient)
 	opts := []Option{WithHTTPClient(httpClient)}
 	if policy != nil {
-		opts = append(opts, WithRetryPolicy(policy))
+		opts = append(opts, WithRetryPolicy(*policy))
 	}
 	return NewClient(ts, opts...)
 }

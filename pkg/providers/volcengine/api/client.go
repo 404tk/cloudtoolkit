@@ -3,14 +3,13 @@ package api
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/auth"
 )
 
@@ -118,7 +117,7 @@ func (c *Client) DoOpenAPI(ctx context.Context, req Request, out any) error {
 	if method == "" {
 		method = http.MethodGet
 	}
-	query := cloneValues(req.Query)
+	query := httpclient.CloneValues(req.Query)
 	query.Set("Action", action)
 	query.Set("Version", version)
 
@@ -136,7 +135,7 @@ func (c *Client) DoOpenAPI(ctx context.Context, req Request, out any) error {
 	if method == http.MethodPost {
 		body = append([]byte(nil), req.Body...)
 	}
-	headers := cloneHeader(req.Headers)
+	headers := httpclient.CloneHeader(req.Headers)
 	contentType := strings.TrimSpace(headers.Get("Content-Type"))
 	if contentType == "" {
 		switch {
@@ -155,7 +154,7 @@ func (c *Client) DoOpenAPI(ctx context.Context, req Request, out any) error {
 		Method:       method,
 		Host:         host,
 		Path:         path,
-		Query:        cloneValues(query),
+		Query:        httpclient.CloneValues(query),
 		Body:         body,
 		ContentType:  contentType,
 		Service:      service,
@@ -186,34 +185,21 @@ func (c *Client) DoOpenAPI(ctx context.Context, req Request, out any) error {
 		RawQuery: canonicalQueryString(query),
 	}
 	idempotent := req.Idempotent || method == http.MethodGet
-	httpResp, err := c.retryPolicy.Do(ctx, idempotent, func() (*http.Response, error) {
-		httpReq, err := http.NewRequestWithContext(ctx, method, requestURL.String(), bytes.NewReader(body))
-		if err != nil {
-			return nil, err
-		}
-		httpReq.Host = host
-		httpReq.Header = finalHeaders.Clone()
-		return c.httpClient.Do(httpReq)
-	})
+	httpReq, err := http.NewRequestWithContext(ctx, method, requestURL.String(), bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
-	defer closeResponse(httpResp)
+	httpReq.Host = host
+	httpReq.Header = finalHeaders.Clone()
 
-	respBody, err := io.ReadAll(httpResp.Body)
+	httpResp, respBody, err := httpclient.Execute(ctx, c.httpClient, c.retryPolicy, httpReq, idempotent)
 	if err != nil {
-		return fmt.Errorf("read volcengine response: %w", err)
+		return err
 	}
 	if err := annotateError(DecodeError(httpResp.StatusCode, respBody), service, action); err != nil {
 		return err
 	}
-	if out == nil || len(respBody) == 0 {
-		return nil
-	}
-	if err := json.Unmarshal(respBody, out); err != nil {
-		return fmt.Errorf("decode volcengine response: %w", err)
-	}
-	return nil
+	return httpclient.DecodeJSON(httpResp, respBody, "volcengine", out)
 }
 
 func (c *Client) resolveEndpoint(req Request, service, region string) (string, string, string, error) {
@@ -228,7 +214,7 @@ func (c *Client) resolveEndpoint(req Request, service, region string) (string, s
 	if u.Scheme == "" || u.Host == "" {
 		return "", "", "", fmt.Errorf("volcengine client: invalid endpoint %q", base)
 	}
-	return u.Scheme, u.Host, joinPath(u.Path, ensureLeadingSlash(req.Path)), nil
+	return u.Scheme, u.Host, httpclient.JoinPath(u.Path, req.Path), nil
 }
 
 func effectiveRegion(region string) string {
@@ -237,33 +223,4 @@ func effectiveRegion(region string) string {
 		return DefaultRegion
 	}
 	return region
-}
-
-func cloneHeader(headers http.Header) http.Header {
-	if headers == nil {
-		return http.Header{}
-	}
-	return headers.Clone()
-}
-
-func cloneValues(values url.Values) url.Values {
-	if values == nil {
-		return url.Values{}
-	}
-	cloned := make(url.Values, len(values))
-	for key, items := range values {
-		cloned[key] = append([]string(nil), items...)
-	}
-	return cloned
-}
-
-func joinPath(base, path string) string {
-	switch {
-	case base == "" || base == "/":
-		return ensureLeadingSlash(path)
-	case path == "" || path == "/":
-		return ensureLeadingSlash(base)
-	default:
-		return strings.TrimRight(base, "/") + ensureLeadingSlash(path)
-	}
 }

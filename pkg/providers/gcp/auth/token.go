@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
 )
 
 type Token struct {
@@ -115,7 +117,7 @@ func (s *TokenSource) fetch(ctx context.Context, now time.Time) (Token, error) {
 	if err != nil {
 		return Token{}, err
 	}
-	defer closeResponse(resp)
+	defer httpclient.CloseResponse(resp)
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -167,12 +169,4 @@ func (s *TokenSource) now() time.Time {
 		return s.clock()
 	}
 	return time.Now()
-}
-
-func closeResponse(resp *http.Response) {
-	if resp == nil || resp.Body == nil {
-		return
-	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 8<<10))
-	_ = resp.Body.Close()
 }

@@ -5,13 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/auth"
 )
 
@@ -181,41 +181,27 @@ func (c *Client) Do(ctx context.Context, req Request, resp any) error {
 		Path:     finalPath,
 		RawQuery: query,
 	}
-
-	httpResp, err := c.retryPolicy.Do(ctx, req.Idempotent, func() (*http.Response, error) {
-		httpReq, err := http.NewRequestWithContext(ctx, method, requestURL.String(), bytes.NewReader(payload))
-		if err != nil {
-			return nil, err
-		}
-		httpReq.Host = host
-		httpReq.Header = headers.Clone()
-		return c.httpClient.Do(httpReq)
-	})
+	httpReq, err := http.NewRequestWithContext(ctx, method, requestURL.String(), bytes.NewReader(payload))
 	if err != nil {
 		return err
 	}
-	defer closeResponse(httpResp)
+	httpReq.Host = host
+	httpReq.Header = headers.Clone()
 
-	body, err := io.ReadAll(httpResp.Body)
+	httpResp, body, err := httpclient.Execute(ctx, c.httpClient, c.retryPolicy, httpReq, req.Idempotent)
 	if err != nil {
-		return fmt.Errorf("read tencent response: %w", err)
+		return err
 	}
 	if err := DecodeError(httpResp.StatusCode, body); err != nil {
 		return err
 	}
-	if resp == nil || len(body) == 0 {
-		return nil
-	}
-	if err := json.Unmarshal(body, resp); err != nil {
-		return fmt.Errorf("decode tencent response: %w", err)
-	}
-	return nil
+	return httpclient.DecodeJSON(httpResp, body, "tencent", resp)
 }
 
 func (c *Client) resolveEndpoint(overrideHost, overrideScheme, path, service string) (string, string, string) {
 	scheme := "https"
 	host := service + ".tencentcloudapi.com"
-	finalPath := ensureLeadingSlash(path)
+	finalPath := httpclient.EnsureLeadingSlash(path)
 
 	if c.baseURL != nil {
 		if c.baseURL.Scheme != "" {
@@ -224,7 +210,7 @@ func (c *Client) resolveEndpoint(overrideHost, overrideScheme, path, service str
 		if c.baseURL.Host != "" {
 			host = c.baseURL.Host
 		}
-		finalPath = joinPath(c.baseURL.Path, finalPath)
+		finalPath = httpclient.JoinPath(c.baseURL.Path, finalPath)
 	}
 	if overrideScheme != "" {
 		scheme = overrideScheme
@@ -281,29 +267,6 @@ func marshalBody(method string, body any) ([]byte, error) {
 		return nil, fmt.Errorf("encode tencent request: %w", err)
 	}
 	return payload, nil
-}
-
-func ensureLeadingSlash(path string) string {
-	if path == "" {
-		return "/"
-	}
-	if strings.HasPrefix(path, "/") {
-		return path
-	}
-	return "/" + path
-}
-
-func joinPath(basePath, requestPath string) string {
-	basePath = strings.TrimRight(basePath, "/")
-	requestPath = ensureLeadingSlash(requestPath)
-	switch {
-	case basePath == "":
-		return requestPath
-	case requestPath == "/":
-		return basePath
-	default:
-		return basePath + requestPath
-	}
 }
 
 func isReservedHeader(key string) bool {

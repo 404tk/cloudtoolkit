@@ -23,6 +23,7 @@ import (
 	aliauth "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/auth"
 	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/oss"
 	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/sls"
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
 )
 
 type authFailureKind int
@@ -639,7 +640,7 @@ func (t *transport) handleSLS(req *http.Request) (*http.Response, error) {
 }
 
 func verifyRPCAuth(req *http.Request) authFailureKind {
-	query := cloneValues(req.URL.Query())
+	query := httpclient.CloneValues(req.URL.Query())
 	if strings.TrimSpace(query.Get("AccessKeyId")) != DemoAccessKeyID {
 		return authInvalidAccessKey
 	}
@@ -791,14 +792,6 @@ func cloneRequest(req *http.Request) *http.Request {
 	clone.Header = req.Header.Clone()
 	clone.Host = req.Host
 	return clone
-}
-
-func cloneValues(values url.Values) url.Values {
-	cloned := make(url.Values, len(values))
-	for key, items := range values {
-		cloned[key] = append([]string(nil), items...)
-	}
-	return cloned
 }
 
 func parseInt(value string, fallback int) int {

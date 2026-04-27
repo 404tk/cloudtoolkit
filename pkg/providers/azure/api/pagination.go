@@ -3,6 +3,8 @@ package api
 import (
 	"context"
 	"net/url"
+
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
 )
 
 // Pager walks Azure ARM list responses that use nextLink.
@@ -27,8 +29,8 @@ func (p *Pager[T]) All(ctx context.Context) ([]T, error) {
 	req := Request{
 		Method:     p.req.Method,
 		Path:       p.req.Path,
-		Query:      cloneValues(p.req.Query),
-		Headers:    cloneHeader(p.req.Headers),
+		Query:      httpclient.CloneValues(p.req.Query),
+		Headers:    httpclient.CloneHeader(p.req.Headers),
 		Body:       append([]byte(nil), p.req.Body...),
 		Idempotent: p.req.Idempotent,
 	}

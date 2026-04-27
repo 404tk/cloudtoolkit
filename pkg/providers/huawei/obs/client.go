@@ -13,6 +13,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/api"
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/auth"
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/endpoint"
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
 )
 
 type Option func(*Client)
@@ -20,7 +21,7 @@ type Option func(*Client)
 type Client struct {
 	credential  auth.Credential
 	httpClient  *http.Client
-	retryPolicy api.RetryPolicy
+	retryPolicy api.Retryer
 	now         func() time.Time
 }
 
@@ -45,7 +46,7 @@ func WithHTTPClient(hc *http.Client) Option {
 	}
 }
 
-func WithRetryPolicy(p api.RetryPolicy) Option {
+func WithRetryPolicy(p api.Retryer) Option {
 	return func(c *Client) {
 		if p != nil {
 			c.retryPolicy = p
@@ -111,7 +112,7 @@ func (c *Client) ListBuckets(ctx context.Context, endpointRegion string) (*ListB
 	if httpResp == nil {
 		return nil, fmt.Errorf("huawei obs client: empty response")
 	}
-	defer closeResponse(httpResp)
+	defer httpclient.CloseResponse(httpResp)
 
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
@@ -195,7 +196,7 @@ func (c *Client) ListObjects(ctx context.Context, bucket, region, marker string,
 	if httpResp == nil {
 		return ListObjectsResponse{}, fmt.Errorf("huawei obs client: empty response")
 	}
-	defer closeResponse(httpResp)
+	defer httpclient.CloseResponse(httpResp)
 
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
@@ -213,12 +214,4 @@ func (c *Client) ListObjects(ctx context.Context, bucket, region, marker string,
 		return ListObjectsResponse{}, fmt.Errorf("decode huawei obs response: %w", err)
 	}
 	return out, nil
-}
-
-func closeResponse(resp *http.Response) {
-	if resp == nil || resp.Body == nil {
-		return
-	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 8<<10))
-	_ = resp.Body.Close()
 }

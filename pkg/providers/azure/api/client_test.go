@@ -109,12 +109,15 @@ func TestClientRetryAfter429(t *testing.T) {
 		WithHTTPClient(httpClient),
 		WithBaseURL(server.URL),
 		WithRetryPolicy(retryPolicy{
-			baseDelay: 0,
-			sleep: func(_ context.Context, d time.Duration) error {
+			MaxAttempts: 3,
+			BaseDelay: 0,
+			Sleep: func(_ context.Context, d time.Duration) error {
 				slept = append(slept, d)
 				return nil
 			},
-			rand: func() float64 { return 0 },
+			Rand:       func() float64 { return 0 },
+			Clock:      func() time.Time { return time.Unix(1700000000, 0) },
+			Classifier: azureRetryClassifier,
 		}),
 	)
 

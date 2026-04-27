@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
 )
 
 const (
@@ -120,7 +122,7 @@ func signedHeaderNames(headers map[string]string) []string {
 }
 
 func canonicalURI(path string) string {
-	parts := strings.Split(ensureLeadingSlash(path), "/")
+	parts := strings.Split(httpclient.EnsureLeadingSlash(path), "/")
 	escaped := make([]string, 0, len(parts))
 	for _, part := range parts {
 		escaped = append(escaped, escape(part))
@@ -196,17 +198,6 @@ func normalizeHost(host string) string {
 		}
 	}
 	return host
-}
-
-func ensureLeadingSlash(path string) string {
-	path = strings.TrimSpace(path)
-	if path == "" {
-		return "/"
-	}
-	if strings.HasPrefix(path, "/") {
-		return path
-	}
-	return "/" + path
 }
 
 func shouldEscape(c byte) bool {

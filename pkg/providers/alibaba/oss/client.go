@@ -12,6 +12,7 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/api"
 	aliauth "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/auth"
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
 )
 
 const (
@@ -103,7 +104,7 @@ func (c *Client) ListBuckets(ctx context.Context, region string) (*ListBucketsRe
 	if httpResp == nil {
 		return nil, fmt.Errorf("alibaba oss client: empty response")
 	}
-	defer closeResponse(httpResp)
+	defer httpclient.CloseResponse(httpResp)
 
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
@@ -171,7 +172,7 @@ func (c *Client) ListObjectsV2(ctx context.Context, bucket, region, continuation
 	if httpResp == nil {
 		return ListObjectsResponse{}, fmt.Errorf("alibaba oss client: empty response")
 	}
-	defer closeResponse(httpResp)
+	defer httpclient.CloseResponse(httpResp)
 
 	body, err := io.ReadAll(httpResp.Body)
 	if err != nil {
@@ -233,12 +234,4 @@ func normalizeServiceRegion(region string) string {
 		return defaultRegion
 	}
 	return region
-}
-
-func closeResponse(resp *http.Response) {
-	if resp == nil || resp.Body == nil {
-		return
-	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 8<<10))
-	_ = resp.Body.Close()
 }

@@ -251,10 +251,12 @@ func TestClientDoJSONRetriesNetworkErrorForGET(t *testing.T) {
 				}, nil
 			}),
 		}),
-		WithRetryPolicy(retryPolicy{
-			baseDelay: 0,
-			sleep:     func(context.Context, time.Duration) error { return nil },
-			rand:      func() float64 { return 0 },
+		WithRetryPolicy(RetryPolicy{
+			MaxAttempts: 2,
+			BaseDelay:   0,
+			Sleep:       func(context.Context, time.Duration) error { return nil },
+			Rand:        func() float64 { return 0 },
+			Classifier:  huaweiRetryClassifier,
 		}),
 		WithClock(func() time.Time { return time.Date(2026, 4, 19, 12, 0, 0, 0, time.UTC) }),
 	)
@@ -278,10 +280,12 @@ func newTestClient(baseURL string) *Client {
 		auth.New("AKID", "SECRET", "cn-north-4", false),
 		WithBaseURL(baseURL),
 		WithClock(func() time.Time { return time.Date(2026, 4, 19, 12, 0, 0, 0, time.UTC) }),
-		WithRetryPolicy(retryPolicy{
-			baseDelay: 0,
-			sleep:     func(context.Context, time.Duration) error { return nil },
-			rand:      func() float64 { return 0 },
+		WithRetryPolicy(RetryPolicy{
+			MaxAttempts: 2,
+			BaseDelay:   0,
+			Sleep:       func(context.Context, time.Duration) error { return nil },
+			Rand:        func() float64 { return 0 },
+			Classifier:  huaweiRetryClassifier,
 		}),
 	)
 }
