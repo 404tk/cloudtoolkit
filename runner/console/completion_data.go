@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	demoreplay "github.com/404tk/cloudtoolkit/pkg/providers/replay"
-	"github.com/404tk/cloudtoolkit/runner/payloads"
+	"github.com/404tk/cloudtoolkit/runner/catalog"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/argparse"
 	"github.com/404tk/cloudtoolkit/utils/cache"
@@ -90,97 +90,6 @@ var showTopicSuggestionsData = []prompt.Suggest{
 var versionSuggestionsData = []prompt.Suggest{
 	{Text: "Intl", Description: "international edition"},
 	{Text: "China", Description: "china edition"},
-}
-
-var regionSuggestionsByProvider = map[string][]prompt.Suggest{
-	"aws": {
-		{Text: "all", Description: "enumerate all configured regions"},
-		{Text: "us-east-1", Description: "N. Virginia"},
-		{Text: "us-east-2", Description: "Ohio"},
-		{Text: "us-west-1", Description: "N. California"},
-		{Text: "us-west-2", Description: "Oregon"},
-		{Text: "ap-east-1", Description: "Hong Kong"},
-		{Text: "ap-southeast-1", Description: "Singapore"},
-		{Text: "ap-southeast-2", Description: "Sydney"},
-		{Text: "ap-northeast-1", Description: "Tokyo"},
-		{Text: "ap-northeast-2", Description: "Seoul"},
-		{Text: "eu-west-1", Description: "Ireland"},
-		{Text: "eu-central-1", Description: "Frankfurt"},
-	},
-	"alibaba": {
-		{Text: "all", Description: "enumerate all configured regions"},
-		{Text: "cn-beijing", Description: "Beijing"},
-		{Text: "cn-hangzhou", Description: "Hangzhou"},
-		{Text: "cn-shanghai", Description: "Shanghai"},
-		{Text: "cn-shenzhen", Description: "Shenzhen"},
-		{Text: "cn-hongkong", Description: "Hong Kong"},
-		{Text: "ap-southeast-1", Description: "Singapore"},
-		{Text: "us-east-1", Description: "Virginia"},
-		{Text: "eu-central-1", Description: "Frankfurt"},
-	},
-	"tencent": {
-		{Text: "all", Description: "enumerate all configured regions"},
-		{Text: "ap-beijing", Description: "Beijing"},
-		{Text: "ap-shanghai", Description: "Shanghai"},
-		{Text: "ap-guangzhou", Description: "Guangzhou"},
-		{Text: "ap-hongkong", Description: "Hong Kong"},
-		{Text: "ap-singapore", Description: "Singapore"},
-		{Text: "ap-seoul", Description: "Seoul"},
-		{Text: "ap-tokyo", Description: "Tokyo"},
-	},
-	"huawei": {
-		{Text: "all", Description: "enumerate all configured regions"},
-		{Text: "cn-north-4", Description: "Beijing 4"},
-		{Text: "cn-east-3", Description: "Shanghai 1"},
-		{Text: "cn-south-1", Description: "Guangzhou"},
-		{Text: "ap-southeast-1", Description: "Hong Kong"},
-		{Text: "eu-west-101", Description: "Dublin"},
-	},
-	"volcengine": {
-		{Text: "all", Description: "enumerate all configured regions"},
-		{Text: "cn-beijing", Description: "Beijing"},
-		{Text: "cn-shanghai", Description: "Shanghai"},
-		{Text: "ap-southeast-1", Description: "Singapore"},
-	},
-	"jdcloud": {
-		{Text: "all", Description: "enumerate all configured regions"},
-		{Text: "cn-north-1", Description: "Beijing"},
-		{Text: "cn-east-2", Description: "Shanghai"},
-		{Text: "cn-east-1", Description: "Suqian"},
-		{Text: "cn-south-1", Description: "Guangzhou"},
-	},
-	"ucloud": {
-		{Text: "all", Description: "enumerate all accessible regions"},
-		{Text: "cn-bj2", Description: "Beijing"},
-		{Text: "cn-sh2", Description: "Shanghai"},
-		{Text: "cn-gd", Description: "Guangzhou"},
-		{Text: "hk", Description: "Hong Kong"},
-		{Text: "sg", Description: "Singapore"},
-		{Text: "us-ca", Description: "Los Angeles"},
-		{Text: "th-bkk", Description: "Bangkok"},
-		{Text: "ge-fra", Description: "Frankfurt"},
-	},
-}
-
-var metadataTemplatesByPayload = map[string][]prompt.Suggest{
-	"iam-user-check": {
-		{Text: "add <username> <password>", Description: "create a validation IAM user"},
-		{Text: "del <username>", Description: "remove a validation IAM user"},
-	},
-	"bucket-check": {
-		{Text: "list <bucket-name>", Description: "review bucket contents in an authorized environment"},
-		{Text: "total <bucket-name>", Description: "count objects in a bucket"},
-	},
-	"event-check": {
-		{Text: "dump all", Description: "review all relevant events"},
-		{Text: "dump <source-ip>", Description: "review events for one source IP"},
-	},
-	"rds-account-check": {
-		{Text: "useradd <instance-id>", Description: "provision a validation database account"},
-	},
-	"instance-cmd-check": {
-		{Text: "<instance-id> <cmd>", Description: "direct metadata syntax for one remote command; prefer `shell <instance-id>` for interactive use"},
-	},
 }
 
 func currentCompletionContext() CompletionContext {
@@ -309,11 +218,22 @@ func sessionIDSuggestions() []prompt.Suggest {
 }
 
 func getProviderRegionSuggestions(provider string) []prompt.Suggest {
-	return regionSuggestionsByProvider[provider]
+	return promptSuggestions(catalog.ProviderRegions(provider))
 }
 
 func getPayloadMetadataSuggestions(payload string) []prompt.Suggest {
-	return metadataTemplatesByPayload[payloads.ResolveName(payload)]
+	return promptSuggestions(catalog.PayloadMetadataSuggestions(payload))
+}
+
+func promptSuggestions(items []catalog.Suggestion) []prompt.Suggest {
+	suggestions := make([]prompt.Suggest, 0, len(items))
+	for _, item := range items {
+		suggestions = append(suggestions, prompt.Suggest{
+			Text:        item.Text,
+			Description: item.Description,
+		})
+	}
+	return suggestions
 }
 
 func getShellTargetSuggestions(ctx CompletionContext) []prompt.Suggest {
@@ -381,7 +301,7 @@ func shellTargetFromConfig(cfg map[string]string) string {
 	if cfg == nil {
 		return ""
 	}
-	if payloads.ResolveName(cfg[utils.Payload]) != "instance-cmd-check" {
+	if cfg[utils.Payload] != "instance-cmd-check" {
 		return ""
 	}
 	return shellTargetFromMetadata(cfg[utils.Metadata])

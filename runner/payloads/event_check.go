@@ -41,6 +41,4 @@ func (p EventCheck) Desc() string {
 
 func init() {
 	registerPayload("event-check", EventCheck{})
-	registerAlias("event-review", "event-check")
-	registerAlias("event-dump", "event-check")
 }

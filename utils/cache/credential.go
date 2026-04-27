@@ -21,6 +21,7 @@ type Credential struct {
 }
 
 func (cfg *InitCfg) CredInsert(user string, provider any, data map[string]string) {
+	cfg.ensureLoaded()
 	providerName := data[utils.Provider]
 	accessKey := credentialKey(provider, data)
 	uuid := utils.Md5Encode(accessKey + providerName)
@@ -59,6 +60,7 @@ func credentialKey(provider any, data map[string]string) string {
 }
 
 func (cfg *InitCfg) CredSelect(uuid string) string {
+	cfg.ensureLoaded()
 	cfg.mu.RLock()
 	defer cfg.mu.RUnlock()
 	for _, v := range cfg.Creds {
@@ -70,6 +72,7 @@ func (cfg *InitCfg) CredSelect(uuid string) string {
 }
 
 func (cfg *InitCfg) CredUpdate(uuid, data string) {
+	cfg.ensureLoaded()
 	cfg.mu.Lock()
 	defer cfg.mu.Unlock()
 	for k, v := range cfg.Creds {
@@ -81,6 +84,7 @@ func (cfg *InitCfg) CredUpdate(uuid, data string) {
 }
 
 func (cfg *InitCfg) CredNote(uuid, data string) {
+	cfg.ensureLoaded()
 	cfg.mu.Lock()
 	defer cfg.mu.Unlock()
 	for k, v := range cfg.Creds {
@@ -92,6 +96,7 @@ func (cfg *InitCfg) CredNote(uuid, data string) {
 }
 
 func (cfg *InitCfg) CredDelete(uuid string) {
+	cfg.ensureLoaded()
 	cfg.mu.Lock()
 	defer cfg.mu.Unlock()
 	for index, v := range cfg.Creds {

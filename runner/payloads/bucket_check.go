@@ -41,6 +41,4 @@ func (p BucketCheck) Desc() string {
 
 func init() {
 	registerPayload("bucket-check", BucketCheck{})
-	registerAlias("bucket-enumeration", "bucket-check")
-	registerAlias("bucket-dump", "bucket-check")
 }

@@ -40,6 +40,4 @@ func (p InstanceCmdCheck) Desc() string {
 
 func init() {
 	registerPayload("instance-cmd-check", InstanceCmdCheck{})
-	registerAlias("instance-command", "instance-cmd-check")
-	registerAlias("exec-command", "instance-cmd-check")
 }

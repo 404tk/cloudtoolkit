@@ -40,6 +40,4 @@ func (p RDSAccountCheck) Desc() string {
 
 func init() {
 	registerPayload("rds-account-check", RDSAccountCheck{})
-	registerAlias("database-account-validation", "rds-account-check")
-	registerAlias("database-account", "rds-account-check")
 }

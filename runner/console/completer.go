@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers"
+	"github.com/404tk/cloudtoolkit/runner/catalog"
 	"github.com/404tk/cloudtoolkit/runner/payloads"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/go-prompt"
@@ -15,23 +16,6 @@ var modules = func() (m []prompt.Suggest) {
 	}
 	return m
 }()
-
-var optionsDesc = map[string]string{
-	// utils.Provider:              "Vendor Name",
-	utils.Payload:               "Validation payload (Default: cloudlist)",
-	utils.AccessKey:             "Key ID",
-	utils.SecretKey:             "Secret",
-	utils.SecurityToken:         "Security Token (Optional)",
-	utils.Region:                "Region (Default: all)",
-	utils.ProjectID:             "Project ID (Optional; defaults to the account default project)",
-	utils.Version:               "International or custom edition (Optional)",
-	utils.AzureClientId:         "Key ID",
-	utils.AzureClientSecret:     "Secret",
-	utils.AzureTenantId:         "Tenant ID",
-	utils.AzureSubscriptionId:   "Subscription ID (Optional)",
-	utils.GCPserviceAccountJSON: "GCP Credential encoded through Base64",
-	utils.Metadata:              "Set the payload with additional arguments (Optional)",
-}
 
 var opt = []prompt.Suggest{
 	{Text: "options", Description: "Display options"},
@@ -242,7 +226,7 @@ func optionSuggestions(ctx CompletionContext) []prompt.Suggest {
 
 	suggestions := make([]prompt.Suggest, 0, len(keys))
 	for _, k := range keys {
-		if v, ok := optionsDesc[k]; ok {
+		if v := catalog.OptionDescription(k); v != "" {
 			suggestions = append(suggestions, prompt.Suggest{Text: k, Description: v})
 		}
 	}

@@ -14,33 +14,32 @@ import (
 
 type CloudList struct{}
 
-// assetPrintOrder keeps asset-inventory output stable regardless of the map
-// iteration order returned by Resources.Grouped().
-var assetPrintOrder = []struct {
-	key, label string
-}{
-	{schema.AssetHost, "Hosts"},
-	{schema.AssetStorage, "Storages"},
-	{schema.AssetUser, "Users"},
-	{schema.AssetDatabase, "Databases"},
-	{schema.AssetDomain, "Domains"},
-	{schema.AssetLog, "Log Service"},
+type CloudListResult struct {
+	Provider    string                 `json:"provider"`
+	Hosts       []schema.Host          `json:"hosts,omitempty"`
+	Storages    []schema.Storage       `json:"storages,omitempty"`
+	Users       []schema.User          `json:"users,omitempty"`
+	Databases   []schema.Database      `json:"databases,omitempty"`
+	Domains     []schema.Domain        `json:"domains,omitempty"`
+	Logs        []schema.Log           `json:"logs,omitempty"`
+	SMS         schema.Sms             `json:"sms,omitempty"`
+	Errors      []schema.ResourceError `json:"errors,omitempty"`
+	OutputFiles []string               `json:"output_files,omitempty"`
+}
+
+type cloudListExecution struct {
+	provider  string
+	path      string
+	resources schema.Resources
 }
 
 func (p CloudList) Run(ctx context.Context, config map[string]string) {
-	i, ok := loadInventory(config)
-	if !ok {
-		return
-	}
-	enum, ok := i.Providers.(schema.Enumerator)
-	if !ok {
-		logger.Error(fmt.Sprintf("%s does not support cloud asset inventory", i.Providers.Name()))
-		return
-	}
-
-	resources, err := enum.Resources(ctx)
-	if err != nil && len(resources.Errors) == 0 {
+	result, exec, err := p.result(ctx, config)
+	if err != nil {
 		logger.Error(err)
+		return
+	}
+	if result == nil {
 		return
 	}
 	select {
@@ -48,61 +47,124 @@ func (p CloudList) Run(ctx context.Context, config map[string]string) {
 		return
 	default:
 		e := env.From(ctx)
-		filename := time.Now().Format("20060102150405.log")
-		path := fmt.Sprintf("%s/%s_cloudlist_%s", e.LogDir, i.Providers.Name(), filename)
 		printGroup := func(tag string, items interface{}) {
 			fmt.Println(tag, "results:")
 			table.Output(items)
 			if e.LogEnable {
-				utils.WriteLog(path, tag+" results:")
-				table.FileOutput(path, items)
+				utils.WriteLog(exec.path, tag+" results:")
+				table.FileOutput(exec.path, items)
 			}
 		}
 
-		groups := resources.Grouped()
-		for _, entry := range assetPrintOrder {
-			items := groups[entry.key]
-			if len(items) == 0 {
+		if len(result.Hosts) > 0 {
+			printGroup("Hosts", result.Hosts)
+		}
+		if len(result.Storages) > 0 {
+			printGroup("Storages", result.Storages)
+		}
+		if len(result.Users) > 0 {
+			printGroup("Users", result.Users)
+		}
+		if len(result.Databases) > 0 {
+			printGroup("Databases", result.Databases)
+		}
+		for _, domain := range result.Domains {
+			if len(domain.Records) == 0 {
 				continue
 			}
-			if entry.key == schema.AssetDomain {
-				for _, a := range items {
-					domain, ok := a.(schema.Domain)
-					if !ok || len(domain.Records) == 0 {
-						continue
-					}
-					printGroup("Domain "+domain.DomainName, domain.Records)
-				}
-				continue
-			}
-			printGroup(entry.label, items)
+			printGroup("Domain "+domain.DomainName, domain.Records)
+		}
+		if len(result.Logs) > 0 {
+			printGroup("Log Service", result.Logs)
 		}
 
-		if len(resources.Sms.Signs) > 0 {
-			printGroup("SMS Signs", resources.Sms.Signs)
+		if len(result.SMS.Signs) > 0 {
+			printGroup("SMS Signs", result.SMS.Signs)
 		}
-		if len(resources.Sms.Templates) > 0 {
-			printGroup("SMS Templates", resources.Sms.Templates)
+		if len(result.SMS.Templates) > 0 {
+			printGroup("SMS Templates", result.SMS.Templates)
 		}
-		if resources.Sms.DailySize > 0 {
-			msg := fmt.Sprintf("The total number of SMS messages sent today is %v.", resources.Sms.DailySize)
+		if result.SMS.DailySize > 0 {
+			msg := fmt.Sprintf("The total number of SMS messages sent today is %v.", result.SMS.DailySize)
 			logger.Info(msg)
 		}
 
-		for _, item := range resources.Errors {
+		for _, item := range result.Errors {
 			logger.Error(fmt.Sprintf("%s failed: %s", item.Scope, item.Message))
 		}
 		if e.LogEnable {
-			logger.Info(fmt.Sprintf("Output written to [%s]", path))
-			if len(resources.Errors) > 0 {
+			logger.Info(fmt.Sprintf("Output written to [%s]", exec.path))
+			if len(result.Errors) > 0 {
 				logger.Error("Cloud asset enumeration completed with partial errors.")
 			}
-		} else if len(resources.Errors) > 0 {
+		} else if len(result.Errors) > 0 {
 			logger.Error("Cloud asset enumeration completed with partial errors.")
 		} else {
 			logger.Info("Done.")
 		}
 	}
+}
+
+func (p CloudList) Result(ctx context.Context, config map[string]string) (any, error) {
+	result, _, err := p.result(ctx, config)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func (p CloudList) result(ctx context.Context, config map[string]string) (*CloudListResult, cloudListExecution, error) {
+	i, err := inventoryFromConfig(config)
+	if err != nil {
+		return nil, cloudListExecution{}, err
+	}
+	enum, ok := i.Providers.(schema.Enumerator)
+	if !ok {
+		return nil, cloudListExecution{}, fmt.Errorf("%s does not support cloud asset inventory", i.Providers.Name())
+	}
+
+	resources, err := enum.Resources(ctx)
+	if err != nil && len(resources.Errors) == 0 {
+		return nil, cloudListExecution{}, err
+	}
+	exec := cloudListExecution{
+		provider:  i.Providers.Name(),
+		resources: resources,
+	}
+	if e := env.From(ctx); e.LogEnable {
+		filename := time.Now().Format("20060102150405.log")
+		exec.path = fmt.Sprintf("%s/%s_cloudlist_%s", e.LogDir, i.Providers.Name(), filename)
+	}
+	result := buildCloudListResult(exec)
+	return &result, exec, nil
+}
+
+func buildCloudListResult(exec cloudListExecution) CloudListResult {
+	result := CloudListResult{
+		Provider: exec.provider,
+		SMS:      exec.resources.Sms,
+		Errors:   append([]schema.ResourceError(nil), exec.resources.Errors...),
+	}
+	if exec.path != "" {
+		result.OutputFiles = []string{exec.path}
+	}
+	for _, asset := range exec.resources.Assets {
+		switch v := asset.(type) {
+		case schema.Host:
+			result.Hosts = append(result.Hosts, v)
+		case schema.Storage:
+			result.Storages = append(result.Storages, v)
+		case schema.User:
+			result.Users = append(result.Users, v)
+		case schema.Database:
+			result.Databases = append(result.Databases, v)
+		case schema.Domain:
+			result.Domains = append(result.Domains, v)
+		case schema.Log:
+			result.Logs = append(result.Logs, v)
+		}
+	}
+	return result
 }
 
 func (p CloudList) Desc() string {

@@ -44,6 +44,4 @@ func (p IAMUserCheck) Desc() string {
 
 func init() {
 	registerPayload("iam-user-check", IAMUserCheck{})
-	registerAlias("iam-user-validation", "iam-user-check")
-	registerAlias("backdoor-user", "iam-user-check")
 }

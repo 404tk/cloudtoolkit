@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/404tk/cloudtoolkit/runner/catalog"
 	"github.com/404tk/cloudtoolkit/runner/payloads"
 	"github.com/404tk/cloudtoolkit/utils"
 )
@@ -31,12 +32,6 @@ type helpTopic struct {
 	Usage    []string
 	Details  []string
 	Examples []string
-}
-
-type payloadHelp struct {
-	MetadataSyntax   []string
-	MetadataExamples []string
-	SafetyNotes      []string
 }
 
 var helpTopicOrder = []string{
@@ -128,7 +123,7 @@ var helpTopics = map[string]helpTopic{
 			"set metadata <payload-specific-args>",
 		},
 		Details: []string{
-			"`set payload <name>` resolves payload aliases to the canonical payload name.",
+			"`set payload <name>` stores the exact payload name used by `run`.",
 			"`set metadata` stores the payload-specific argument string used by `run`.",
 			"Changing the payload may reset metadata defaults for payloads that provide them.",
 		},
@@ -225,92 +220,6 @@ var helpTopics = map[string]helpTopic{
 	},
 }
 
-var payloadHelpDocs = map[string]payloadHelp{
-	"cloudlist": {
-		MetadataSyntax: []string{
-			"This payload does not require metadata.",
-		},
-		MetadataExamples: []string{
-			"set payload cloudlist",
-			"run",
-		},
-		SafetyNotes: []string{
-			"Cloud asset inventory is read-oriented, but still use it only in owned, lab, or explicitly authorized environments.",
-			"Provider credentials still need enough access to enumerate the resources you want to validate.",
-		},
-	},
-	"iam-user-check": {
-		MetadataSyntax: []string{
-			"set metadata <action> <username> <password>",
-			"`action` is typically `add` or `del`.",
-		},
-		MetadataExamples: []string{
-			"set metadata add demo-user 'TempPassw0rd!'",
-			"set metadata del demo-user cleanup-placeholder",
-		},
-		SafetyNotes: []string{
-			"Use dedicated test identities and remove them after validation.",
-			"Validate only in environments where creating or deleting IAM users is explicitly approved.",
-		},
-	},
-	"bucket-check": {
-		MetadataSyntax: []string{
-			"set metadata <action> <bucket-name>",
-			"`action` is typically `list` or `total`.",
-		},
-		MetadataExamples: []string{
-			"set metadata list ctk-validation-bucket",
-			"set metadata total ctk-validation-bucket",
-		},
-		SafetyNotes: []string{
-			"Use buckets created for validation or otherwise explicitly approved for review.",
-			"Reviewing bucket contents can expose sensitive data; align the test scope with the data owner first.",
-		},
-	},
-	"event-check": {
-		MetadataSyntax: []string{
-			"set metadata <action> <scope>",
-			"`action` is typically `dump`, and `<scope>` can be a source IP or `all`.",
-		},
-		MetadataExamples: []string{
-			"set metadata dump all",
-			"set metadata dump 198.51.100.24",
-		},
-		SafetyNotes: []string{
-			"Use event review in environments where log access is approved.",
-			"Treat event output as investigative data and handle it according to local retention and access policies.",
-		},
-	},
-	"rds-account-check": {
-		MetadataSyntax: []string{
-			"set metadata <action> <instance-id>",
-			"`action` is typically `useradd`.",
-		},
-		MetadataExamples: []string{
-			"set metadata useradd rm-1234567890",
-		},
-		SafetyNotes: []string{
-			"Run this only where creating validation database accounts is explicitly authorized.",
-			"Remove temporary accounts after testing and confirm the expected database privilege scope before execution.",
-		},
-	},
-	"instance-cmd-check": {
-		MetadataSyntax: []string{
-			"set metadata <instance-id> <cmd>",
-			"`shell <instance-id>` wraps this payload and forwards all non-local input as `<cmd>`.",
-		},
-		MetadataExamples: []string{
-			"set metadata i-1234567890abcdef0 whoami",
-			"set metadata i-1234567890abcdef0 'id && hostname'",
-			"shell i-1234567890abcdef0",
-		},
-		SafetyNotes: []string{
-			"Use only on instances that are owned, lab-managed, or explicitly authorized for command validation.",
-			"Remember that shell mode sends non-local input to the remote instance as a validation command.",
-		},
-	},
-}
-
 var helpOptionOrder = []string{
 	utils.AccessKey,
 	utils.SecretKey,
@@ -323,14 +232,6 @@ var helpOptionOrder = []string{
 	utils.AzureTenantId,
 	utils.AzureSubscriptionId,
 	utils.GCPserviceAccountJSON,
-}
-
-var sensitiveHelpOptions = map[string]struct{}{
-	utils.AccessKey:             {},
-	utils.SecretKey:             {},
-	utils.SecurityToken:         {},
-	utils.AzureClientSecret:     {},
-	utils.GCPserviceAccountJSON: {},
 }
 
 func currentHelpContext() HelpContext {
@@ -551,7 +452,7 @@ func renderPayloadHelp(ctx HelpContext, name string, metadataOnly bool) {
 		return
 	}
 
-	doc := payloadHelpDocs[resolved]
+	doc, _ := catalog.PayloadHelpFor(resolved)
 	var b strings.Builder
 	if metadataOnly {
 		writeHeader(&b, "Metadata Help: "+resolved)
@@ -571,7 +472,10 @@ func renderPayloadHelp(ctx HelpContext, name string, metadataOnly bool) {
 }
 
 func findVisiblePayload(name string) (payloads.Entry, string, bool) {
-	resolved := payloads.ResolveName(name)
+	_, resolved, ok := payloads.Lookup(name)
+	if !ok {
+		return payloads.Entry{}, "", false
+	}
 	for _, entry := range payloads.Visible() {
 		if entry.Name == resolved {
 			return entry, resolved, true
@@ -608,7 +512,7 @@ func providerRequiredOptionLines() []string {
 		if strings.TrimSpace(config[key]) != "" {
 			status = "set"
 		}
-		desc := optionsDesc[key]
+		desc := catalog.OptionDescription(key)
 		lines = append(lines, fmt.Sprintf("%s: %s - %s", key, status, desc))
 	}
 	if len(lines) == 0 {
@@ -706,7 +610,7 @@ func providerConfigKeys() []string {
 }
 
 func isOptionalHelpOption(key string) bool {
-	desc := optionsDesc[key]
+	desc := catalog.OptionDescription(key)
 	return strings.Contains(desc, "Optional") || strings.Contains(desc, "Default:")
 }
 
@@ -715,7 +619,7 @@ func summarizeConfigValue(key, value string) string {
 	if value == "" {
 		return "(empty)"
 	}
-	if _, ok := sensitiveHelpOptions[key]; ok {
+	if catalog.SensitiveOption(key) {
 		return "(set)"
 	}
 	if len(value) > 72 {

@@ -2,9 +2,31 @@ package processbar
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"strings"
 	"sync"
 )
+
+var (
+	outputMu sync.RWMutex
+	outputW  io.Writer
+)
+
+func SetOutput(w io.Writer) {
+	outputMu.Lock()
+	defer outputMu.Unlock()
+	outputW = w
+}
+
+func writer() io.Writer {
+	outputMu.RLock()
+	defer outputMu.RUnlock()
+	if outputW == nil {
+		return os.Stdout
+	}
+	return outputW
+}
 
 // RegionTracker renders one "[region] N found." line per region iteration,
 // collapsing zero-count regions into a single refreshing line and printing a
@@ -39,7 +61,7 @@ func (t *RegionTracker) Finish() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if !t.flag {
-		fmt.Printf("\n\033[F\033[K")
+		fmt.Fprintf(writer(), "\n\033[F\033[K")
 	}
 }
 
@@ -59,7 +81,7 @@ func (t *CountTracker) Update(tag string, count int) {
 	defer t.mu.Unlock()
 	progress := fmt.Sprintf("[%s] %d found.", tag, count)
 	progress += padTo(t.prevLength, len(progress))
-	fmt.Printf("\r%s", progress)
+	fmt.Fprintf(writer(), "\r%s", progress)
 	t.prevLength = len(progress)
 }
 
@@ -68,7 +90,7 @@ func (t *CountTracker) Update(tag string, count int) {
 func (t *CountTracker) Finish() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	fmt.Printf("\r")
+	fmt.Fprint(writer(), "\r")
 	t.prevLength = 0
 }
 
@@ -76,18 +98,18 @@ func regionPrint(region string, count, prev int, flag bool) (int, bool) {
 	progress := fmt.Sprintf("[%s] %d found.", region, count)
 	if count == 0 {
 		if flag {
-			fmt.Print(progress)
+			fmt.Fprint(writer(), progress)
 		} else {
 			progress += padTo(prev, len(progress))
-			fmt.Printf("\r%s", progress)
+			fmt.Fprintf(writer(), "\r%s", progress)
 		}
 		flag = false
 	} else {
 		if flag {
-			fmt.Println(progress)
+			fmt.Fprintln(writer(), progress)
 		} else {
 			progress += padTo(prev, len(progress))
-			fmt.Printf("\r%s\n", progress)
+			fmt.Fprintf(writer(), "\r%s\n", progress)
 		}
 		flag = true
 	}

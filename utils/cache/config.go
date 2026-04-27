@@ -16,10 +16,12 @@ type InitCfg struct {
 	Path  string
 	Creds []Credential
 	mu    sync.RWMutex
+	once  sync.Once
 }
 
 // Snapshot returns a shallow copy of Creds safe for iteration outside the package.
 func (cfg *InitCfg) Snapshot() []Credential {
+	cfg.ensureLoaded()
 	cfg.mu.RLock()
 	defer cfg.mu.RUnlock()
 	out := make([]Credential, len(cfg.Creds))
@@ -28,24 +30,24 @@ func (cfg *InitCfg) Snapshot() []Credential {
 }
 
 func init() {
-	Cfg = NewConfig()
+	Cfg = &InitCfg{}
 }
 
 func NewConfig() *InitCfg {
 	cfg := &InitCfg{}
-	path := filepath.Join(userHomeDir(), ".config/cloudtoolkit/config.json")
-	if v, _ := filepath.Glob(path); len(v) == 0 {
-		err := os.MkdirAll(filepath.Dir(path), 0700)
-		if err != nil {
-			logger.Error("Could not mkdir:", err.Error())
-			return cfg
-		}
-	} else {
-		_ = os.Chmod(path, 0600)
-	}
-	cfg.Path = path
-	cfg.Creds = getCreds(path)
+	cfg.ensureLoaded()
 	return cfg
+}
+
+func (cfg *InitCfg) ensureLoaded() {
+	cfg.once.Do(func() {
+		path := filepath.Join(userHomeDir(), ".config/cloudtoolkit/config.json")
+		cfg.Path = path
+		cfg.Creds = getCreds(path)
+		if _, err := os.Stat(path); err == nil {
+			_ = os.Chmod(path, 0600)
+		}
+	})
 }
 
 func getCreds(path string) (creds []Credential) {
@@ -65,6 +67,7 @@ func getCreds(path string) (creds []Credential) {
 }
 
 func SaveFile() {
+	Cfg.ensureLoaded()
 	Cfg.mu.RLock()
 	snapshot := make([]Credential, len(Cfg.Creds))
 	copy(snapshot, Cfg.Creds)
@@ -74,6 +77,11 @@ func SaveFile() {
 	data, err := json.MarshalIndent(snapshot, "", "\t")
 	if err != nil {
 		logger.Error("Failed to marshal credentials:", err.Error())
+		return
+	}
+	err = os.MkdirAll(filepath.Dir(path), 0700)
+	if err != nil {
+		logger.Error("Could not mkdir:", err.Error())
 		return
 	}
 	err = os.WriteFile(path, data, 0600)

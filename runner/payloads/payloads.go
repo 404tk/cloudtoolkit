@@ -3,6 +3,7 @@ package payloads
 import (
 	"context"
 	"sort"
+	"strings"
 
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
@@ -12,13 +13,16 @@ type Payload interface {
 	Desc() string
 }
 
+type ResultProducer interface {
+	Result(context.Context, map[string]string) (any, error)
+}
+
 type Entry struct {
 	Name    string
 	Payload Payload
 }
 
 var Payloads = make(map[string]Payload)
-var aliases = make(map[string]string)
 
 func registerPayload(pName string, p Payload) {
 	if _, ok := Payloads[pName]; ok {
@@ -27,24 +31,10 @@ func registerPayload(pName string, p Payload) {
 	Payloads[pName] = p
 }
 
-func registerAlias(alias, canonical string) {
-	if _, ok := aliases[alias]; ok {
-		logger.Error("Payload alias registered multiple times:", alias)
-	}
-	aliases[alias] = canonical
-}
-
-func ResolveName(name string) string {
-	if canonical, ok := aliases[name]; ok {
-		return canonical
-	}
-	return name
-}
-
 func Lookup(name string) (Payload, string, bool) {
-	resolved := ResolveName(name)
-	p, ok := Payloads[resolved]
-	return p, resolved, ok
+	name = strings.TrimSpace(name)
+	p, ok := Payloads[name]
+	return p, name, ok
 }
 
 func Visible() []Entry {

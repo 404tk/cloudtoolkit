@@ -99,7 +99,7 @@ func Executor(s string) {
 // instance-cmd-check is skipped here so the shell REPL, which enters a single
 // confirmation at session start, does not prompt on every keystroke.
 func confirmIfSensitive(config map[string]string) bool {
-	payload := payloads.ResolveName(config[utils.Payload])
+	payload := config[utils.Payload]
 	metadata := config[utils.Metadata]
 	parts := argparse.Split(metadata)
 	provider := config[utils.Provider]
@@ -169,13 +169,10 @@ func set(args []string) {
 
 	if _, ok := config[key]; ok || key == utils.Metadata || key == utils.Payload {
 		value := args[1]
-		if key == utils.Payload {
-			value = payloads.ResolveName(value)
-		}
 		config[key] = value
 		fmt.Printf("%s => %s\n", key, value)
 
-		if key == utils.Metadata && payloads.ResolveName(config[utils.Payload]) == "instance-cmd-check" {
+		if key == utils.Metadata && config[utils.Payload] == "instance-cmd-check" {
 			if target := shellTargetFromMetadata(value); target != "" {
 				rememberShellTarget(target, config[utils.Provider], "instance-cmd-check metadata")
 			}

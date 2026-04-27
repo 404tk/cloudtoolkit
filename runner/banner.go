@@ -18,3 +18,7 @@ const version = `0.2.7`
 func ShowBanner() {
 	fmt.Printf(banner, version)
 }
+
+func Version() string {
+	return version
+}

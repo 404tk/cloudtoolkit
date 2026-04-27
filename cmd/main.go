@@ -7,11 +7,16 @@ import (
 
 	"github.com/404tk/cloudtoolkit/runner"
 	"github.com/404tk/cloudtoolkit/runner/console"
+	"github.com/404tk/cloudtoolkit/runner/headless"
 	"github.com/404tk/cloudtoolkit/utils/cache"
 	"github.com/404tk/go-prompt"
 )
 
 func main() {
+	if len(os.Args) > 1 {
+		os.Exit(headless.Run(os.Args[1:]))
+	}
+
 	runner.ShowBanner()
 	_ = runner.InitConfig()
 

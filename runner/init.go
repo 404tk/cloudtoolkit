@@ -88,8 +88,7 @@ func firstDatabaseAccountConfig(values ...databaseAccountConfig) databaseAccount
 // As a side effect it pins the same env via env.SetActive so capability methods
 // without ctx (EventDump, parseRDSAccount) can fall back to env.Active().
 //
-// cmd/main.go calls this once at startup and threads the returned env through
-// to the REPL or headless dispatcher.
+// cmd/main.go calls this once when entering the interactive console.
 func InitConfig() *env.Env {
 	filename := resolveConfigPath()
 
@@ -105,6 +104,18 @@ func InitConfig() *env.Env {
 		_ = yaml.Unmarshal([]byte(defaultConfigFile), &cfg)
 	}
 
+	e := configToEnv(cfg)
+	env.SetActive(e)
+	return e
+}
+
+func DefaultEnv() *env.Env {
+	var cfg Config
+	_ = yaml.Unmarshal([]byte(defaultConfigFile), &cfg)
+	return configToEnv(cfg)
+}
+
+func configToEnv(cfg Config) *env.Env {
 	e := &env.Env{
 		LogEnable:    cfg.Common.LogEnable,
 		ListPolicies: cfg.Common.ListPolicies,
@@ -138,8 +149,6 @@ func InitConfig() *env.Env {
 		rdsAccountCheck.Username,
 		rdsAccountCheck.Password,
 	)
-
-	env.SetActive(e)
 	return e
 }
 

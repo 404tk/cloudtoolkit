@@ -6,7 +6,6 @@ import (
 	"strconv"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers"
-	"github.com/404tk/cloudtoolkit/runner/payloads"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -111,9 +110,6 @@ func internation(uuid string) {
 		config = m
 		if _, ok := config[utils.Metadata]; !ok {
 			config[utils.Metadata] = ""
-		}
-		if name, ok := config[utils.Payload]; ok {
-			config[utils.Payload] = payloads.ResolveName(name)
 		}
 		if target := shellTargetFromConfig(config); target != "" {
 			rememberShellTarget(target, provider, "cached session")
