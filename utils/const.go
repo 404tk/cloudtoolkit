@@ -1,7 +1,5 @@
 package utils
 
-import "time"
-
 const (
 	Provider      = "provider"
 	Payload       = "payload"
@@ -28,14 +26,4 @@ const (
 	Metadata    = "metadata"
 	BucketCheck = "list all"
 	EventCheck  = "dump all"
-)
-
-var (
-	DoSave       bool
-	ListPolicies bool
-	LogDir       string
-	Cloudlist    []string
-	IAMUserCheck string
-	RDSAccount   string
-	RunTimeout   time.Duration
 )

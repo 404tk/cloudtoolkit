@@ -9,6 +9,7 @@ import (
 	_ec2 "github.com/404tk/cloudtoolkit/pkg/providers/aws/ec2"
 	_iam "github.com/404tk/cloudtoolkit/pkg/providers/aws/iam"
 	_s3 "github.com/404tk/cloudtoolkit/pkg/providers/aws/s3"
+	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
@@ -67,7 +68,7 @@ func (p *Provider) Name() string {
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.Name()
-	for _, product := range utils.Cloudlist {
+	for _, product := range env.From(ctx).Cloudlist {
 		switch product {
 		case "host":
 			ec2provider := &_ec2.Driver{

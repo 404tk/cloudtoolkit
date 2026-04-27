@@ -4,7 +4,6 @@ import (
 	"crypto/md5"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -23,12 +22,6 @@ func Md5Encode(s string) string {
 	data := []byte(s)
 	has := md5.Sum(data)
 	return fmt.Sprintf("%x", has)
-}
-
-func CheckLogDir() {
-	if v, _ := filepath.Glob(LogDir); len(v) == 0 {
-		os.Mkdir(LogDir, os.ModePerm)
-	}
 }
 
 func ParseBytes(size int64) string {

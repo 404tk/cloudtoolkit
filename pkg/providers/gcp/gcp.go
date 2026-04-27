@@ -9,6 +9,7 @@ import (
 	_compute "github.com/404tk/cloudtoolkit/pkg/providers/gcp/compute"
 	_dns "github.com/404tk/cloudtoolkit/pkg/providers/gcp/dns"
 	_iam "github.com/404tk/cloudtoolkit/pkg/providers/gcp/iam"
+	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
@@ -66,7 +67,7 @@ func (p *Provider) Name() string {
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	list := schema.NewResources()
 	list.Provider = p.Name()
-	for _, product := range utils.Cloudlist {
+	for _, product := range env.From(ctx).Cloudlist {
 		switch product {
 		case "host":
 			InstanceProvider := &_compute.Driver{Projects: p.projects, Client: p.apiClient}

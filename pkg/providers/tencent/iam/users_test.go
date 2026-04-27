@@ -6,15 +6,15 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/404tk/cloudtoolkit/utils"
+	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 )
 
 func TestListUsersIncludesAttachedPolicies(t *testing.T) {
-	oldListPolicies := utils.ListPolicies
-	utils.ListPolicies = true
+	next := env.Active().Clone()
+	next.ListPolicies = true
 	policy_infos = nil
+	env.SetActiveForTest(t, next)
 	t.Cleanup(func() {
-		utils.ListPolicies = oldListPolicies
 		policy_infos = nil
 	})
 

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/api"
-	"github.com/404tk/cloudtoolkit/utils"
+	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
@@ -54,7 +54,7 @@ func grantAccountPrivilege(ctx context.Context, client *api.Client, region, inst
 }
 
 func parseRDSAccount() (string, string, bool) {
-	accountName, accountPassword, ok := strings.Cut(utils.RDSAccount, ":")
+	accountName, accountPassword, ok := strings.Cut(env.Active().RDSAccount, ":")
 	if !ok || strings.TrimSpace(accountName) == "" || strings.TrimSpace(accountPassword) == "" {
 		logger.Error("RDS account metadata is invalid. expected username:password")
 		return "", "", false

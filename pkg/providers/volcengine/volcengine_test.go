@@ -12,14 +12,14 @@ import (
 	"time"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/api"
+	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
 func TestProviderResourcesDatabaseUsesRDSDrivers(t *testing.T) {
-	restoreCloudlist := setCloudlist([]string{"database"})
-	defer restoreCloudlist()
+	setCloudlist(t, []string{"database"})
 
 	logger.SetOutput(io.Discard)
 	t.Cleanup(func() {
@@ -128,8 +128,7 @@ func TestProviderResourcesDatabaseUsesRDSDrivers(t *testing.T) {
 }
 
 func TestProviderResourcesDomainUsesDNSDriver(t *testing.T) {
-	restoreCloudlist := setCloudlist([]string{"domain"})
-	defer restoreCloudlist()
+	setCloudlist(t, []string{"domain"})
 
 	logger.SetOutput(io.Discard)
 	t.Cleanup(func() {
@@ -229,12 +228,11 @@ func testClientOptions(baseURL string) []api.Option {
 	}
 }
 
-func setCloudlist(values []string) func() {
-	previous := append([]string(nil), utils.Cloudlist...)
-	utils.Cloudlist = append([]string(nil), values...)
-	return func() {
-		utils.Cloudlist = previous
-	}
+func setCloudlist(t *testing.T, values []string) {
+	t.Helper()
+	next := env.Active().Clone()
+	next.Cloudlist = append([]string(nil), values...)
+	env.SetActiveForTest(t, next)
 }
 
 func assertJSONBody(t *testing.T, r *http.Request, want map[string]any) {

@@ -13,7 +13,7 @@ import (
 
 func main() {
 	runner.ShowBanner()
-	runner.InitConfig()
+	_ = runner.InitConfig()
 
 	// Flush credential cache on fatal signals so AK/SK captured this session
 	// aren't lost. SIGINT during an active `run` is handled locally in the

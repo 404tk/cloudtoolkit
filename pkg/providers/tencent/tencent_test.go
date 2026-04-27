@@ -15,6 +15,7 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/api"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/tat"
+	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -51,14 +52,11 @@ func TestNewCloudlistLogsCallerIdentity(t *testing.T) {
 }
 
 func TestProviderResourcesAccountUsesIAMDriver(t *testing.T) {
-	restoreGlobals := setCloudlist([]string{"account"})
-	defer restoreGlobals()
+	setCloudlist(t, []string{"account"})
 
-	previousPolicies := utils.ListPolicies
-	utils.ListPolicies = false
-	defer func() {
-		utils.ListPolicies = previousPolicies
-	}()
+	next := env.Active().Clone()
+	next.ListPolicies = false
+	env.SetActiveForTest(t, next)
 
 	logger.SetOutput(io.Discard)
 	t.Cleanup(func() {
@@ -97,8 +95,7 @@ func TestProviderResourcesAccountUsesIAMDriver(t *testing.T) {
 }
 
 func TestProviderResourcesDatabaseUsesAllDrivers(t *testing.T) {
-	restoreGlobals := setCloudlist([]string{"database"})
-	defer restoreGlobals()
+	setCloudlist(t, []string{"database"})
 
 	logger.SetOutput(io.Discard)
 	t.Cleanup(func() {
@@ -257,12 +254,11 @@ func testClientOptions(baseURL string) []api.Option {
 	}
 }
 
-func setCloudlist(values []string) func() {
-	previous := append([]string(nil), utils.Cloudlist...)
-	utils.Cloudlist = append([]string(nil), values...)
-	return func() {
-		utils.Cloudlist = previous
-	}
+func setCloudlist(t *testing.T, values []string) {
+	t.Helper()
+	next := env.Active().Clone()
+	next.Cloudlist = append([]string(nil), values...)
+	env.SetActiveForTest(t, next)
 }
 
 func captureStdout(t *testing.T, fn func()) string {

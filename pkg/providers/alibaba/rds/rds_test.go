@@ -13,8 +13,8 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/api"
 	aliauth "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/auth"
+	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
-	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
@@ -147,11 +147,9 @@ func TestCreateAccountCreatesReadonlyUserAndGrantsPrivilege(t *testing.T) {
 		logger.SetOutput(nil)
 	})
 
-	originalAccount := utils.RDSAccount
-	utils.RDSAccount = "readonly:Secret!1"
-	t.Cleanup(func() {
-		utils.RDSAccount = originalAccount
-	})
+	next := env.Active().Clone()
+	next.RDSAccount = "readonly:Secret!1"
+	env.SetActiveForTest(t, next)
 
 	var actions []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -207,11 +205,9 @@ func TestDeleteAccountUsesConfiguredCredential(t *testing.T) {
 		logger.SetOutput(nil)
 	})
 
-	originalAccount := utils.RDSAccount
-	utils.RDSAccount = "readonly:Secret!1"
-	t.Cleanup(func() {
-		utils.RDSAccount = originalAccount
-	})
+	next := env.Active().Clone()
+	next.RDSAccount = "readonly:Secret!1"
+	env.SetActiveForTest(t, next)
 
 	var actions []string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -46,12 +47,13 @@ func (p CloudList) Run(ctx context.Context, config map[string]string) {
 	case <-ctx.Done():
 		return
 	default:
+		e := env.From(ctx)
 		filename := time.Now().Format("20060102150405.log")
-		path := fmt.Sprintf("%s/%s_cloudlist_%s", utils.LogDir, i.Providers.Name(), filename)
+		path := fmt.Sprintf("%s/%s_cloudlist_%s", e.LogDir, i.Providers.Name(), filename)
 		printGroup := func(tag string, items interface{}) {
 			fmt.Println(tag, "results:")
 			table.Output(items)
-			if utils.DoSave {
+			if e.LogEnable {
 				utils.WriteLog(path, tag+" results:")
 				table.FileOutput(path, items)
 			}
@@ -90,7 +92,7 @@ func (p CloudList) Run(ctx context.Context, config map[string]string) {
 		for _, item := range resources.Errors {
 			logger.Error(fmt.Sprintf("%s failed: %s", item.Scope, item.Message))
 		}
-		if utils.DoSave {
+		if e.LogEnable {
 			logger.Info(fmt.Sprintf("Output written to [%s]", path))
 			if len(resources.Errors) > 0 {
 				logger.Error("Cloud asset enumeration completed with partial errors.")

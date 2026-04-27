@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/runner/payloads"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/argparse"
@@ -61,7 +62,7 @@ func Executor(s string) {
 		return
 	}
 
-	timeout := utils.RunTimeout
+	timeout := env.Active().RunTimeout
 	if timeout <= 0 {
 		timeout = 10 * time.Minute
 	}
@@ -183,7 +184,7 @@ func set(args []string) {
 	if key == utils.Payload {
 		switch config[utils.Payload] {
 		case "iam-user-check":
-			config[utils.Metadata] = utils.IAMUserCheck
+			config[utils.Metadata] = env.Active().IAMUserCheck
 		case "bucket-check":
 			config[utils.Metadata] = utils.BucketCheck
 		case "event-check":

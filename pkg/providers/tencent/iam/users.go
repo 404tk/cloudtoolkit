@@ -6,8 +6,8 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/api"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/auth"
+	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
-	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
@@ -52,7 +52,7 @@ func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 		if derefUint64(user.ConsoleLogin) == 1 {
 			_user.EnableLogin = true
 		}
-		if utils.ListPolicies {
+		if env.From(ctx).ListPolicies {
 			_user.Policies = listAttachedUserAllPolicies(ctx, client, derefUint64(user.Uin))
 		}
 

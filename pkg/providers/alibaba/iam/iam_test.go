@@ -12,16 +12,14 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/api"
 	aliauth "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/auth"
-	"github.com/404tk/cloudtoolkit/utils"
+	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
 func TestListUsersWithPaginationLoginStateAndPolicies(t *testing.T) {
-	previousPolicies := utils.ListPolicies
-	utils.ListPolicies = true
-	t.Cleanup(func() {
-		utils.ListPolicies = previousPolicies
-	})
+	next := env.Active().Clone()
+	next.ListPolicies = true
+	env.SetActiveForTest(t, next)
 
 	logger.SetOutput(io.Discard)
 	t.Cleanup(func() {

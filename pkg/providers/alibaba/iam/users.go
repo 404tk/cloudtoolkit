@@ -8,9 +8,9 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/api"
 	aliauth "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/auth"
+	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/paginate"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
-	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
@@ -71,7 +71,7 @@ func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 		_user.EnableLogin = enableLogin
 		_user.LastLogin = lastLogin
 
-		if utils.ListPolicies {
+		if env.From(ctx).ListPolicies {
 			_user.Policies = listPoliciesForUser(ctx, client, region, _user.UserName)
 		}
 

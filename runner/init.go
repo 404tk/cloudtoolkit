@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/404tk/cloudtoolkit/utils"
+	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"gopkg.in/yaml.v3"
 )
@@ -84,7 +84,13 @@ func firstDatabaseAccountConfig(values ...databaseAccountConfig) databaseAccount
 	return databaseAccountConfig{}
 }
 
-func InitConfig() {
+// InitConfig parses config.yaml (CWD or XDG) and returns the resulting *env.Env.
+// As a side effect it pins the same env via env.SetActive so capability methods
+// without ctx (EventDump, parseRDSAccount) can fall back to env.Active().
+//
+// cmd/main.go calls this once at startup and threads the returned env through
+// to the REPL or headless dispatcher.
+func InitConfig() *env.Env {
 	filename := resolveConfigPath()
 
 	data, err := os.ReadFile(filename)
@@ -99,14 +105,16 @@ func InitConfig() {
 		_ = yaml.Unmarshal([]byte(defaultConfigFile), &cfg)
 	}
 
-	utils.DoSave = cfg.Common.LogEnable
-	utils.ListPolicies = cfg.Common.ListPolicies
-	utils.LogDir = cfg.Common.LogDir
-	utils.Cloudlist = cfg.Cloudlist
+	e := &env.Env{
+		LogEnable:    cfg.Common.LogEnable,
+		ListPolicies: cfg.Common.ListPolicies,
+		LogDir:       cfg.Common.LogDir,
+		Cloudlist:    append([]string(nil), cfg.Cloudlist...),
+	}
 	if cfg.Common.TimeoutMinutes > 0 {
-		utils.RunTimeout = time.Duration(cfg.Common.TimeoutMinutes) * time.Minute
+		e.RunTimeout = time.Duration(cfg.Common.TimeoutMinutes) * time.Minute
 	} else {
-		utils.RunTimeout = 10 * time.Minute
+		e.RunTimeout = 10 * time.Minute
 	}
 	logger.SetFormat(logger.Format(strings.ToLower(strings.TrimSpace(cfg.Common.LogFormat))))
 
@@ -115,7 +123,7 @@ func InitConfig() {
 		cfg.LegacyIAMUserValidation,
 		cfg.LegacyBackdoorUser,
 	)
-	utils.IAMUserCheck = fmt.Sprintf("%s %s %s",
+	e.IAMUserCheck = fmt.Sprintf("%s %s %s",
 		iamUserCheck.Action,
 		iamUserCheck.Username,
 		iamUserCheck.Password,
@@ -126,10 +134,13 @@ func InitConfig() {
 		cfg.LegacyDBAccountValidation,
 		cfg.LegacyDatabaseAccount,
 	)
-	utils.RDSAccount = fmt.Sprintf("%s:%s",
+	e.RDSAccount = fmt.Sprintf("%s:%s",
 		rdsAccountCheck.Username,
 		rdsAccountCheck.Password,
 	)
+
+	env.SetActive(e)
+	return e
 }
 
 const defaultConfigFile = `common:
