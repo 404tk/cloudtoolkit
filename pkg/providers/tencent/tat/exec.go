@@ -139,9 +139,9 @@ func (d *Driver) describeInvocationTasks(ctx context.Context, client *api.Client
 
 func resolveCommandType(osType string) (string, bool) {
 	switch osType {
-	case "LINUX_UNIX":
+	case "LINUX_UNIX", "linux":
 		return "SHELL", true
-	case "WINDOWS":
+	case "WINDOWS", "windows":
 		return "POWERSHELL", true
 	default:
 		return "", false

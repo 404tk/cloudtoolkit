@@ -15,6 +15,7 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/providers"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
+	"github.com/404tk/cloudtoolkit/pkg/runtime/vmexecspec"
 	"github.com/404tk/cloudtoolkit/runner"
 	"github.com/404tk/cloudtoolkit/runner/catalog"
 	"github.com/404tk/cloudtoolkit/runner/payloads"
@@ -42,6 +43,8 @@ type commandFlags struct {
 	Describe  bool
 	Stdin     bool
 	Approval  bool
+	ShellMode bool
+	CmdMode   bool
 	Profile   string
 	CredsPath string
 	Metadata  string
@@ -179,6 +182,13 @@ var actionSpecs = map[string]actionSpec{
 			return "total " + args[0]
 		},
 	},
+	"shell": {
+		payload:     "instance-cmd-check",
+		minArgs:     2,
+		maxArgs:     -1,
+		usage:       "shell <instance-id> <cmd...> -r <region> (-sh | -cmd)",
+		description: "run one validation command on a cloud instance in headless mode",
+	},
 }
 
 func (e headlessError) Error() string {
@@ -258,6 +268,8 @@ func newFlagSet(name string, cfg *commandFlags) *flag.FlagSet {
 	fs.BoolVar(&cfg.Stdin, "stdin", cfg.Stdin, "read credentials JSON from stdin")
 	fs.BoolVar(&cfg.Approval, "yes", cfg.Approval, "approve sensitive execution")
 	fs.BoolVar(&cfg.Approval, "y", cfg.Approval, "approve sensitive execution")
+	fs.BoolVar(&cfg.ShellMode, "sh", cfg.ShellMode, "")
+	fs.BoolVar(&cfg.CmdMode, "cmd", cfg.CmdMode, "")
 	fs.StringVar(&cfg.Profile, "profile", cfg.Profile, "credential profile name")
 	fs.StringVar(&cfg.Profile, "P", cfg.Profile, "credential profile name")
 	fs.StringVar(&cfg.CredsPath, "creds", cfg.CredsPath, "credentials JSON file")
@@ -751,17 +763,29 @@ func decodeCredentialJSON(data []byte) (map[string]string, error) {
 
 func resolveRunRequest(command string, args []string, flags commandFlags) (string, string, error) {
 	command = strings.TrimSpace(command)
+	if command == "shell" {
+		return resolveShellAction(args, flags)
+	}
 	if spec, ok := actionSpecs[command]; ok {
 		if strings.TrimSpace(flags.Metadata) != "" {
 			return "", "", fmt.Errorf("%s does not accept --metadata; use `%s`", command, spec.usage)
 		}
-		if len(args) < spec.minArgs || len(args) > spec.maxArgs {
+		if len(args) < spec.minArgs {
+			return "", "", fmt.Errorf("usage: %s", spec.usage)
+		}
+		if spec.maxArgs >= 0 && len(args) > spec.maxArgs {
+			return "", "", fmt.Errorf("usage: %s", spec.usage)
+		}
+		if spec.build == nil {
 			return "", "", fmt.Errorf("usage: %s", spec.usage)
 		}
 		return spec.payload, spec.build(args), nil
 	}
 	if command == "iam-user-check" {
 		return "", "", errors.New("headless iam-user-check uses `useradd <username> <password>` or `userdel <username>`")
+	}
+	if command == "instance-cmd-check" {
+		return "", "", errors.New("headless instance-cmd-check uses `shell <instance-id> <cmd...> -r <region> (-sh | -cmd)`")
 	}
 	if _, _, ok := payloads.Lookup(command); ok {
 		if len(args) > 0 {
@@ -770,6 +794,32 @@ func resolveRunRequest(command string, args []string, flags commandFlags) (strin
 		return command, "", nil
 	}
 	return "", "", fmt.Errorf("unsupported payload or action: %s", command)
+}
+
+func resolveShellAction(args []string, flags commandFlags) (string, string, error) {
+	if strings.TrimSpace(flags.Metadata) != "" {
+		return "", "", errors.New("shell does not accept --metadata")
+	}
+	if len(args) < 2 {
+		return "", "", errors.New("usage: shell <instance-id> <cmd...> -r <region> (-sh | -cmd)")
+	}
+	if strings.TrimSpace(flags.Region) == "" || strings.EqualFold(strings.TrimSpace(flags.Region), "all") {
+		return "", "", errors.New("headless shell requires explicit -r <region>; region=all is not supported")
+	}
+	if flags.ShellMode == flags.CmdMode {
+		return "", "", errors.New("headless shell requires exactly one of -sh or -cmd")
+	}
+
+	instanceID := strings.TrimSpace(args[0])
+	command := strings.Join(args[1:], " ")
+	if instanceID == "" || strings.TrimSpace(command) == "" {
+		return "", "", errors.New("usage: shell <instance-id> <cmd...> -r <region> (-sh | -cmd)")
+	}
+
+	if flags.ShellMode {
+		return "instance-cmd-check", instanceID + " " + vmexecspec.BuildLinux(command), nil
+	}
+	return "instance-cmd-check", instanceID + " " + vmexecspec.BuildWindows(command), nil
 }
 
 func isHeadlessCommand(command string) bool {
@@ -818,6 +868,10 @@ func headlessNotesForPayload(payload string) []string {
 	case "bucket-check":
 		return []string{
 			"Headless mode accepts `bls` and `bcnt` for this payload.",
+		}
+	case "instance-cmd-check":
+		return []string{
+			"Headless mode accepts `shell <instance-id> <cmd...> -r <region> (-sh | -cmd)` for this payload.",
 		}
 	default:
 		return nil
@@ -907,6 +961,8 @@ func providersForPayload(payload string) []string {
 func normalizeArgs(args []string) ([]string, error) {
 	flagArgs := make([]string, 0, len(args))
 	positionals := make([]string, 0, len(args))
+	sawShell := false
+	shellTargetSeen := false
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		if arg == "--" {
@@ -915,10 +971,22 @@ func normalizeArgs(args []string) ([]string, error) {
 		}
 		if !strings.HasPrefix(arg, "-") || arg == "-" {
 			positionals = append(positionals, arg)
+			if arg == "shell" && !sawShell {
+				sawShell = true
+				shellTargetSeen = false
+				continue
+			}
+			if sawShell && !shellTargetSeen {
+				shellTargetSeen = true
+			}
 			continue
 		}
 
 		name, hasValue := parseFlagToken(arg)
+		if sawShell && shellTargetSeen && !isBoolFlag(name) && !isValueFlag(name) {
+			positionals = append(positionals, arg)
+			continue
+		}
 		switch {
 		case isBoolFlag(name):
 			flagArgs = append(flagArgs, arg)
@@ -946,7 +1014,7 @@ func parseFlagToken(arg string) (name string, hasValue bool) {
 
 func isBoolFlag(name string) bool {
 	switch name {
-	case "json", "quiet", "no-color", "agent", "stdin", "v", "yes", "y":
+	case "json", "quiet", "no-color", "agent", "stdin", "v", "yes", "y", "sh", "cmd":
 		return true
 	default:
 		return false

@@ -20,6 +20,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/sls"
 	_sms "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/sms"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
+	"github.com/404tk/cloudtoolkit/pkg/runtime/vmexecspec"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
@@ -221,6 +222,19 @@ func (p *Provider) EventDump(action, args string) {
 }
 
 func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {
+	if osType, command, ok := vmexecspec.Parse(cmd); ok {
+		region := strings.TrimSpace(p.region)
+		if region == "" || strings.EqualFold(region, "all") {
+			logger.Error("headless shell requires explicit region")
+			return
+		}
+		output := p.newECSDriver(region).RunCommand(instanceID, osType, command)
+		if output != "" {
+			fmt.Println(output)
+		}
+		return
+	}
+
 	host, ok := p.lookupHost(instanceID)
 	if !ok {
 		logger.Error("Unable to resolve instance metadata.")

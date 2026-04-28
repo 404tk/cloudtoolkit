@@ -15,6 +15,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/rds"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/tos"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
+	"github.com/404tk/cloudtoolkit/pkg/runtime/vmexecspec"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
@@ -167,6 +168,20 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([
 }
 
 func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {
+	if osType, command, ok := vmexecspec.Parse(cmd); ok {
+		region := strings.TrimSpace(p.region)
+		if region == "" || strings.EqualFold(region, "all") {
+			logger.Error("headless shell requires explicit region")
+			return
+		}
+		driver := &ecs.Driver{Client: p.apiClient, Region: region}
+		output := driver.RunCommand(instanceID, osType, command)
+		if output != "" {
+			fmt.Println(output)
+		}
+		return
+	}
+
 	host, ok := p.lookupHost(instanceID)
 	if !ok {
 		logger.Error("Unable to resolve instance metadata, run `cloudlist` first and retry.")
