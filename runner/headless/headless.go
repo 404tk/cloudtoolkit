@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sort"
 	"strings"
 
 	"github.com/mattn/go-isatty"
@@ -62,54 +61,6 @@ type commandFlags struct {
 	GCPBase64JSON string
 }
 
-type providerInfo struct {
-	Name         string   `json:"name"`
-	Description  string   `json:"description"`
-	Capabilities []string `json:"capabilities"`
-}
-
-type payloadInfo struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Capability  string `json:"capability,omitempty"`
-	Sensitivity string `json:"sensitivity,omitempty"`
-}
-
-type globalDescribe struct {
-	Version   string         `json:"version"`
-	Providers []providerInfo `json:"providers"`
-	Payloads  []payloadInfo  `json:"payloads"`
-}
-
-type providerField struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Required    bool   `json:"required"`
-	Sensitive   bool   `json:"sensitive,omitempty"`
-	Default     string `json:"default,omitempty"`
-}
-
-type providerDescribe struct {
-	Name         string          `json:"name"`
-	Description  string          `json:"description"`
-	Fields       []providerField `json:"fields"`
-	Regions      []string        `json:"regions,omitempty"`
-	Capabilities []string        `json:"capabilities"`
-	Payloads     []string        `json:"payloads"`
-}
-
-type payloadDescribe struct {
-	Name              string               `json:"name"`
-	Description       string               `json:"description"`
-	Capability        string               `json:"capability,omitempty"`
-	Sensitivity       string               `json:"sensitivity,omitempty"`
-	MetadataTemplates []catalog.Suggestion `json:"metadata_templates,omitempty"`
-	Help              catalog.PayloadHelp  `json:"help,omitempty"`
-	HeadlessActions   []headlessAction     `json:"headless_actions,omitempty"`
-	HeadlessNotes     []string             `json:"headless_notes,omitempty"`
-	Providers         []string             `json:"providers"`
-}
-
 type codedError interface {
 	error
 	ErrorCode() string
@@ -121,47 +72,49 @@ type headlessError struct {
 }
 
 type actionSpec struct {
-	payload     string
-	minArgs     int
-	maxArgs     int
-	usage       string
-	description string
-	build       func([]string) string
-}
-
-type headlessAction struct {
-	Name        string `json:"name"`
-	Usage       string `json:"usage"`
-	Description string `json:"description,omitempty"`
+	payload string
+	minArgs int
+	maxArgs int
+	usage   string
+	build   func([]string) string
 }
 
 var actionSpecs = map[string]actionSpec{
+	"ls": {
+		payload: "cloudlist",
+		minArgs: 0,
+		maxArgs: 1,
+		usage:   "ls [resource[,resource...]]",
+		build: func(args []string) string {
+			if len(args) == 0 {
+				return ""
+			}
+			return strings.TrimSpace(args[0])
+		},
+	},
 	"useradd": {
-		payload:     "iam-user-check",
-		minArgs:     2,
-		maxArgs:     2,
-		usage:       "useradd <username> <password>",
-		description: "create a validation IAM user in headless mode",
+		payload: "iam-user-check",
+		minArgs: 2,
+		maxArgs: 2,
+		usage:   "useradd <username> <password>",
 		build: func(args []string) string {
 			return "add " + args[0] + " " + args[1]
 		},
 	},
 	"userdel": {
-		payload:     "iam-user-check",
-		minArgs:     1,
-		maxArgs:     1,
-		usage:       "userdel <username>",
-		description: "remove a validation IAM user in headless mode",
+		payload: "iam-user-check",
+		minArgs: 1,
+		maxArgs: 1,
+		usage:   "userdel <username>",
 		build: func(args []string) string {
 			return "del " + args[0]
 		},
 	},
 	"bls": {
-		payload:     "bucket-check",
-		minArgs:     0,
-		maxArgs:     1,
-		usage:       "bls [bucket]",
-		description: "list objects in bucket(s)",
+		payload: "bucket-check",
+		minArgs: 0,
+		maxArgs: 1,
+		usage:   "bls [bucket]",
 		build: func(args []string) string {
 			if len(args) == 0 {
 				return "list all"
@@ -170,11 +123,10 @@ var actionSpecs = map[string]actionSpec{
 		},
 	},
 	"bcnt": {
-		payload:     "bucket-check",
-		minArgs:     0,
-		maxArgs:     1,
-		usage:       "bcnt [bucket]",
-		description: "count objects in bucket(s)",
+		payload: "bucket-check",
+		minArgs: 0,
+		maxArgs: 1,
+		usage:   "bcnt [bucket]",
 		build: func(args []string) string {
 			if len(args) == 0 {
 				return "total all"
@@ -183,11 +135,10 @@ var actionSpecs = map[string]actionSpec{
 		},
 	},
 	"shell": {
-		payload:     "instance-cmd-check",
-		minArgs:     2,
-		maxArgs:     -1,
-		usage:       "shell <instance-id> <cmd...> -r <region> (-sh | -cmd)",
-		description: "run one validation command on a cloud instance in headless mode",
+		payload: "instance-cmd-check",
+		minArgs: 2,
+		maxArgs: -1,
+		usage:   "shell <instance-id> <cmd...> -r <region> (-sh | -cmd)",
 	},
 }
 
@@ -205,7 +156,7 @@ func Run(args []string) int {
 		return fail(flags.JSON, exitConfigError, err)
 	}
 	if flags.Describe && len(remaining) == 0 {
-		return describe(nil, flags)
+		return writeVersion(flags.JSON)
 	}
 	if len(remaining) == 0 {
 		return fail(flags.JSON, exitConfigError, errors.New("missing command"))
@@ -222,24 +173,22 @@ func Run(args []string) int {
 	}
 
 	command := remaining[0]
-	switch command {
-	case "describe":
-		return describe(remaining[1:], flags)
-	default:
-		if flags.Describe {
-			return fail(flags.JSON, exitConfigError, errors.New("`-v` cannot be combined with other commands"))
-		}
-		if providers.Supports(command) {
-			return runShort(command, remaining[1:], flags)
-		}
-		if canInferProvider(flags) {
-			return runInferredProvider(command, remaining[1:], flags)
-		}
-		if isHeadlessCommand(command) {
-			return fail(flags.JSON, exitConfigError, errors.New("provider is required unless supplied by --profile, --creds, or --stdin"))
-		}
-		return fail(flags.JSON, exitConfigError, fmt.Errorf("unsupported command: %s", command))
+	if flags.Describe {
+		return fail(flags.JSON, exitConfigError, errors.New("`-v` cannot be combined with other commands"))
 	}
+	if command == "describe" {
+		return fail(flags.JSON, exitConfigError, fmt.Errorf("unsupported: %s", command))
+	}
+	if providers.Supports(command) {
+		return runShort(command, remaining[1:], flags)
+	}
+	if canInferProvider(flags) {
+		return runInferredProvider(command, remaining[1:], flags)
+	}
+	if isHeadlessCommand(command) {
+		return fail(flags.JSON, exitConfigError, errors.New("provider is required unless supplied by --profile, --creds, or --stdin"))
+	}
+	return fail(flags.JSON, exitConfigError, fmt.Errorf("unsupported command: %s", command))
 }
 
 func parseFlags(args []string) (commandFlags, []string, error) {
@@ -264,7 +213,7 @@ func newFlagSet(name string, cfg *commandFlags) *flag.FlagSet {
 	fs.BoolVar(&cfg.Quiet, "quiet", cfg.Quiet, "reduce log chatter")
 	fs.BoolVar(&cfg.NoColor, "no-color", cfg.NoColor, "disable ANSI color")
 	fs.BoolVar(&cfg.Agent, "agent", cfg.Agent, "agent-friendly mode")
-	fs.BoolVar(&cfg.Describe, "v", cfg.Describe, "describe built-in metadata")
+	fs.BoolVar(&cfg.Describe, "v", cfg.Describe, "print version")
 	fs.BoolVar(&cfg.Stdin, "stdin", cfg.Stdin, "read credentials JSON from stdin")
 	fs.BoolVar(&cfg.Approval, "yes", cfg.Approval, "approve sensitive execution")
 	fs.BoolVar(&cfg.Approval, "y", cfg.Approval, "approve sensitive execution")
@@ -298,168 +247,6 @@ func (cfg *commandFlags) applyDerived() {
 		cfg.Quiet = true
 		cfg.NoColor = true
 	}
-}
-
-func describe(args []string, flags commandFlags) int {
-	switch {
-	case len(args) == 0:
-		return describeGlobal(flags)
-	case args[0] == "payload":
-		return describePayload(args[1:], flags)
-	case len(args) > 1:
-		return fail(flags.JSON, exitConfigError, errors.New("describe accepts at most one target; use `describe payload <name>` for explicit payload lookup"))
-	}
-
-	target := strings.TrimSpace(args[0])
-	if providers.Supports(target) {
-		return describeProvider([]string{target}, flags)
-	}
-	if _, _, ok := payloads.Lookup(target); ok {
-		return describePayload([]string{target}, flags)
-	}
-	return fail(flags.JSON, exitConfigError, fmt.Errorf("unknown describe target: %s", target))
-}
-
-func describeGlobal(flags commandFlags) int {
-	result := globalDescribe{
-		Version:   runner.Version(),
-		Providers: providerSummaries(),
-		Payloads:  payloadSummaries(),
-	}
-	if flags.JSON {
-		return writeJSON(result)
-	}
-
-	fmt.Fprintf(os.Stdout, "CloudToolKit %s\n", result.Version)
-	fmt.Fprintln(os.Stdout, "Providers:")
-	for _, item := range result.Providers {
-		fmt.Fprintf(os.Stdout, "  %s\t%s\t%s\n", item.Name, item.Description, strings.Join(item.Capabilities, ", "))
-	}
-	fmt.Fprintln(os.Stdout, "Payloads:")
-	for _, item := range result.Payloads {
-		fmt.Fprintf(os.Stdout, "  %s\t%s\t%s\t%s\n", item.Name, item.Capability, item.Sensitivity, item.Description)
-	}
-	return exitSuccess
-}
-
-func describeProvider(args []string, flags commandFlags) int {
-	if len(args) != 1 {
-		return fail(flags.JSON, exitConfigError, errors.New("describe provider requires exactly one provider name"))
-	}
-	name := strings.TrimSpace(args[0])
-	spec, ok := catalog.ProviderSpecFor(name)
-	if !ok {
-		return fail(flags.JSON, exitConfigError, fmt.Errorf("unsupported provider: %s", name))
-	}
-
-	info := providerInfoByName(name)
-	result := providerDescribe{
-		Name:         name,
-		Description:  info.Description,
-		Fields:       providerFields(spec),
-		Regions:      providerRegionNames(spec),
-		Capabilities: catalog.ProviderCapabilities(name),
-		Payloads:     payloadNamesForProvider(name),
-	}
-	if flags.JSON {
-		return writeJSON(result)
-	}
-
-	fmt.Fprintln(os.Stdout, result.Name)
-	if result.Description != "" {
-		fmt.Fprintf(os.Stdout, "  description: %s\n", result.Description)
-	}
-	if len(result.Capabilities) > 0 {
-		fmt.Fprintf(os.Stdout, "  capabilities: %s\n", strings.Join(result.Capabilities, ", "))
-	}
-	if len(result.Payloads) > 0 {
-		fmt.Fprintf(os.Stdout, "  payloads: %s\n", strings.Join(result.Payloads, ", "))
-	}
-	for _, field := range result.Fields {
-		state := "optional"
-		if field.Required {
-			state = "required"
-		}
-		if field.Default != "" {
-			fmt.Fprintf(os.Stdout, "  field %s (%s, default=%s): %s\n", field.Name, state, field.Default, field.Description)
-			continue
-		}
-		fmt.Fprintf(os.Stdout, "  field %s (%s): %s\n", field.Name, state, field.Description)
-	}
-	if len(result.Regions) > 0 {
-		fmt.Fprintf(os.Stdout, "  regions: %s\n", strings.Join(result.Regions, ", "))
-	}
-	return exitSuccess
-}
-
-func describePayload(args []string, flags commandFlags) int {
-	if len(args) != 1 {
-		return fail(flags.JSON, exitConfigError, errors.New("describe payload requires exactly one payload name"))
-	}
-	payload, resolved, ok := payloads.Lookup(strings.TrimSpace(args[0]))
-	if !ok {
-		return fail(flags.JSON, exitConfigError, fmt.Errorf("unsupported payload: %s", strings.TrimSpace(args[0])))
-	}
-	help, _ := catalog.PayloadHelpFor(resolved)
-	result := payloadDescribe{
-		Name:              resolved,
-		Description:       payload.Desc(),
-		Capability:        catalog.PayloadCapability(resolved),
-		Sensitivity:       catalog.PayloadSensitivity(resolved),
-		MetadataTemplates: catalog.PayloadMetadataSuggestions(resolved),
-		Help:              help,
-		HeadlessActions:   headlessActionsForPayload(resolved),
-		HeadlessNotes:     headlessNotesForPayload(resolved),
-		Providers:         providersForPayload(resolved),
-	}
-	if flags.JSON {
-		return writeJSON(result)
-	}
-
-	fmt.Fprintln(os.Stdout, result.Name)
-	fmt.Fprintf(os.Stdout, "  description: %s\n", result.Description)
-	if result.Capability != "" {
-		fmt.Fprintf(os.Stdout, "  capability: %s\n", result.Capability)
-	}
-	if result.Sensitivity != "" {
-		fmt.Fprintf(os.Stdout, "  sensitivity: %s\n", result.Sensitivity)
-	}
-	if len(result.Providers) > 0 {
-		fmt.Fprintf(os.Stdout, "  providers: %s\n", strings.Join(result.Providers, ", "))
-	}
-	if len(result.MetadataTemplates) > 0 {
-		fmt.Fprintln(os.Stdout, "  metadata templates:")
-		for _, item := range result.MetadataTemplates {
-			if item.Description != "" {
-				fmt.Fprintf(os.Stdout, "    - %s\t%s\n", item.Text, item.Description)
-				continue
-			}
-			fmt.Fprintf(os.Stdout, "    - %s\n", item.Text)
-		}
-	}
-	if len(result.HeadlessActions) > 0 {
-		fmt.Fprintln(os.Stdout, "  headless actions:")
-		for _, item := range result.HeadlessActions {
-			if item.Description != "" {
-				fmt.Fprintf(os.Stdout, "    - %s\t%s\n", item.Usage, item.Description)
-				continue
-			}
-			fmt.Fprintf(os.Stdout, "    - %s\n", item.Usage)
-		}
-	}
-	for _, line := range result.HeadlessNotes {
-		fmt.Fprintf(os.Stdout, "  headless note: %s\n", line)
-	}
-	for _, line := range result.Help.MetadataSyntax {
-		fmt.Fprintf(os.Stdout, "  syntax: %s\n", line)
-	}
-	for _, line := range result.Help.MetadataExamples {
-		fmt.Fprintf(os.Stdout, "  example: %s\n", line)
-	}
-	for _, line := range result.Help.SafetyNotes {
-		fmt.Fprintf(os.Stdout, "  note: %s\n", line)
-	}
-	return exitSuccess
 }
 
 func runShort(provider string, args []string, flags commandFlags) int {
@@ -504,6 +291,13 @@ func executeRun(providerName, payloadName, metadataOverride string, flags comman
 	}
 
 	baseEnv := runner.DefaultEnv()
+	if payloadName == "cloudlist" {
+		items, err := resolveCloudlistSelection(baseEnv.Cloudlist, metadataOverride)
+		if err != nil {
+			return fail(flags.JSON, exitConfigError, err)
+		}
+		baseEnv.Cloudlist = items
+	}
 	prev := env.Active().Clone()
 	env.SetActive(baseEnv)
 	defer env.SetActive(prev)
@@ -657,6 +451,19 @@ func writeJSON(v any) int {
 	return exitSuccess
 }
 
+func writeVersion(jsonOutput bool) int {
+	if jsonOutput {
+		return writeJSON(map[string]string{
+			"version": runner.Version(),
+		})
+	}
+	if _, err := fmt.Fprintf(os.Stdout, "CloudToolKit %s\n", runner.Version()); err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		return exitConfigError
+	}
+	return exitSuccess
+}
+
 func requireApproval(config map[string]string, flags commandFlags) error {
 	sensitivity := payloads.DescribeSensitivity(config[utils.Payload], config[utils.Metadata])
 	if !sensitivity.RequiresConfirmation() {
@@ -781,19 +588,7 @@ func resolveRunRequest(command string, args []string, flags commandFlags) (strin
 		}
 		return spec.payload, spec.build(args), nil
 	}
-	if command == "iam-user-check" {
-		return "", "", errors.New("headless iam-user-check uses `useradd <username> <password>` or `userdel <username>`")
-	}
-	if command == "instance-cmd-check" {
-		return "", "", errors.New("headless instance-cmd-check uses `shell <instance-id> <cmd...> -r <region> (-sh | -cmd)`")
-	}
-	if _, _, ok := payloads.Lookup(command); ok {
-		if len(args) > 0 {
-			return "", "", fmt.Errorf("payload %s does not accept positional arguments here; use --metadata", command)
-		}
-		return command, "", nil
-	}
-	return "", "", fmt.Errorf("unsupported payload or action: %s", command)
+	return "", "", fmt.Errorf("unsupported: %s", command)
 }
 
 func resolveShellAction(args []string, flags commandFlags) (string, string, error) {
@@ -826,8 +621,7 @@ func isHeadlessCommand(command string) bool {
 	if _, ok := actionSpecs[strings.TrimSpace(command)]; ok {
 		return true
 	}
-	_, _, ok := payloads.Lookup(strings.TrimSpace(command))
-	return ok
+	return false
 }
 
 func canInferProvider(flags commandFlags) bool {
@@ -839,123 +633,6 @@ func canPromptForApproval(flags commandFlags) bool {
 		return false
 	}
 	return isatty.IsTerminal(os.Stdin.Fd()) && isatty.IsTerminal(os.Stdout.Fd())
-}
-
-func headlessActionsForPayload(payload string) []headlessAction {
-	items := make([]headlessAction, 0)
-	for name, spec := range actionSpecs {
-		if spec.payload != payload {
-			continue
-		}
-		items = append(items, headlessAction{
-			Name:        name,
-			Usage:       spec.usage,
-			Description: spec.description,
-		})
-	}
-	sort.Slice(items, func(i, j int) bool {
-		return items[i].Name < items[j].Name
-	})
-	return items
-}
-
-func headlessNotesForPayload(payload string) []string {
-	switch payload {
-	case "iam-user-check":
-		return []string{
-			"Headless mode accepts `useradd` and `userdel` for this payload.",
-		}
-	case "bucket-check":
-		return []string{
-			"Headless mode accepts `bls` and `bcnt` for this payload.",
-		}
-	case "instance-cmd-check":
-		return []string{
-			"Headless mode accepts `shell <instance-id> <cmd...> -r <region> (-sh | -cmd)` for this payload.",
-		}
-	default:
-		return nil
-	}
-}
-
-func providerSummaries() []providerInfo {
-	items := make([]providerInfo, 0, len(providers.Supported()))
-	for _, item := range providers.Supported() {
-		items = append(items, providerInfo{
-			Name:         item.Name,
-			Description:  item.Desc,
-			Capabilities: catalog.ProviderCapabilities(item.Name),
-		})
-	}
-	return items
-}
-
-func payloadSummaries() []payloadInfo {
-	items := make([]payloadInfo, 0, len(payloads.Visible()))
-	for _, entry := range payloads.Visible() {
-		items = append(items, payloadInfo{
-			Name:        entry.Name,
-			Description: entry.Payload.Desc(),
-			Capability:  catalog.PayloadCapability(entry.Name),
-			Sensitivity: catalog.PayloadSensitivity(entry.Name),
-		})
-	}
-	return items
-}
-
-func providerInfoByName(name string) providerInfo {
-	for _, item := range providerSummaries() {
-		if item.Name == name {
-			return item
-		}
-	}
-	return providerInfo{Name: name}
-}
-
-func providerFields(spec catalog.ProviderSpec) []providerField {
-	fields := make([]providerField, 0, len(spec.Options))
-	for _, option := range spec.Options {
-		fields = append(fields, providerField{
-			Name:        option.Name,
-			Description: option.Description,
-			Required:    option.Required,
-			Sensitive:   option.Sensitive,
-			Default:     option.Default,
-		})
-	}
-	return fields
-}
-
-func providerRegionNames(spec catalog.ProviderSpec) []string {
-	regions := make([]string, 0, len(spec.Regions))
-	for _, region := range spec.Regions {
-		regions = append(regions, region.Text)
-	}
-	return regions
-}
-
-func payloadNamesForProvider(provider string) []string {
-	names := make([]string, 0)
-	for _, entry := range payloads.Visible() {
-		capability := catalog.PayloadCapability(entry.Name)
-		if capability == "" || catalog.ProviderSupportsCapability(provider, capability) {
-			names = append(names, entry.Name)
-		}
-	}
-	sort.Strings(names)
-	return names
-}
-
-func providersForPayload(payload string) []string {
-	capability := catalog.PayloadCapability(payload)
-	names := make([]string, 0)
-	for _, item := range providers.Supported() {
-		if capability == "" || catalog.ProviderSupportsCapability(item.Name, capability) {
-			names = append(names, item.Name)
-		}
-	}
-	sort.Strings(names)
-	return names
 }
 
 func normalizeArgs(args []string) ([]string, error) {
@@ -1004,6 +681,59 @@ func normalizeArgs(args []string) ([]string, error) {
 		}
 	}
 	return append(flagArgs, positionals...), nil
+}
+
+func resolveCloudlistSelection(defaults []string, selection string) ([]string, error) {
+	selection = strings.TrimSpace(selection)
+	if selection == "" || strings.EqualFold(selection, "all") {
+		return append([]string(nil), defaults...), nil
+	}
+
+	aliases := map[string]string{
+		"all":      "all",
+		"balance":  "balance",
+		"amt":      "balance",
+		"host":     "host",
+		"vm":       "host",
+		"user":     "account",
+		"account":  "account",
+		"iam":      "account",
+		"bucket":   "bucket",
+		"s3":       "bucket",
+		"database": "database",
+		"db":       "database",
+		"rds":      "database",
+		"domain":   "domain",
+		"dns":      "domain",
+		"sms":      "sms",
+		"log":      "log",
+		"sls":      "log",
+	}
+
+	items := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, raw := range strings.Split(selection, ",") {
+		key := strings.ToLower(strings.TrimSpace(raw))
+		if key == "" {
+			continue
+		}
+		mapped, ok := aliases[key]
+		if !ok {
+			return nil, fmt.Errorf("unknown cloudlist resource type: %s", raw)
+		}
+		if mapped == "all" {
+			return append([]string(nil), defaults...), nil
+		}
+		if _, ok := seen[mapped]; ok {
+			continue
+		}
+		seen[mapped] = struct{}{}
+		items = append(items, mapped)
+	}
+	if len(items) == 0 {
+		return append([]string(nil), defaults...), nil
+	}
+	return items, nil
 }
 
 func parseFlagToken(arg string) (name string, hasValue bool) {
