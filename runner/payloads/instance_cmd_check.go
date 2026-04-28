@@ -38,6 +38,18 @@ func (p InstanceCmdCheck) Desc() string {
 	return "Run an authorized validation command on a cloud instance to generate telemetry for detection and investigation verification."
 }
 
+func (p InstanceCmdCheck) Sensitivity(metadata string) Sensitivity {
+	data := argparse.SplitN(metadata, 2)
+	if len(data) < 2 {
+		return Sensitivity{}
+	}
+	return Sensitivity{
+		Level:      "destructive",
+		ConfirmKey: "instance-cmd-check.exec",
+		Resource:   data[0],
+	}
+}
+
 func init() {
 	registerPayload("instance-cmd-check", InstanceCmdCheck{})
 }

@@ -13,8 +13,10 @@ type ListObjectsV2Output struct {
 }
 
 type Object struct {
-	Key  string
-	Size int64
+	Key          string
+	Size         int64
+	LastModified string
+	StorageClass string
 }
 
 type listObjectsV2Response struct {
@@ -25,8 +27,10 @@ type listObjectsV2Response struct {
 }
 
 type objectWire struct {
-	Key  string `xml:"Key"`
-	Size int64  `xml:"Size"`
+	Key          string `xml:"Key"`
+	Size         int64  `xml:"Size"`
+	LastModified string `xml:"LastModified"`
+	StorageClass string `xml:"StorageClass"`
 }
 
 func normalizeBucketRegion(region string) string {

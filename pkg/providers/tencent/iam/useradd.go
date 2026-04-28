@@ -5,24 +5,27 @@ import (
 	"fmt"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/api"
-	"github.com/404tk/cloudtoolkit/utils/logger"
+	"github.com/404tk/cloudtoolkit/pkg/schema"
 )
 
-func (d *Driver) AddUser() {
+func (d *Driver) AddUser() (schema.IAMResult, error) {
 	ctx := context.Background()
 	client := d.newClient()
 	err := createUser(ctx, client, d.UserName, d.Password)
 	if err != nil {
-		logger.Error("Create user failed:", err.Error())
-		return
+		return schema.IAMResult{}, fmt.Errorf("create user failed: %w", err)
 	}
 	_ = attachPolicyToUser(ctx, client, d.UserName)
 	OwnerID := getOwnerUin(ctx, client)
-	fmt.Printf("\n%-10s\t%-10s\t%-60s\n", "Username", "Password", "Login URL")
-	fmt.Printf("%-10s\t%-10s\t%-60s\n", "--------", "--------", "---------")
-	fmt.Printf("%-10s\t%-10s\t%-60s\n\n",
-		d.UserName,
-		d.Password, "https://cloud.tencent.com/login/subAccount/"+OwnerID)
+	loginURL := "https://cloud.tencent.com/login/subAccount/" + OwnerID
+
+	return schema.IAMResult{
+		Username:  d.UserName,
+		Password:  d.Password,
+		LoginURL:  loginURL,
+		AccountID: OwnerID,
+		Message:   "User created successfully with AdministratorAccess policy",
+	}, nil
 }
 
 func createUser(ctx context.Context, client *api.Client, userName, password string) error {
@@ -46,7 +49,6 @@ func getUserInfo(ctx context.Context, client *api.Client, userName string) (api.
 func getOwnerUin(ctx context.Context, client *api.Client) string {
 	response, err := client.GetUserAppID(ctx)
 	if err != nil {
-		logger.Error("Get user appid failed.")
 		return ""
 	}
 	return derefString(response.Response.OwnerUin)

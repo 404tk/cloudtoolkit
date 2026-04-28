@@ -5,23 +5,25 @@ import (
 	"fmt"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/api"
-	"github.com/404tk/cloudtoolkit/utils/logger"
+	"github.com/404tk/cloudtoolkit/pkg/schema"
 )
 
-func (d *Driver) DelRole() {
+func (d *Driver) DelRole() (schema.IAMResult, error) {
 	ctx := context.Background()
 	client := d.newClient()
 	err := detachPolicyFromRole(ctx, client, d.RoleName)
 	if err != nil {
-		logger.Error(fmt.Sprintf("Remove policy from %s failed: %s", d.RoleName, err.Error()))
-		return
+		return schema.IAMResult{}, fmt.Errorf("remove policy from %s failed: %w", d.RoleName, err)
 	}
 	err = deleteRole(ctx, client, d.RoleName)
 	if err != nil {
-		logger.Error(fmt.Sprintf("Delete role %s failed: %s", d.RoleName, err.Error()))
-		return
+		return schema.IAMResult{}, fmt.Errorf("delete role %s failed: %w", d.RoleName, err)
 	}
-	logger.Warning(d.RoleName + " role delete completed.")
+
+	return schema.IAMResult{
+		Username: d.RoleName,
+		Message:  "Role deleted successfully",
+	}, nil
 }
 
 func detachPolicyFromRole(ctx context.Context, client *api.Client, roleName string) error {

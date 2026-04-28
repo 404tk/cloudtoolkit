@@ -7,37 +7,36 @@ import (
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/api"
-	"github.com/404tk/cloudtoolkit/utils/logger"
+	"github.com/404tk/cloudtoolkit/pkg/schema"
 )
 
-func (d *Driver) DelUser() {
+func (d *Driver) DelUser() (schema.IAMResult, error) {
 	ctx := context.Background()
 	client, err := d.requireClient()
 	if err != nil {
-		logger.Error(err)
-		return
+		return schema.IAMResult{}, fmt.Errorf("require client failed: %w", err)
 	}
 
 	region := d.requestRegion()
 	userName := strings.TrimSpace(d.UserName)
 	if userName == "" {
-		logger.Error("Empty user name.")
-		return
+		return schema.IAMResult{}, fmt.Errorf("empty user name")
 	}
 
 	if err := detachUserPolicy(ctx, client, region, userName); err != nil && !isIgnorableDeleteError(err) {
-		logger.Error(fmt.Sprintf("Remove policy from %s failed: %s", userName, err))
-		return
+		return schema.IAMResult{}, fmt.Errorf("remove policy from %s failed: %w", userName, err)
 	}
 	if err := deleteLoginProfile(ctx, client, region, userName); err != nil && !isIgnorableDeleteError(err) {
-		logger.Error(fmt.Sprintf("Delete login profile for %s failed: %s", userName, err))
-		return
+		return schema.IAMResult{}, fmt.Errorf("delete login profile for %s failed: %w", userName, err)
 	}
 	if err := deleteUser(ctx, client, region, userName); err != nil {
-		logger.Error(fmt.Sprintf("Delete user %s failed: %s", userName, err))
-		return
+		return schema.IAMResult{}, fmt.Errorf("delete user %s failed: %w", userName, err)
 	}
-	logger.Warning(userName + " user delete completed.")
+
+	return schema.IAMResult{
+		Username: userName,
+		Message:  "User deleted successfully",
+	}, nil
 }
 
 func detachUserPolicy(ctx context.Context, client *api.Client, region, userName string) error {

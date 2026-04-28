@@ -150,47 +150,45 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	return list, list.Err()
 }
 
-func (p *Provider) UserManagement(action, username, password string) {
+func (p *Provider) UserManagement(action, username, password string) (schema.IAMResult, error) {
 	r := p.newIAMDriver(p.region)
 	switch action {
 	case "add":
 		r.UserName = username
 		r.Password = password
-		r.AddUser()
+		return r.AddUser()
 	case "del":
 		r.UserName = username
-		r.DelUser()
+		return r.DelUser()
 	case "shadow":
 		r.RoleName = username
 		r.AccountId = password
-		r.AddRole()
+		return r.AddRole()
 	case "delrole":
 		r.RoleName = username
-		r.DelRole()
+		return r.DelRole()
 	default:
-		logger.Error("Please set metadata like \"add username password\" or \"del username\"")
+		return schema.IAMResult{}, fmt.Errorf("invalid action: %s (expected: add, del, shadow, delrole)", action)
 	}
 }
 
-func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
+func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([]schema.BucketResult, error) {
 	ossdrvier := p.newOSSDriver(p.region)
 	switch action {
 	case "list":
 		infos, err := p.bucketInfos(context.Background(), ossdrvier, bucketName)
 		if err != nil {
-			logger.Error("List buckets failed:", err)
-			return
+			return nil, fmt.Errorf("list buckets: %w", err)
 		}
-		ossdrvier.ListObjects(ctx, infos)
+		return ossdrvier.ListObjects(ctx, infos)
 	case "total":
 		infos, err := p.bucketInfos(context.Background(), ossdrvier, bucketName)
 		if err != nil {
-			logger.Error("List buckets failed:", err)
-			return
+			return nil, fmt.Errorf("list buckets: %w", err)
 		}
-		ossdrvier.TotalObjects(ctx, infos)
+		return ossdrvier.TotalObjects(ctx, infos)
 	default:
-		logger.Error("`list all` or `total all`.")
+		return nil, fmt.Errorf("invalid action: %s (expected: list, total)", action)
 	}
 }
 

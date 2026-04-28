@@ -35,8 +35,10 @@ type ListObjectsResponse struct {
 }
 
 type OSSObject struct {
-	Key  string `xml:"Key"`
-	Size int64  `xml:"Size"`
+	Key          string `xml:"Key"`
+	Size         int64  `xml:"Size"`
+	LastModified string `xml:"LastModified"`
+	StorageClass string `xml:"StorageClass"`
 }
 
 type errorResponse struct {

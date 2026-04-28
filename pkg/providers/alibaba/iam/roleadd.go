@@ -5,30 +5,30 @@ import (
 	"fmt"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/api"
-	"github.com/404tk/cloudtoolkit/utils/logger"
+	"github.com/404tk/cloudtoolkit/pkg/schema"
 )
 
-func (d *Driver) AddRole() {
+func (d *Driver) AddRole() (schema.IAMResult, error) {
 	ctx := context.Background()
 	client := d.newClient()
 	region := api.NormalizeRegion(d.Region)
 
 	err := createRole(ctx, client, region, d.RoleName, d.AccountId)
 	if err != nil {
-		logger.Error("Create role failed:", err.Error())
-		return
+		return schema.IAMResult{}, fmt.Errorf("create role failed: %w", err)
 	}
 	err = attachPolicyToRole(ctx, client, region, d.RoleName)
 	if err != nil {
-		logger.Error("Grant AdministratorAccess policy failed.")
-		return
+		return schema.IAMResult{}, fmt.Errorf("grant AdministratorAccess policy failed: %w", err)
 	}
 	accountAlias := getAccountAlias(ctx, client, region)
-	fmt.Printf("\n%-20s\t%-10s\t%-60s\n", "AccountAlias", "RoleName", "Switch URL")
-	fmt.Printf("%-20s\t%-10s\t%-60s\n", "------------", "--------", "----------")
-	fmt.Printf("%-20s\t%-10s\t%-60s\n\n",
-		accountAlias, d.RoleName,
-		"https://signin.aliyun.com/switchRole.htm")
+
+	return schema.IAMResult{
+		Username:  d.RoleName,
+		AccountID: accountAlias,
+		LoginURL:  "https://signin.aliyun.com/switchRole.htm",
+		Message:   "Role created successfully with AdministratorAccess policy",
+	}, nil
 }
 
 func createRole(ctx context.Context, client *api.Client, region, roleName, accountId string) error {

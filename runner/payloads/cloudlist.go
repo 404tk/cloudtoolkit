@@ -94,13 +94,6 @@ func (p CloudList) Run(ctx context.Context, config map[string]string) {
 		}
 		if e.LogEnable {
 			logger.Info(fmt.Sprintf("Output written to [%s]", exec.path))
-			if len(result.Errors) > 0 {
-				logger.Error("Cloud asset enumeration completed with partial errors.")
-			}
-		} else if len(result.Errors) > 0 {
-			logger.Error("Cloud asset enumeration completed with partial errors.")
-		} else {
-			logger.Info("Done.")
 		}
 	}
 }

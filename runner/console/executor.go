@@ -12,7 +12,6 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/runner/payloads"
 	"github.com/404tk/cloudtoolkit/utils"
-	"github.com/404tk/cloudtoolkit/utils/argparse"
 	"github.com/404tk/cloudtoolkit/utils/cache"
 	"github.com/404tk/cloudtoolkit/utils/confirm"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -99,33 +98,11 @@ func Executor(s string) {
 // instance-cmd-check is skipped here so the shell REPL, which enters a single
 // confirmation at session start, does not prompt on every keystroke.
 func confirmIfSensitive(config map[string]string) bool {
-	payload := config[utils.Payload]
-	metadata := config[utils.Metadata]
-	parts := argparse.Split(metadata)
-	provider := config[utils.Provider]
-
-	switch payload {
-	case "iam-user-check":
-		if len(parts) < 2 {
-			return true
-		}
-		return confirm.Ask("iam-user-check."+parts[0], provider, parts[1])
-	case "rds-account-check":
-		if len(parts) < 2 {
-			return true
-		}
-		return confirm.Ask("rds-account-check."+parts[0], provider, parts[1])
-	case "event-check":
-		if len(parts) < 1 || parts[0] != "whitelist" {
-			return true
-		}
-		resource := ""
-		if len(parts) >= 2 {
-			resource = parts[1]
-		}
-		return confirm.Ask("event-check.whitelist", provider, resource)
+	sensitivity := payloads.DescribeSensitivity(config[utils.Payload], config[utils.Metadata])
+	if !sensitivity.RequiresConfirmation() {
+		return true
 	}
-	return true
+	return confirm.Ask(sensitivity.ConfirmKey, config[utils.Provider], sensitivity.Resource)
 }
 
 func show(args []string) {

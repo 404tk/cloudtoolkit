@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/api"
-	"github.com/404tk/cloudtoolkit/utils/logger"
+	"github.com/404tk/cloudtoolkit/pkg/schema"
 )
 
 const (
@@ -24,38 +24,38 @@ const (
 	jdcloudConsoleURL = "https://login.jdcloud.com/subAccount/login/%s"
 )
 
-func (d *Driver) AddUser() {
+func (d *Driver) AddUser() (schema.IAMResult, error) {
 	ctx := context.Background()
 	if d.Client == nil {
-		logger.Error("jdcloud iam: nil api client")
-		return
+		return schema.IAMResult{}, fmt.Errorf("jdcloud iam: nil api client")
 	}
 
 	userName := strings.TrimSpace(d.UserName)
 	password := d.Password
 	if userName == "" {
-		logger.Error("Empty user name.")
-		return
+		return schema.IAMResult{}, fmt.Errorf("empty user name")
 	}
 	if password == "" {
-		logger.Error("Empty password.")
-		return
+		return schema.IAMResult{}, fmt.Errorf("empty password")
 	}
 
 	if err := createSubUser(ctx, d.Client, userName, password); err != nil {
-		logger.Error("Create user failed:", err.Error())
-		return
+		return schema.IAMResult{}, fmt.Errorf("create user failed: %w", err)
 	}
 	if err := attachSubUserPolicy(ctx, d.Client, userName); err != nil {
-		logger.Error("Grant "+administratorPolicyName+" policy failed:", err.Error())
-		return
+		return schema.IAMResult{}, fmt.Errorf("grant %s policy failed: %w", administratorPolicyName, err)
 	}
 
 	masterPin := getMasterPin(ctx, d.Client, d.AccessKey)
-	fmt.Printf("\n%-16s\t%-16s\t%-60s\n", "Username", "Password", "Login URL")
-	fmt.Printf("%-16s\t%-16s\t%-60s\n", "--------", "--------", "---------")
-	fmt.Printf("%-16s\t%-16s\t%-60s\n\n", userName, password,
-		fmt.Sprintf(jdcloudConsoleURL, masterPin))
+	loginURL := fmt.Sprintf(jdcloudConsoleURL, masterPin)
+
+	return schema.IAMResult{
+		Username:  userName,
+		Password:  password,
+		LoginURL:  loginURL,
+		AccountID: masterPin,
+		Message:   "User created successfully with " + administratorPolicyName + " policy",
+	}, nil
 }
 
 func createSubUser(ctx context.Context, client *api.Client, userName, password string) error {
@@ -120,11 +120,10 @@ func describeUserPin(ctx context.Context, client *api.Client, accessKey string) 
 // account context pre-filled. JDCloud's API requires either accessKey or
 // accountId; we use the authenticated master access key that created the
 // sub-user. Failure is non-fatal — the user creation itself has already
-// succeeded, we just skip the pre-filled URL parameter and log a warning.
+// succeeded, we just skip the pre-filled URL parameter.
 func getMasterPin(ctx context.Context, client *api.Client, accessKey string) string {
 	pin, err := describeUserPin(ctx, client, accessKey)
 	if err != nil {
-		logger.Warning("Resolve master account pin failed:", err.Error())
 		return ""
 	}
 	return pin

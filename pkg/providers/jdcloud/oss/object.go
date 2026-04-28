@@ -2,56 +2,96 @@ package oss
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/404tk/cloudtoolkit/utils"
-	"github.com/404tk/cloudtoolkit/utils/logger"
+	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
 )
 
-func (d *Driver) ListObjects(ctx context.Context, buckets map[string]string) {
+func (d *Driver) ListObjects(ctx context.Context, buckets map[string]string) ([]schema.BucketResult, error) {
+	results := make([]schema.BucketResult, 0, len(buckets))
+	var errs []string
 	for bucket, region := range buckets {
-		resp, err := d.listObjectsPage(ctx, bucket, region, "", 100)
-		if err != nil {
-			logger.Error(fmt.Sprintf("List Objects in %s failed: %s", bucket, err))
-			continue
-		}
+		token := ""
+		objects := make([]schema.BucketObject, 0)
+		failed := false
+		for {
+			resp, err := d.listObjectsPage(ctx, bucket, region, token, 100)
+			if err != nil {
+				errs = append(errs, fmt.Sprintf("%s: %v", bucket, err))
+				failed = true
+				break
+			}
 
-		if len(resp.Objects) == 0 {
-			logger.Error(fmt.Sprintf("No Objects found in %s.", bucket))
-			continue
-		}
-		logger.Warning(fmt.Sprintf("%d objects found in %s.", len(resp.Objects), bucket))
+			for _, obj := range resp.Objects {
+				objects = append(objects, schema.BucketObject{
+					BucketName:   bucket,
+					Key:          obj.Key,
+					Size:         obj.Size,
+					LastModified: obj.LastModified,
+					StorageClass: obj.StorageClass,
+				})
+			}
 
-		fmt.Printf("\n%-70s\t%-10s\n", "Key", "Size")
-		fmt.Printf("%-70s\t%-10s\n", "---", "----")
-		for _, object := range resp.Objects {
-			fmt.Printf("%-70s\t%-10s\n", object.Key, utils.ParseBytes(object.Size))
-		}
-		fmt.Println()
+			if !resp.IsTruncated || strings.TrimSpace(resp.NextContinuationToken) == "" {
+				break
+			}
+			token = resp.NextContinuationToken
 
-		select {
-		case <-ctx.Done():
-			return
-		default:
+			select {
+			case <-ctx.Done():
+				results = append(results, schema.BucketResult{
+					Action:      "list",
+					BucketName:  bucket,
+					ObjectCount: int64(len(objects)),
+					Objects:     objects,
+					Message:     fmt.Sprintf("%d objects found", len(objects)),
+				})
+				return results, nil
+			default:
+			}
+		}
+		if !failed || len(objects) > 0 {
+			results = append(results, schema.BucketResult{
+				Action:      "list",
+				BucketName:  bucket,
+				ObjectCount: int64(len(objects)),
+				Objects:     objects,
+				Message:     fmt.Sprintf("%d objects found", len(objects)),
+			})
 		}
 	}
+	if len(errs) > 0 {
+		return results, errors.New(strings.Join(errs, "; "))
+	}
+	return results, nil
 }
 
-func (d *Driver) TotalObjects(ctx context.Context, buckets map[string]string) {
+func (d *Driver) TotalObjects(ctx context.Context, buckets map[string]string) ([]schema.BucketResult, error) {
 	tracker := processbar.NewCountTracker()
 	defer tracker.Finish()
 
+	results := make([]schema.BucketResult, 0, len(buckets))
+	var errs []string
 	for bucket, region := range buckets {
 		count, err := d.countBucketObjects(ctx, bucket, region, tracker)
 		if err != nil {
-			logger.Error(fmt.Sprintf("List Objects in %s failed: %s", bucket, err))
-			return
+			errs = append(errs, fmt.Sprintf("%s: %v", bucket, err))
+			continue
 		}
-		fmt.Printf("\r")
-		logger.Warning(fmt.Sprintf("%s has %d objects.", bucket, count))
+		results = append(results, schema.BucketResult{
+			Action:      "total",
+			BucketName:  bucket,
+			ObjectCount: int64(count),
+			Message:     fmt.Sprintf("%d objects", count),
+		})
 	}
+	if len(errs) > 0 {
+		return results, errors.New(strings.Join(errs, "; "))
+	}
+	return results, nil
 }
 
 func (d *Driver) listObjectsPage(ctx context.Context, bucket, region, token string, maxKeys int) (ListObjectsV2Output, error) {

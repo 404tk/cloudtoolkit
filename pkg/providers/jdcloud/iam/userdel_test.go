@@ -16,8 +16,6 @@ func TestDriverDelUserDetachThenDelete(t *testing.T) {
 			if r.URL.RawPath != "/v1/subUser/demo-user%3AdetachSubUserPolicy" {
 				t.Fatalf("expected wire RawPath to escape ':' as %%3A, got %q", r.URL.RawPath)
 			}
-			// DELETE params must ride the query string (JDCloud SDK:
-			// WithoutBodyBuilder.BuildBody returns "" for DELETE).
 			if got := r.URL.Query().Get("policyName"); got != administratorPolicyName {
 				t.Fatalf("expected policyName=%s in query, got %q", administratorPolicyName, got)
 			}
@@ -35,10 +33,19 @@ func TestDriverDelUserDetachThenDelete(t *testing.T) {
 		Client:   newTestClient(server.URL),
 		UserName: "demo-user",
 	}
-	driver.DelUser()
+	result, err := driver.DelUser()
 
+	if err != nil {
+		t.Fatalf("DelUser failed: %v", err)
+	}
 	if got := strings.Join(actions, ","); got != "DetachSubUserPolicy,DeleteSubUser" {
 		t.Fatalf("unexpected actions: %s", got)
+	}
+	if result.Username != "demo-user" {
+		t.Fatalf("unexpected username: %s", result.Username)
+	}
+	if !strings.Contains(result.Message, "deleted") {
+		t.Fatalf("unexpected message: %s", result.Message)
 	}
 }
 

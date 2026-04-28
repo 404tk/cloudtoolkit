@@ -17,6 +17,47 @@ type ResultProducer interface {
 	Result(context.Context, map[string]string) (any, error)
 }
 
+type ResultError interface {
+	error
+	ResultPayload() any
+	ExitCode() int
+}
+
+type structuredResultError struct {
+	payload  any
+	err      error
+	exitCode int
+}
+
+func (e structuredResultError) Error() string {
+	if e.err == nil {
+		return ""
+	}
+	return e.err.Error()
+}
+
+func (e structuredResultError) ResultPayload() any {
+	return e.payload
+}
+
+func (e structuredResultError) ExitCode() int {
+	if e.exitCode <= 0 {
+		return 1
+	}
+	return e.exitCode
+}
+
+func NewResultError(payload any, exitCode int, err error) error {
+	if err == nil {
+		return nil
+	}
+	return structuredResultError{
+		payload:  payload,
+		err:      err,
+		exitCode: exitCode,
+	}
+}
+
 type Entry struct {
 	Name    string
 	Payload Payload

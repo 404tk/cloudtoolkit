@@ -8,31 +8,31 @@ import (
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/api"
-	"github.com/404tk/cloudtoolkit/utils/logger"
+	"github.com/404tk/cloudtoolkit/pkg/schema"
 )
 
-func (d *Driver) DelUser() {
+func (d *Driver) DelUser() (schema.IAMResult, error) {
 	ctx := context.Background()
 	if d.Client == nil {
-		logger.Error("jdcloud iam: nil api client")
-		return
+		return schema.IAMResult{}, fmt.Errorf("jdcloud iam: nil api client")
 	}
 
 	userName := strings.TrimSpace(d.UserName)
 	if userName == "" {
-		logger.Error("Empty user name.")
-		return
+		return schema.IAMResult{}, fmt.Errorf("empty user name")
 	}
 
 	if err := detachSubUserPolicy(ctx, d.Client, userName); err != nil && !isIgnorableDetachError(err) {
-		logger.Error(fmt.Sprintf("Remove policy from %s failed: %s", userName, err.Error()))
-		return
+		return schema.IAMResult{}, fmt.Errorf("remove policy from %s failed: %w", userName, err)
 	}
 	if err := deleteSubUser(ctx, d.Client, userName); err != nil {
-		logger.Error(fmt.Sprintf("Delete user %s failed: %s", userName, err.Error()))
-		return
+		return schema.IAMResult{}, fmt.Errorf("delete user %s failed: %w", userName, err)
 	}
-	logger.Warning(userName + " user delete completed.")
+
+	return schema.IAMResult{
+		Username: userName,
+		Message:  "User deleted successfully",
+	}, nil
 }
 
 func detachSubUserPolicy(ctx context.Context, client *api.Client, userName string) error {

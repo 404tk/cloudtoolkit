@@ -6,28 +6,27 @@ import (
 	"net/http"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/api"
-	"github.com/404tk/cloudtoolkit/utils/logger"
+	"github.com/404tk/cloudtoolkit/pkg/schema"
 )
 
-func (d *Driver) DelUser() {
+func (d *Driver) DelUser() (schema.IAMResult, error) {
 	users, err := d.ListUsers(context.Background())
 	if err != nil {
-		logger.Error("List users failed:", err.Error())
-		return
+		return schema.IAMResult{}, fmt.Errorf("list users failed: %w", err)
 	}
 	for _, u := range users {
 		if u.UserName == d.Username {
-			logger.Warning("Found UserId:", u.UserId)
 			err := d.deleteUser(context.Background(), u.UserId)
 			if err != nil {
-				logger.Error(fmt.Sprintf("Delete user %s failed: %s", d.Username, err.Error()))
-				return
+				return schema.IAMResult{}, fmt.Errorf("delete user %s failed: %w", d.Username, err)
 			}
-			logger.Warning(fmt.Sprintf("Delete user %s success!", d.Username))
-			return
+			return schema.IAMResult{
+				Username: d.Username,
+				Message:  "User deleted successfully",
+			}, nil
 		}
 	}
-	logger.Error(fmt.Sprintf("User %s not found.", d.Username))
+	return schema.IAMResult{}, fmt.Errorf("user %s not found", d.Username)
 }
 
 func (d *Driver) deleteUser(ctx context.Context, uid string) error {

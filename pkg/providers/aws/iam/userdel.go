@@ -5,38 +5,38 @@ import (
 	"fmt"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/aws/api"
-	"github.com/404tk/cloudtoolkit/utils/logger"
+	"github.com/404tk/cloudtoolkit/pkg/schema"
 )
 
-func (d *Driver) DelUser() {
+func (d *Driver) DelUser() (schema.IAMResult, error) {
 	ctx := context.Background()
 	client, err := d.requireClient()
 	if err != nil {
-		logger.Error(err)
-		return
+		return schema.IAMResult{}, err
 	}
 	region := d.requestRegion()
 
 	err = deleteLoginProfile(ctx, client, region, d.Username)
 	if err != nil {
 		if !isNoSuchEntity(err) {
-			logger.Error(fmt.Sprintf("Delete login profile failed: %s", err))
-			return
+			return schema.IAMResult{}, fmt.Errorf("delete login profile failed: %w", err)
 		}
 	}
 	err = detachUserPolicy(ctx, client, region, d.Username)
 	if err != nil {
 		if !isNoSuchEntity(err) {
-			logger.Error(fmt.Sprintf("Remove policy from %s failed: %s", d.Username, err))
-			return
+			return schema.IAMResult{}, fmt.Errorf("remove policy from %s failed: %w", d.Username, err)
 		}
 	}
 	err = deleteUser(ctx, client, region, d.Username)
 	if err != nil {
-		logger.Error(fmt.Sprintf("Delete user failed: %s", err))
-		return
+		return schema.IAMResult{}, fmt.Errorf("delete user failed: %w", err)
 	}
-	logger.Warning(fmt.Sprintf("Delete user %s success!", d.Username))
+
+	return schema.IAMResult{
+		Username: d.Username,
+		Message:  "User deleted successfully",
+	}, nil
 }
 
 func detachUserPolicy(ctx context.Context, client *api.Client, region, userName string) error {

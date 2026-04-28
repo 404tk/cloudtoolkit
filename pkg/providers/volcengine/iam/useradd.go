@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/api"
-	"github.com/404tk/cloudtoolkit/utils/logger"
+	"github.com/404tk/cloudtoolkit/pkg/schema"
 )
 
 const (
@@ -16,45 +16,43 @@ const (
 	volcengineSigninURL     = "https://console.volcengine.com/auth/login/user/%s"
 )
 
-func (d *Driver) AddUser() {
+func (d *Driver) AddUser() (schema.IAMResult, error) {
 	ctx := context.Background()
 	client, err := d.requireClient()
 	if err != nil {
-		logger.Error(err)
-		return
+		return schema.IAMResult{}, fmt.Errorf("require client failed: %w", err)
 	}
 
 	region := d.requestRegion()
 	userName := strings.TrimSpace(d.UserName)
 	password := d.Password
 	if userName == "" {
-		logger.Error("Empty user name.")
-		return
+		return schema.IAMResult{}, fmt.Errorf("empty user name")
 	}
 	if password == "" {
-		logger.Error("Empty password.")
-		return
+		return schema.IAMResult{}, fmt.Errorf("empty password")
 	}
 
 	if err := createUser(ctx, client, region, userName); err != nil {
-		logger.Error("Create user failed:", err)
-		return
+		return schema.IAMResult{}, fmt.Errorf("create user failed: %w", err)
 	}
 	if err := createLoginProfile(ctx, client, region, userName, password); err != nil {
-		logger.Error("Create login profile failed:", err)
-		return
+		return schema.IAMResult{}, fmt.Errorf("create login profile failed: %w", err)
 	}
 	if err := attachUserPolicy(ctx, client, region, userName); err != nil {
-		logger.Error("Grant AdministratorAccess policy failed:", err)
-		return
+		return schema.IAMResult{}, fmt.Errorf("grant AdministratorAccess policy failed: %w", err)
 	}
 
 	accountID := currentAccountID(ctx, client, region)
-	fmt.Printf("\n%-16s\t%-16s\t%-40s\n", "Username", "Password", "Login URL")
-	fmt.Printf("%-16s\t%-16s\t%-40s\n", "--------", "--------", "---------")
-	fmt.Printf("%-16s\t%-16s\t%-40s\n", userName, password,
-		fmt.Sprintf(volcengineSigninURL, accountID))
-	fmt.Println()
+	loginURL := fmt.Sprintf(volcengineSigninURL, accountID)
+
+	return schema.IAMResult{
+		Username:  userName,
+		Password:  password,
+		LoginURL:  loginURL,
+		AccountID: accountID,
+		Message:   "User created successfully with AdministratorAccess policy",
+	}, nil
 }
 
 func createUser(ctx context.Context, client *api.Client, region, userName string) error {
@@ -75,7 +73,6 @@ func attachUserPolicy(ctx context.Context, client *api.Client, region, userName 
 func currentAccountID(ctx context.Context, client *api.Client, region string) string {
 	resp, err := client.ListProjects(ctx, region)
 	if err != nil {
-		logger.Error("Get account ID failed:", err)
 		return ""
 	}
 	if len(resp.Result.Projects) == 0 {

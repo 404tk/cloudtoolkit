@@ -32,11 +32,26 @@ func (p EventCheck) Run(ctx context.Context, config map[string]string) {
 		return
 	}
 	reader.EventDump(action, sourceIp)
-	logger.Info("Done.")
 }
 
 func (p EventCheck) Desc() string {
 	return "Review cloud security events from an authorized environment to validate alert context and investigation workflows."
+}
+
+func (p EventCheck) Sensitivity(metadata string) Sensitivity {
+	data := argparse.Split(metadata)
+	if len(data) < 1 || data[0] != "whitelist" {
+		return Sensitivity{}
+	}
+	resource := ""
+	if len(data) >= 2 {
+		resource = data[1]
+	}
+	return Sensitivity{
+		Level:      "mutate",
+		ConfirmKey: "event-check.whitelist",
+		Resource:   resource,
+	}
 }
 
 func init() {

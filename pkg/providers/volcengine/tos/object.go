@@ -2,60 +2,106 @@ package tos
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
-	"github.com/404tk/cloudtoolkit/utils"
-	"github.com/404tk/cloudtoolkit/utils/logger"
+	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
 )
 
-func (d *Driver) ListObjects(ctx context.Context, buckets map[string]string) {
+func (d *Driver) ListObjects(ctx context.Context, buckets map[string]string) ([]schema.BucketResult, error) {
 	client, err := d.NewClient()
 	if err != nil {
-		logger.Error(err)
-		return
+		return nil, err
 	}
 
+	results := make([]schema.BucketResult, 0, len(buckets))
+	var errs []string
 	for bucket, region := range buckets {
-		resp, err := client.ListObjectsV2(ctx, bucket, normalizeBucketRegion(region), "", 100)
-		if err != nil {
-			logger.Error(fmt.Sprintf("List Objects in %s failed: %s", bucket, err))
-			continue
-		}
-		if len(resp.Contents) == 0 {
-			logger.Error(fmt.Sprintf("No Objects found in %s.", bucket))
-			continue
-		}
-		logger.Warning(fmt.Sprintf("%d objects found in %s.", len(resp.Contents), bucket))
-		fmt.Printf("\n%-70s\t%-10s\n", "Key", "Size")
-		fmt.Printf("%-70s\t%-10s\n", "---", "----")
-		for _, object := range resp.Contents {
-			fmt.Printf("%-70s\t%-10s\n", object.Key, utils.ParseBytes(object.Size))
-		}
-		fmt.Println()
+		token := ""
+		objects := make([]schema.BucketObject, 0)
+		failed := false
+		for {
+			resp, err := client.ListObjectsV2(ctx, bucket, normalizeBucketRegion(region), token, 100)
+			if err != nil {
+				errs = append(errs, fmt.Sprintf("%s: %v", bucket, err))
+				failed = true
+				break
+			}
 
-		select {
-		case <-ctx.Done():
-			return
-		default:
+			for _, object := range resp.Contents {
+				objects = append(objects, schema.BucketObject{
+					BucketName:   bucket,
+					Key:          object.Key,
+					Size:         object.Size,
+					LastModified: object.LastModified,
+					StorageClass: object.StorageClass,
+				})
+			}
+
+			if !resp.IsTruncated {
+				break
+			}
+			token = strings.TrimSpace(resp.NextContinuationToken)
+			if token == "" {
+				errs = append(errs, fmt.Sprintf("%s: missing next continuation token", bucket))
+				failed = true
+				break
+			}
+
+			select {
+			case <-ctx.Done():
+				results = append(results, schema.BucketResult{
+					Action:      "list",
+					BucketName:  bucket,
+					ObjectCount: int64(len(objects)),
+					Objects:     objects,
+					Message:     fmt.Sprintf("%d objects found", len(objects)),
+				})
+				return results, nil
+			default:
+			}
+		}
+		if !failed || len(objects) > 0 {
+			results = append(results, schema.BucketResult{
+				Action:      "list",
+				BucketName:  bucket,
+				ObjectCount: int64(len(objects)),
+				Objects:     objects,
+				Message:     fmt.Sprintf("%d objects found", len(objects)),
+			})
 		}
 	}
+	if len(errs) > 0 {
+		return results, errors.New(strings.Join(errs, "; "))
+	}
+	return results, nil
 }
 
-func (d *Driver) TotalObjects(ctx context.Context, buckets map[string]string) {
+func (d *Driver) TotalObjects(ctx context.Context, buckets map[string]string) ([]schema.BucketResult, error) {
 	tracker := processbar.NewCountTracker()
 	defer tracker.Finish()
 
+	results := make([]schema.BucketResult, 0, len(buckets))
+	var errs []string
 	for bucket, region := range buckets {
 		count, err := d.countBucketObjects(ctx, bucket, normalizeBucketRegion(region), tracker)
 		if err != nil {
-			logger.Error(fmt.Sprintf("List Objects in %s failed: %s", bucket, err))
-			return
+			errs = append(errs, fmt.Sprintf("%s: %v", bucket, err))
+			continue
 		}
-		fmt.Printf("\r")
-		logger.Warning(fmt.Sprintf("%s has %d objects.", bucket, count))
+		results = append(results, schema.BucketResult{
+			Action:      "total",
+			BucketName:  bucket,
+			ObjectCount: int64(count),
+			Message:     fmt.Sprintf("%d objects", count),
+		})
 	}
+	if len(errs) > 0 {
+		return results, errors.New(strings.Join(errs, "; "))
+	}
+	return results, nil
 }
 
 func (d *Driver) countBucketObjects(ctx context.Context, bucket, region string, tracker *processbar.CountTracker) (int, error) {

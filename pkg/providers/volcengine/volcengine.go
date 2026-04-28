@@ -131,7 +131,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	return list, list.Err()
 }
 
-func (p *Provider) UserManagement(action, username, password string) {
+func (p *Provider) UserManagement(action, username, password string) (schema.IAMResult, error) {
 	driver := &iam.Driver{
 		Client:   p.apiClient,
 		Region:   p.region,
@@ -141,33 +141,28 @@ func (p *Provider) UserManagement(action, username, password string) {
 
 	switch action {
 	case "add":
-		driver.AddUser()
+		return driver.AddUser()
 	case "del":
-		driver.DelUser()
+		return driver.DelUser()
 	default:
-		logger.Error("Please set metadata like \"add username password\" or \"del username\"")
+		return schema.IAMResult{}, fmt.Errorf("invalid action: %s (expected: add, del)", action)
 	}
 }
 
-func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
+func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([]schema.BucketResult, error) {
 	driver := p.newTOSDriver(p.region)
+	infos, err := p.bucketInfos(context.Background(), driver, bucketName)
+	if err != nil {
+		return nil, fmt.Errorf("list buckets: %w", err)
+	}
+
 	switch action {
 	case "list":
-		infos, err := p.bucketInfos(context.Background(), driver, bucketName)
-		if err != nil {
-			logger.Error("List buckets failed:", err)
-			return
-		}
-		driver.ListObjects(ctx, infos)
+		return driver.ListObjects(ctx, infos)
 	case "total":
-		infos, err := p.bucketInfos(context.Background(), driver, bucketName)
-		if err != nil {
-			logger.Error("List buckets failed:", err)
-			return
-		}
-		driver.TotalObjects(ctx, infos)
+		return driver.TotalObjects(ctx, infos)
 	default:
-		logger.Error("`list all` or `total all`.")
+		return nil, fmt.Errorf("invalid action: %s (expected: list, total)", action)
 	}
 }
 

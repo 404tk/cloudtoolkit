@@ -31,13 +31,23 @@ func TestDriverDelUserDeletesMatchedUser(t *testing.T) {
 	driver := newTestDriver(server.URL, "cn-north-4")
 	driver.Username = "ctk"
 	driver.DomainID = "d-1"
-	driver.DelUser()
+	result, err := driver.DelUser()
 
+	if err != nil {
+		t.Fatalf("DelUser failed: %v", err)
+	}
 	if deletedPath != "/v3/users/u-1" {
 		t.Fatalf("unexpected delete path: %s", deletedPath)
 	}
-	if !strings.Contains(stdout.String(), "Delete user ctk success!") {
-		t.Fatalf("unexpected stdout logs: %s", stdout.String())
+	if result.Username != "ctk" {
+		t.Fatalf("unexpected username: %s", result.Username)
+	}
+	if !strings.Contains(result.Message, "success") {
+		t.Fatalf("unexpected message: %s", result.Message)
+	}
+	// ListUsers is called internally and produces log output
+	if !strings.Contains(stdout.String(), "List IAM users") {
+		t.Fatalf("expected list users log in stdout: %s", stdout.String())
 	}
 	if stderr.Len() != 0 {
 		t.Fatalf("unexpected stderr logs: %s", stderr.String())
@@ -45,7 +55,7 @@ func TestDriverDelUserDeletesMatchedUser(t *testing.T) {
 }
 
 func TestDriverDelUserLogsNotFound(t *testing.T) {
-	_, stderr := withLoggerBuffers(t)
+	stdout, _ := withLoggerBuffers(t)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v5/users" {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
@@ -56,9 +66,19 @@ func TestDriverDelUserLogsNotFound(t *testing.T) {
 
 	driver := newTestDriver(server.URL, "cn-north-4")
 	driver.Username = "ctk"
-	driver.DelUser()
+	result, err := driver.DelUser()
 
-	if !strings.Contains(stderr.String(), "User ctk not found.") {
-		t.Fatalf("unexpected stderr logs: %s", stderr.String())
+	if err == nil {
+		t.Fatalf("expected error for user not found")
+	}
+	if !strings.Contains(err.Error(), "user ctk not found") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+	// ListUsers is called internally and produces log output
+	if !strings.Contains(stdout.String(), "List IAM users") {
+		t.Fatalf("expected list users log in stdout: %s", stdout.String())
+	}
+	if result.Username != "" {
+		t.Fatalf("expected empty username in error result, got: %s", result.Username)
 	}
 }

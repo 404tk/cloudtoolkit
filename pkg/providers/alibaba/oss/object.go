@@ -5,45 +5,50 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/404tk/cloudtoolkit/utils"
-	"github.com/404tk/cloudtoolkit/utils/logger"
+	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
 )
 
-func (d *Driver) ListObjects(ctx context.Context, buckets map[string]string) {
+func (d *Driver) ListObjects(ctx context.Context, buckets map[string]string) ([]schema.BucketResult, error) {
 	client, err := d.NewClient()
 	if err != nil {
-		logger.Error(err)
-		return
+		return nil, err
 	}
+
+	results := []schema.BucketResult{}
 	for b, r := range buckets {
 		resp, err := client.ListObjectsV2(ctx, b, normalizeBucketRegion(r), "", 100)
 		if err != nil {
-			msg := fmt.Sprintf("List Objects in %s failed: %s", b, err.Error())
-			logger.Error(msg)
-			continue
+			return nil, fmt.Errorf("list objects in %s: %w", b, err)
 		}
 
-		if len(resp.Objects) == 0 {
-			msg := fmt.Sprintf("No Objects found in %s.", b)
-			logger.Error(msg)
-			continue
+		objects := make([]schema.BucketObject, 0, len(resp.Objects))
+		for _, obj := range resp.Objects {
+			objects = append(objects, schema.BucketObject{
+				BucketName:   b,
+				Key:          obj.Key,
+				Size:         obj.Size,
+				LastModified: obj.LastModified,
+				StorageClass: obj.StorageClass,
+			})
 		}
-		logger.Warning(fmt.Sprintf("%d objects found in %s.", len(resp.Objects), b))
 
-		fmt.Printf("\n%-70s\t%-10s\n", "Key", "Size")
-		fmt.Printf("%-70s\t%-10s\n", "---", "----")
-		for _, object := range resp.Objects {
-			fmt.Printf("%-70s\t%-10s\n",
-				object.Key, utils.ParseBytes(object.Size))
+		result := schema.BucketResult{
+			Action:      "list",
+			BucketName:  b,
+			ObjectCount: int64(len(objects)),
+			Objects:     objects,
+			Message:     fmt.Sprintf("%d objects found", len(objects)),
 		}
-		fmt.Println()
+		results = append(results, result)
+
 		select {
 		case <-ctx.Done():
-			return
+			return results, nil
 		default:
 		}
 	}
+	return results, nil
 }
 
 /*
@@ -56,18 +61,26 @@ Links:
 	https://help.aliyun.com/document_detail/129732.html
 	https://github.com/aliyun/ossutil
 */
-func (d *Driver) TotalObjects(ctx context.Context, buckets map[string]string) {
+func (d *Driver) TotalObjects(ctx context.Context, buckets map[string]string) ([]schema.BucketResult, error) {
 	tracker := processbar.NewCountTracker()
 	defer tracker.Finish()
+
+	results := []schema.BucketResult{}
 	for b, r := range buckets {
 		count, err := d.countBucketObjects(ctx, b, normalizeBucketRegion(r), tracker)
 		if err != nil {
-			logger.Error(fmt.Sprintf("List Objects in %s failed: %s", b, err))
-			return
+			return nil, fmt.Errorf("list objects in %s: %w", b, err)
 		}
-		fmt.Printf("\r")
-		logger.Warning(fmt.Sprintf("%s has %d objects.", b, count))
+
+		result := schema.BucketResult{
+			Action:      "total",
+			BucketName:  b,
+			ObjectCount: int64(count),
+			Message:     fmt.Sprintf("%d objects", count),
+		}
+		results = append(results, result)
 	}
+	return results, nil
 }
 
 func (d *Driver) countBucketObjects(ctx context.Context, bucket, region string, tracker *processbar.CountTracker) (int, error) {

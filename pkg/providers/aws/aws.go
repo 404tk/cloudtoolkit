@@ -102,7 +102,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	return list, list.Err()
 }
 
-func (p *Provider) UserManagement(action, username, password string) {
+func (p *Provider) UserManagement(action, username, password string) (schema.IAMResult, error) {
 	ramprovider := &_iam.Driver{
 		Client:        p.apiClient,
 		Region:        p.region,
@@ -112,15 +112,15 @@ func (p *Provider) UserManagement(action, username, password string) {
 	}
 	switch action {
 	case "add":
-		ramprovider.AddUser()
+		return ramprovider.AddUser()
 	case "del":
-		ramprovider.DelUser()
+		return ramprovider.DelUser()
 	default:
-		logger.Error("Please set metadata like \"add username password\" or \"del username\"")
+		return schema.IAMResult{}, fmt.Errorf("invalid action: %s (expected: add, del)", action)
 	}
 }
 
-func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
+func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([]schema.BucketResult, error) {
 	s3provider := &_s3.Driver{Client: p.apiClient, DefaultRegion: p.defaultRegion}
 	switch action {
 	case "list":
@@ -128,8 +128,7 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
 		if bucketName == "all" {
 			buckets, err := s3provider.GetBuckets(context.Background())
 			if err != nil {
-				logger.Error("List buckets failed:", err)
-				return
+				return nil, fmt.Errorf("list buckets: %w", err)
 			}
 			for _, b := range buckets {
 				infos[b.BucketName] = b.Region
@@ -137,14 +136,13 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
 		} else {
 			infos[bucketName] = p.defaultRegion
 		}
-		s3provider.ListObjects(ctx, infos)
+		return s3provider.ListObjects(ctx, infos)
 	case "total":
 		var infos = make(map[string]string)
 		if bucketName == "all" {
 			buckets, err := s3provider.GetBuckets(context.Background())
 			if err != nil {
-				logger.Error("List buckets failed:", err)
-				return
+				return nil, fmt.Errorf("list buckets: %w", err)
 			}
 			for _, b := range buckets {
 				infos[b.BucketName] = b.Region
@@ -152,8 +150,8 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
 		} else {
 			infos[bucketName] = p.defaultRegion
 		}
-		s3provider.TotalObjects(ctx, infos)
+		return s3provider.TotalObjects(ctx, infos)
 	default:
-		logger.Error("`list all` or `total all`.")
+		return nil, fmt.Errorf("invalid action: %s (expected: list, total)", action)
 	}
 }

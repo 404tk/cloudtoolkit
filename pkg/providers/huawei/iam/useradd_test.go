@@ -43,13 +43,22 @@ func TestDriverAddUserPrintsLoginURL(t *testing.T) {
 	driver.Username = "ctk"
 	driver.Password = "P@ss"
 	driver.DomainID = "d-1"
-	output := captureStdout(t, driver.AddUser)
+	result, err := driver.AddUser()
 
+	if err != nil {
+		t.Fatalf("AddUser failed: %v", err)
+	}
 	if addedPath != "/v3/groups/g-admin/users/u-1" {
 		t.Fatalf("unexpected add-user path: %s", addedPath)
 	}
-	if !strings.Contains(output, "https://auth.huaweicloud.com/authui/login?id=example") {
-		t.Fatalf("unexpected stdout: %s", output)
+	if result.Username != "ctk" {
+		t.Fatalf("unexpected username: %s", result.Username)
+	}
+	if result.Password != "P@ss" {
+		t.Fatalf("unexpected password: %s", result.Password)
+	}
+	if !strings.Contains(result.LoginURL, "https://auth.huaweicloud.com/authui/login?id=example") {
+		t.Fatalf("unexpected login URL: %s", result.LoginURL)
 	}
 }
 
@@ -85,8 +94,11 @@ func TestDriverAddUserFallsBackToAllGroups(t *testing.T) {
 	driver.Username = "ctk"
 	driver.Password = "P@ss"
 	driver.DomainID = "d-1"
-	_ = captureStdout(t, driver.AddUser)
+	_, err := driver.AddUser()
 
+	if err != nil {
+		t.Fatalf("AddUser failed: %v", err)
+	}
 	if len(added) != 2 || !added["/v3/groups/g-1/users/u-1"] || !added["/v3/groups/g-2/users/u-1"] {
 		t.Fatalf("unexpected fallback add paths: %+v", added)
 	}

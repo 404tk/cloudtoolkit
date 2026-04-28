@@ -42,9 +42,15 @@ func TestDelUserDetachesPolicyThenDeletesUser(t *testing.T) {
 
 	driver := newTestDriver(server.URL)
 	driver.UserName = "alice"
-	driver.DelUser()
+	result, err := driver.DelUser()
 
-	if got := buffer.String(); !strings.Contains(got, "alice user delete completed.") {
-		t.Fatalf("unexpected logger output: %s", got)
+	if err != nil {
+		t.Fatalf("DelUser failed: %v", err)
+	}
+	if result.Username != "alice" {
+		t.Fatalf("unexpected username: %s", result.Username)
+	}
+	if !strings.Contains(result.Message, "deleted") {
+		t.Fatalf("unexpected message: %s", result.Message)
 	}
 }

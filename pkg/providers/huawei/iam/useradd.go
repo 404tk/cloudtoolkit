@@ -7,27 +7,29 @@ import (
 	"net/http"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/api"
-	"github.com/404tk/cloudtoolkit/utils/logger"
+	"github.com/404tk/cloudtoolkit/pkg/schema"
 )
 
-func (d *Driver) AddUser() {
+func (d *Driver) AddUser() (schema.IAMResult, error) {
 	ctx := context.Background()
 	uid, domainID, err := d.createUser(ctx)
 	if err != nil {
-		logger.Error("Create user failed:", err.Error())
-		return
+		return schema.IAMResult{}, fmt.Errorf("create user failed: %w", err)
 	}
 	err = d.addUserToAdminGroup(ctx, uid)
 	if err != nil {
-		logger.Error("Grant AdministratorAccess policy failed.")
-		return
+		return schema.IAMResult{}, fmt.Errorf("grant AdministratorAccess policy failed: %w", err)
 	}
 	name := d.getDomainName(ctx, domainID)
-	fmt.Printf("\n%-10s\t%-10s\t%-60s\n", "Username", "Password", "Login URL")
-	fmt.Printf("%-10s\t%-10s\t%-60s\n", "--------", "--------", "---------")
-	fmt.Printf("%-10s\t%-10s\t%-60s\n\n",
-		d.Username,
-		d.Password, "https://auth.huaweicloud.com/authui/login?id="+name)
+	loginURL := "https://auth.huaweicloud.com/authui/login?id=" + name
+
+	return schema.IAMResult{
+		Username:  d.Username,
+		Password:  d.Password,
+		LoginURL:  loginURL,
+		AccountID: name,
+		Message:   "User created successfully with admin group membership",
+	}, nil
 }
 
 func (d *Driver) createUser(ctx context.Context) (string, string, error) {
@@ -114,7 +116,6 @@ func (d *Driver) addUserToGroup(ctx context.Context, region, groupID, userID str
 func (d *Driver) getDomainName(ctx context.Context, domainID string) string {
 	resp, err := d.listAuthDomains(ctx)
 	if err != nil {
-		logger.Error("List domains failed:", err.Error())
 		return ""
 	}
 	for _, v := range resp.Domains {

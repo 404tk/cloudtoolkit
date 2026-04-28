@@ -40,8 +40,6 @@ func TestDriverAddUserCreatesSubUserAndAttachesAdminPolicy(t *testing.T) {
 			_, _ = w.Write([]byte(`{"requestId":"req-create","result":{"subUser":{"name":"demo-user","account":"1001"}}}`))
 		case r.Method == http.MethodPost && r.URL.Path == "/v1/subUser/demo-user:attachSubUserPolicy":
 			actions = append(actions, "AttachSubUserPolicy")
-			// JDCloud signs with the colon percent-encoded; asserting RawPath
-			// here pins the HTTP wire form to match what the signer hashes.
 			if r.URL.RawPath != "/v1/subUser/demo-user%3AattachSubUserPolicy" {
 				t.Fatalf("expected wire RawPath to escape ':' as %%3A, got %q", r.URL.RawPath)
 			}
@@ -75,10 +73,22 @@ func TestDriverAddUserCreatesSubUserAndAttachesAdminPolicy(t *testing.T) {
 		UserName:  "demo-user",
 		Password:  "TempPassw0rd!",
 	}
-	driver.AddUser()
+	result, err := driver.AddUser()
 
+	if err != nil {
+		t.Fatalf("AddUser failed: %v", err)
+	}
 	if got := strings.Join(actions, ","); got != "CreateSubUser,AttachSubUserPolicy,DescribeUserPin" {
 		t.Fatalf("unexpected actions: %s", got)
+	}
+	if result.Username != "demo-user" {
+		t.Fatalf("unexpected username: %s", result.Username)
+	}
+	if result.Password != "TempPassw0rd!" {
+		t.Fatalf("unexpected password: %s", result.Password)
+	}
+	if !strings.Contains(result.LoginURL, "https://login.jdcloud.com/subAccount/login/jd_master_demo") {
+		t.Fatalf("unexpected login URL: %s", result.LoginURL)
 	}
 }
 
@@ -111,12 +121,16 @@ func TestDriverAddUserIgnoresPinLookupFailure(t *testing.T) {
 		UserName:  "demo-user",
 		Password:  "TempPassw0rd!",
 	}
-	// AddUser must not abort when DescribeUserPin fails — the account already
-	// exists and the login URL just renders without the master pin prefix.
-	driver.AddUser()
+	result, err := driver.AddUser()
 
+	if err != nil {
+		t.Fatalf("AddUser failed: %v", err)
+	}
 	if got := strings.Join(actions, ","); got != "CreateSubUser,AttachSubUserPolicy,DescribeUserPin" {
 		t.Fatalf("unexpected actions: %s", got)
+	}
+	if result.Username != "demo-user" {
+		t.Fatalf("unexpected username: %s", result.Username)
 	}
 }
 
@@ -138,8 +152,11 @@ func TestDriverAddUserSkipsAttachOnCreateFailure(t *testing.T) {
 		UserName:  "demo-user",
 		Password:  "weak",
 	}
-	driver.AddUser()
+	_, err := driver.AddUser()
 
+	if err == nil {
+		t.Fatalf("expected error for create failure")
+	}
 	if got := strings.Join(actions, ","); got != "CreateSubUser" {
 		t.Fatalf("unexpected actions: %s", got)
 	}
@@ -167,7 +184,10 @@ func TestDriverAddUserRejectsEmptyInputs(t *testing.T) {
 				UserName:  tc.user,
 				Password:  tc.pwd,
 			}
-			driver.AddUser()
+			_, err := driver.AddUser()
+			if err == nil {
+				t.Fatalf("expected error for empty input")
+			}
 		})
 	}
 }

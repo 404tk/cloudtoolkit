@@ -37,9 +37,15 @@ func TestDelRoleDetachesPolicyThenDeletesRole(t *testing.T) {
 
 	driver := newTestDriver(server.URL)
 	driver.RoleName = "shadow-admin"
-	driver.DelRole()
+	result, err := driver.DelRole()
 
-	if got := buffer.String(); !strings.Contains(got, "shadow-admin role delete completed.") {
-		t.Fatalf("unexpected logger output: %s", got)
+	if err != nil {
+		t.Fatalf("DelRole failed: %v", err)
+	}
+	if result.Username != "shadow-admin" {
+		t.Fatalf("unexpected username (role name): %s", result.Username)
+	}
+	if !strings.Contains(result.Message, "deleted") {
+		t.Fatalf("unexpected message: %s", result.Message)
 	}
 }

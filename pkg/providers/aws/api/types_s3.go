@@ -23,8 +23,10 @@ type GetBucketLocationOutput struct {
 }
 
 type S3Object struct {
-	Key  string
-	Size int64
+	Key          string
+	Size         int64
+	LastModified string
+	StorageClass string
 }
 
 type ListObjectsV2Output struct {
@@ -56,8 +58,10 @@ type listObjectsV2Response struct {
 }
 
 type s3ObjectWire struct {
-	Key  string `xml:"Key"`
-	Size int64  `xml:"Size"`
+	Key          string `xml:"Key"`
+	Size         int64  `xml:"Size"`
+	LastModified string `xml:"LastModified"`
+	StorageClass string `xml:"StorageClass"`
 }
 
 func (c *Client) ListBuckets(ctx context.Context, region string) (ListBucketsOutput, error) {
@@ -140,8 +144,10 @@ func (c *Client) ListObjectsV2(ctx context.Context, region, bucket, continuation
 			continue
 		}
 		out.Objects = append(out.Objects, S3Object{
-			Key:  key,
-			Size: object.Size,
+			Key:          key,
+			Size:         object.Size,
+			LastModified: strings.TrimSpace(object.LastModified),
+			StorageClass: strings.TrimSpace(object.StorageClass),
 		})
 	}
 	return out, nil

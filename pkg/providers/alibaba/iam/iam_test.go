@@ -5,7 +5,6 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -143,17 +142,18 @@ func TestAddUserCreatesLoginProfileAndPrintsLoginURL(t *testing.T) {
 	driver.UserName = "alice"
 	driver.Password = "Secret!1"
 
-	output := captureStdout(t, func() {
-		driver.AddUser()
-	})
-	if !strings.Contains(output, "alice") {
-		t.Fatalf("expected username in output: %s", output)
+	result, err := driver.AddUser()
+	if err != nil {
+		t.Fatalf("AddUser failed: %v", err)
 	}
-	if !strings.Contains(output, "Secret!1") {
-		t.Fatalf("expected password in output: %s", output)
+	if result.Username != "alice" {
+		t.Fatalf("unexpected username: %s", result.Username)
 	}
-	if !strings.Contains(output, "https://signin.aliyun.com/demo-account/login.htm") {
-		t.Fatalf("expected login url in output: %s", output)
+	if result.Password != "Secret!1" {
+		t.Fatalf("unexpected password: %s", result.Password)
+	}
+	if !strings.Contains(result.LoginURL, "https://signin.aliyun.com/demo-account/login.htm") {
+		t.Fatalf("unexpected login URL: %s", result.LoginURL)
 	}
 }
 
@@ -181,10 +181,19 @@ func TestDelUserIgnoresMissingAttachmentAndDeletesUser(t *testing.T) {
 
 	driver := newTestDriver(server.URL)
 	driver.UserName = "alice"
-	driver.DelUser()
+	result, err := driver.DelUser()
 
+	if err != nil {
+		t.Fatalf("DelUser failed: %v", err)
+	}
 	if strings.Join(actions, ",") != "DetachPolicyFromUser,DeleteUser" {
 		t.Fatalf("unexpected action sequence: %v", actions)
+	}
+	if result.Username != "alice" {
+		t.Fatalf("unexpected username: %s", result.Username)
+	}
+	if !strings.Contains(result.Message, "deleted successfully") {
+		t.Fatalf("unexpected message: %s", result.Message)
 	}
 }
 
@@ -221,17 +230,18 @@ func TestAddRoleCreatesRoleAndPrintsSwitchURL(t *testing.T) {
 	driver.RoleName = "auditor"
 	driver.AccountId = "1234567890123456"
 
-	output := captureStdout(t, func() {
-		driver.AddRole()
-	})
-	if !strings.Contains(output, "demo-account") {
-		t.Fatalf("expected account alias in output: %s", output)
+	result, err := driver.AddRole()
+	if err != nil {
+		t.Fatalf("AddRole failed: %v", err)
 	}
-	if !strings.Contains(output, "auditor") {
-		t.Fatalf("expected role name in output: %s", output)
+	if result.Username != "auditor" {
+		t.Fatalf("unexpected username (role name): %s", result.Username)
 	}
-	if !strings.Contains(output, "https://signin.aliyun.com/switchRole.htm") {
-		t.Fatalf("expected switch url in output: %s", output)
+	if result.AccountID != "demo-account" {
+		t.Fatalf("unexpected account ID: %s", result.AccountID)
+	}
+	if !strings.Contains(result.LoginURL, "https://signin.aliyun.com/switchRole.htm") {
+		t.Fatalf("unexpected switch URL: %s", result.LoginURL)
 	}
 }
 
@@ -258,10 +268,19 @@ func TestDelRoleDetachesPolicyAndDeletesRole(t *testing.T) {
 
 	driver := newTestDriver(server.URL)
 	driver.RoleName = "auditor"
-	driver.DelRole()
+	result, err := driver.DelRole()
 
+	if err != nil {
+		t.Fatalf("DelRole failed: %v", err)
+	}
 	if strings.Join(actions, ",") != "DetachPolicyFromRole,DeleteRole" {
 		t.Fatalf("unexpected action sequence: %v", actions)
+	}
+	if result.Username != "auditor" {
+		t.Fatalf("unexpected username (role name): %s", result.Username)
+	}
+	if !strings.Contains(result.Message, "deleted successfully") {
+		t.Fatalf("unexpected message: %s", result.Message)
 	}
 }
 
@@ -275,27 +294,4 @@ func newTestDriver(baseURL string) Driver {
 			api.WithNonce(func() string { return "nonce" }),
 		},
 	}
-}
-
-func captureStdout(t *testing.T, fn func()) string {
-	t.Helper()
-
-	originalStdout := os.Stdout
-	reader, writer, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("create pipe: %v", err)
-	}
-	os.Stdout = writer
-
-	done := make(chan string, 1)
-	go func() {
-		data, _ := io.ReadAll(reader)
-		done <- string(data)
-	}()
-
-	fn()
-
-	_ = writer.Close()
-	os.Stdout = originalStdout
-	return <-done
 }

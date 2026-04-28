@@ -5,22 +5,26 @@ import (
 	"fmt"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/api"
-	"github.com/404tk/cloudtoolkit/utils/logger"
+	"github.com/404tk/cloudtoolkit/pkg/schema"
 )
 
-func (d *Driver) AddRole() {
+func (d *Driver) AddRole() (schema.IAMResult, error) {
 	ctx := context.Background()
 	client := d.newClient()
 	err := createRole(ctx, client, d.RoleName, d.Uin)
 	if err != nil {
-		logger.Error("Create role failed:", err.Error())
-		return
+		return schema.IAMResult{}, fmt.Errorf("create role failed: %w", err)
 	}
 	_ = attachPolicyToRole(ctx, client, d.RoleName)
-	OwnerID := getOwnerUin(ctx, client)
-	logger.Warning(fmt.Sprintf(
-		"Switch URL: https://cloud.tencent.com/cam/switchrole?ownerUin=%s&roleName=%s\n",
-		OwnerID, d.RoleName))
+	ownerID := getOwnerUin(ctx, client)
+	switchURL := fmt.Sprintf("https://cloud.tencent.com/cam/switchrole?ownerUin=%s&roleName=%s", ownerID, d.RoleName)
+
+	return schema.IAMResult{
+		Username:  d.RoleName,
+		AccountID: ownerID,
+		LoginURL:  switchURL,
+		Message:   "Role created successfully with AdministratorAccess policy",
+	}, nil
 }
 
 func createRole(ctx context.Context, client *api.Client, roleName, uin string) error {

@@ -40,17 +40,17 @@ func TestAddUserCreatesUserAttachesPolicyAndPrintsLoginURL(t *testing.T) {
 	driver.UserName = "alice"
 	driver.Password = "Secret!1"
 
-	output := captureStdout(t, func() {
-		driver.AddUser()
-	})
-
-	if !strings.Contains(output, "alice") {
-		t.Fatalf("expected username in output: %s", output)
+	result, err := driver.AddUser()
+	if err != nil {
+		t.Fatalf("AddUser failed: %v", err)
 	}
-	if !strings.Contains(output, "Secret!1") {
-		t.Fatalf("expected password in output: %s", output)
+	if result.Username != "alice" {
+		t.Fatalf("unexpected username: %s", result.Username)
 	}
-	if !strings.Contains(output, "https://cloud.tencent.com/login/subAccount/1234567890") {
-		t.Fatalf("expected login URL in output: %s", output)
+	if result.Password != "Secret!1" {
+		t.Fatalf("unexpected password: %s", result.Password)
+	}
+	if !strings.Contains(result.LoginURL, "https://cloud.tencent.com/login/subAccount/1234567890") {
+		t.Fatalf("unexpected login URL: %s", result.LoginURL)
 	}
 }

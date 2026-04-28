@@ -23,13 +23,69 @@ type Enumerator interface {
 // IAMManager powers the iam-user-check payload.
 type IAMManager interface {
 	Provider
-	UserManagement(action, username, password string)
+	UserManagement(action, username, password string) (IAMResult, error)
+}
+
+type IAMResult struct {
+	Action    string
+	Username  string
+	Password  string
+	LoginURL  string
+	AccountID string
+	Message   string
 }
 
 // BucketManager powers the bucket-check payload.
 type BucketManager interface {
 	Provider
-	BucketDump(ctx context.Context, action, bucketName string)
+	BucketDump(ctx context.Context, action, bucketName string) ([]BucketResult, error)
+}
+
+type BucketResult struct {
+	Action      string
+	BucketName  string
+	ObjectCount int64
+	Objects     []BucketObject
+	Message     string
+}
+
+type BucketObject struct {
+	BucketName   string
+	Key          string
+	Size         int64
+	LastModified string
+	StorageClass string
+}
+
+func AggregateBucketResults(action, bucketName string, results []BucketResult) BucketResult {
+	result := BucketResult{
+		Action:     action,
+		BucketName: bucketName,
+	}
+	if len(results) == 0 {
+		result.Message = "no buckets found"
+		return result
+	}
+	if len(results) == 1 {
+		result = results[0]
+		if result.Action == "" {
+			result.Action = action
+		}
+		if result.BucketName == "" {
+			result.BucketName = bucketName
+		}
+		return result
+	}
+	for _, item := range results {
+		result.ObjectCount += item.ObjectCount
+		result.Objects = append(result.Objects, item.Objects...)
+	}
+	if result.ObjectCount > 0 {
+		result.Message = fmt.Sprintf("%d buckets, %d total objects", len(results), result.ObjectCount)
+	} else {
+		result.Message = fmt.Sprintf("%d buckets", len(results))
+	}
+	return result
 }
 
 // EventReader powers the event-check payload.

@@ -2,6 +2,7 @@ package huawei
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/api"
@@ -124,54 +125,57 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	return list, list.Err()
 }
 
-func (p *Provider) UserManagement(action, username, password string) {
+func (p *Provider) UserManagement(action, username, password string) (schema.IAMResult, error) {
 	r := &_iam.Driver{
 		Cred: p.iamCredential(), Username: username, Password: password, DomainID: p.domainID}
 	switch action {
 	case "add":
-		r.AddUser()
+		return r.AddUser()
 	case "del":
-		r.DelUser()
+		return r.DelUser()
 	default:
-		logger.Error("Please set metadata like \"add username password\" or \"del username\"")
+		return schema.IAMResult{}, fmt.Errorf("invalid action: %s (expected: add, del)", action)
 	}
 }
 
-func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) {
+func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([]schema.BucketResult, error) {
 	obsprovider := &_obs.Driver{Cred: p.iamCredential(), Regions: p.regions}
+
+	infos := make(map[string]string)
+	if bucketName == "all" {
+		buckets, err := obsprovider.GetBuckets(context.Background())
+		if err != nil {
+			return nil, fmt.Errorf("list buckets: %w", err)
+		}
+		for _, bucket := range buckets {
+			infos[bucket.BucketName] = bucket.Region
+		}
+	} else {
+		// For a specific bucket, we need to find its region first
+		buckets, err := obsprovider.GetBuckets(context.Background())
+		if err != nil {
+			return nil, fmt.Errorf("list buckets: %w", err)
+		}
+		found := false
+		for _, bucket := range buckets {
+			if bucket.BucketName == bucketName {
+				infos[bucketName] = bucket.Region
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("bucket %s not found", bucketName)
+		}
+	}
+
 	switch action {
 	case "list":
-		infos := make(map[string]string)
-		if bucketName == "all" {
-			buckets, err := obsprovider.GetBuckets(context.Background())
-			if err != nil {
-				logger.Error("List buckets failed:", err)
-				return
-			}
-			for _, bucket := range buckets {
-				infos[bucket.BucketName] = bucket.Region
-			}
-		} else {
-			infos[bucketName] = p.iamCredential().Region
-		}
-		obsprovider.ListObjects(ctx, infos)
+		return obsprovider.ListObjects(ctx, infos)
 	case "total":
-		infos := make(map[string]string)
-		if bucketName == "all" {
-			buckets, err := obsprovider.GetBuckets(context.Background())
-			if err != nil {
-				logger.Error("List buckets failed:", err)
-				return
-			}
-			for _, bucket := range buckets {
-				infos[bucket.BucketName] = bucket.Region
-			}
-		} else {
-			infos[bucketName] = p.iamCredential().Region
-		}
-		obsprovider.TotalObjects(ctx, infos)
+		return obsprovider.TotalObjects(ctx, infos)
 	default:
-		logger.Error("`list all` or `total all`.")
+		return nil, fmt.Errorf("invalid action: %s (expected: list, total)", action)
 	}
 }
 

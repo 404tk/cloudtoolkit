@@ -59,9 +59,18 @@ func TestAddRoleCreatesRoleAttachesPolicyAndLogsSwitchURL(t *testing.T) {
 	driver := newTestDriver(server.URL)
 	driver.RoleName = "shadow-admin"
 	driver.Uin = "1234567890"
-	driver.AddRole()
+	result, err := driver.AddRole()
 
-	if got := buffer.String(); !strings.Contains(got, "https://cloud.tencent.com/cam/switchrole?ownerUin=22334455&roleName=shadow-admin") {
-		t.Fatalf("unexpected logger output: %s", got)
+	if err != nil {
+		t.Fatalf("AddRole failed: %v", err)
+	}
+	if result.Username != "shadow-admin" {
+		t.Fatalf("unexpected username (role name): %s", result.Username)
+	}
+	if result.AccountID != "22334455" {
+		t.Fatalf("unexpected account ID: %s", result.AccountID)
+	}
+	if !strings.Contains(result.LoginURL, "https://cloud.tencent.com/cam/switchrole?ownerUin=22334455&roleName=shadow-admin") {
+		t.Fatalf("unexpected login URL: %s", result.LoginURL)
 	}
 }

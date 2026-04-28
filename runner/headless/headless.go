@@ -2,8 +2,6 @@ package headless
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -12,7 +10,8 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"time"
+
+	"github.com/mattn/go-isatty"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
@@ -21,16 +20,18 @@ import (
 	"github.com/404tk/cloudtoolkit/runner/payloads"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
+	"github.com/404tk/cloudtoolkit/utils/confirm"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
 )
 
 const (
-	exitSuccess     = 0
-	exitPartial     = 2
-	exitConfigError = 4
-	exitUnsupported = 5
-	schemaVersionV1 = "1"
+	exitSuccess          = 0
+	exitPartial          = 2
+	exitApprovalRequired = 3
+	exitConfigError      = 4
+	exitUnsupported      = 5
+	schemaVersionV1      = "1"
 )
 
 type commandFlags struct {
@@ -40,6 +41,7 @@ type commandFlags struct {
 	Agent     bool
 	Describe  bool
 	Stdin     bool
+	Approval  bool
 	Profile   string
 	CredsPath string
 	Metadata  string
@@ -55,17 +57,6 @@ type commandFlags struct {
 	AzureTenantID string
 	AzureSubID    string
 	GCPBase64JSON string
-}
-
-type headlessRunResult struct {
-	SchemaVersion string `json:"schema_version"`
-	RunID         string `json:"run_id"`
-	Provider      string `json:"provider"`
-	Payload       string `json:"payload"`
-	StartedAt     string `json:"started_at"`
-	FinishedAt    string `json:"finished_at"`
-	DurationMS    int64  `json:"duration_ms"`
-	Result        any    `json:"result,omitempty"`
 }
 
 type providerInfo struct {
@@ -111,7 +102,91 @@ type payloadDescribe struct {
 	Sensitivity       string               `json:"sensitivity,omitempty"`
 	MetadataTemplates []catalog.Suggestion `json:"metadata_templates,omitempty"`
 	Help              catalog.PayloadHelp  `json:"help,omitempty"`
+	HeadlessActions   []headlessAction     `json:"headless_actions,omitempty"`
+	HeadlessNotes     []string             `json:"headless_notes,omitempty"`
 	Providers         []string             `json:"providers"`
+}
+
+type codedError interface {
+	error
+	ErrorCode() string
+}
+
+type headlessError struct {
+	code    string
+	message string
+}
+
+type actionSpec struct {
+	payload     string
+	minArgs     int
+	maxArgs     int
+	usage       string
+	description string
+	build       func([]string) string
+}
+
+type headlessAction struct {
+	Name        string `json:"name"`
+	Usage       string `json:"usage"`
+	Description string `json:"description,omitempty"`
+}
+
+var actionSpecs = map[string]actionSpec{
+	"useradd": {
+		payload:     "iam-user-check",
+		minArgs:     2,
+		maxArgs:     2,
+		usage:       "useradd <username> <password>",
+		description: "create a validation IAM user in headless mode",
+		build: func(args []string) string {
+			return "add " + args[0] + " " + args[1]
+		},
+	},
+	"userdel": {
+		payload:     "iam-user-check",
+		minArgs:     1,
+		maxArgs:     1,
+		usage:       "userdel <username>",
+		description: "remove a validation IAM user in headless mode",
+		build: func(args []string) string {
+			return "del " + args[0]
+		},
+	},
+	"bls": {
+		payload:     "bucket-check",
+		minArgs:     0,
+		maxArgs:     1,
+		usage:       "bls [bucket]",
+		description: "list objects in bucket(s)",
+		build: func(args []string) string {
+			if len(args) == 0 {
+				return "list all"
+			}
+			return "list " + args[0]
+		},
+	},
+	"bcnt": {
+		payload:     "bucket-check",
+		minArgs:     0,
+		maxArgs:     1,
+		usage:       "bcnt [bucket]",
+		description: "count objects in bucket(s)",
+		build: func(args []string) string {
+			if len(args) == 0 {
+				return "total all"
+			}
+			return "total " + args[0]
+		},
+	},
+}
+
+func (e headlessError) Error() string {
+	return e.message
+}
+
+func (e headlessError) ErrorCode() string {
+	return e.code
 }
 
 func Run(args []string) int {
@@ -147,6 +222,12 @@ func Run(args []string) int {
 		if providers.Supports(command) {
 			return runShort(command, remaining[1:], flags)
 		}
+		if canInferProvider(flags) {
+			return runInferredProvider(command, remaining[1:], flags)
+		}
+		if isHeadlessCommand(command) {
+			return fail(flags.JSON, exitConfigError, errors.New("provider is required unless supplied by --profile, --creds, or --stdin"))
+		}
 		return fail(flags.JSON, exitConfigError, fmt.Errorf("unsupported command: %s", command))
 	}
 }
@@ -175,6 +256,8 @@ func newFlagSet(name string, cfg *commandFlags) *flag.FlagSet {
 	fs.BoolVar(&cfg.Agent, "agent", cfg.Agent, "agent-friendly mode")
 	fs.BoolVar(&cfg.Describe, "v", cfg.Describe, "describe built-in metadata")
 	fs.BoolVar(&cfg.Stdin, "stdin", cfg.Stdin, "read credentials JSON from stdin")
+	fs.BoolVar(&cfg.Approval, "yes", cfg.Approval, "approve sensitive execution")
+	fs.BoolVar(&cfg.Approval, "y", cfg.Approval, "approve sensitive execution")
 	fs.StringVar(&cfg.Profile, "profile", cfg.Profile, "credential profile name")
 	fs.StringVar(&cfg.Profile, "P", cfg.Profile, "credential profile name")
 	fs.StringVar(&cfg.CredsPath, "creds", cfg.CredsPath, "credentials JSON file")
@@ -313,6 +396,8 @@ func describePayload(args []string, flags commandFlags) int {
 		Sensitivity:       catalog.PayloadSensitivity(resolved),
 		MetadataTemplates: catalog.PayloadMetadataSuggestions(resolved),
 		Help:              help,
+		HeadlessActions:   headlessActionsForPayload(resolved),
+		HeadlessNotes:     headlessNotesForPayload(resolved),
 		Providers:         providersForPayload(resolved),
 	}
 	if flags.JSON {
@@ -340,6 +425,19 @@ func describePayload(args []string, flags commandFlags) int {
 			fmt.Fprintf(os.Stdout, "    - %s\n", item.Text)
 		}
 	}
+	if len(result.HeadlessActions) > 0 {
+		fmt.Fprintln(os.Stdout, "  headless actions:")
+		for _, item := range result.HeadlessActions {
+			if item.Description != "" {
+				fmt.Fprintf(os.Stdout, "    - %s\t%s\n", item.Usage, item.Description)
+				continue
+			}
+			fmt.Fprintf(os.Stdout, "    - %s\n", item.Usage)
+		}
+	}
+	for _, line := range result.HeadlessNotes {
+		fmt.Fprintf(os.Stdout, "  headless note: %s\n", line)
+	}
 	for _, line := range result.Help.MetadataSyntax {
 		fmt.Fprintf(os.Stdout, "  syntax: %s\n", line)
 	}
@@ -354,15 +452,24 @@ func describePayload(args []string, flags commandFlags) int {
 
 func runShort(provider string, args []string, flags commandFlags) int {
 	if len(args) == 0 {
-		return fail(flags.JSON, exitConfigError, fmt.Errorf("missing payload for provider %s", provider))
+		return fail(flags.JSON, exitConfigError, fmt.Errorf("missing payload or action for provider %s", provider))
 	}
-	if len(args) > 1 {
-		return fail(flags.JSON, exitConfigError, errors.New("headless execution only accepts `ctk <provider> <payload>` plus flags; pass payload arguments through flags such as --metadata"))
+	payloadName, metadata, err := resolveRunRequest(args[0], args[1:], flags)
+	if err != nil {
+		return fail(flags.JSON, exitConfigError, err)
 	}
-	return executeRun(provider, args[0], flags)
+	return executeRun(provider, payloadName, metadata, flags)
 }
 
-func executeRun(providerName, payloadName string, flags commandFlags) int {
+func runInferredProvider(command string, args []string, flags commandFlags) int {
+	payloadName, metadata, err := resolveRunRequest(command, args, flags)
+	if err != nil {
+		return fail(flags.JSON, exitConfigError, err)
+	}
+	return executeRun("", payloadName, metadata, flags)
+}
+
+func executeRun(providerName, payloadName, metadataOverride string, flags commandFlags) int {
 	provider := strings.TrimSpace(providerName)
 	payloadName = strings.TrimSpace(payloadName)
 	payload, resolved, ok := payloads.Lookup(payloadName)
@@ -371,22 +478,17 @@ func executeRun(providerName, payloadName string, flags commandFlags) int {
 	}
 	payloadName = resolved
 
-	if payloadName != "cloudlist" {
-		return fail(flags.JSON, exitUnsupported, fmt.Errorf("headless execution currently supports cloudlist only; payload %s still requires the later sensitivity/approval path", payloadName))
+	config, err := buildRunConfig(provider, payloadName, metadataOverride, flags)
+	if err != nil {
+		return fail(flags.JSON, exitConfigError, err)
 	}
+	provider = config[utils.Provider]
 	capability := catalog.PayloadCapability(payloadName)
 	if capability != "" && !catalog.ProviderSupportsCapability(provider, capability) {
 		return fail(flags.JSON, exitUnsupported, fmt.Errorf("%s does not support %s", provider, payloadName))
 	}
-
-	config, err := buildRunConfig(provider, payloadName, flags)
-	if err != nil {
-		return fail(flags.JSON, exitConfigError, err)
-	}
-
-	producer, ok := payload.(payloads.ResultProducer)
-	if !ok {
-		return fail(flags.JSON, exitUnsupported, fmt.Errorf("payload %s does not support structured headless execution yet", payloadName))
+	if err := requireApproval(config, flags); err != nil {
+		return fail(flags.JSON, exitApprovalRequired, err)
 	}
 
 	baseEnv := runner.DefaultEnv()
@@ -399,23 +501,22 @@ func executeRun(providerName, payloadName string, flags commandFlags) int {
 		payload.Run(ctx, config)
 		return exitSuccess
 	}
+	producer, ok := payload.(payloads.ResultProducer)
+	if !ok {
+		return fail(flags.JSON, exitUnsupported, fmt.Errorf("payload %s does not support structured headless output yet; retry without --json", payloadName))
+	}
 
-	start := time.Now().UTC()
 	result, err := producer.Result(ctx, config)
 	if err != nil {
+		if resultErr, ok := err.(payloads.ResultError); ok {
+			if writeCode := writeJSON(resultErr.ResultPayload()); writeCode != exitSuccess {
+				return writeCode
+			}
+			return resultErr.ExitCode()
+		}
 		return fail(flags.JSON, exitConfigError, err)
 	}
 
-	response := headlessRunResult{
-		SchemaVersion: schemaVersionV1,
-		RunID:         newRunID(),
-		Provider:      provider,
-		Payload:       payloadName,
-		StartedAt:     start.Format(time.RFC3339Nano),
-		FinishedAt:    time.Now().UTC().Format(time.RFC3339Nano),
-		DurationMS:    time.Since(start).Milliseconds(),
-		Result:        result,
-	}
 	code := exitSuccess
 	if cloud, ok := result.(*payloads.CloudListResult); ok && len(cloud.Errors) > 0 {
 		code = exitPartial
@@ -423,21 +524,50 @@ func executeRun(providerName, payloadName string, flags commandFlags) int {
 	if cloud, ok := result.(payloads.CloudListResult); ok && len(cloud.Errors) > 0 {
 		code = exitPartial
 	}
-	if writeCode := writeJSON(response); writeCode != exitSuccess {
+	if writeCode := writeJSON(result); writeCode != exitSuccess {
 		return writeCode
 	}
 	return code
 }
 
-func buildRunConfig(provider, payload string, flags commandFlags) (map[string]string, error) {
-	if _, ok := catalog.ProviderSpecFor(provider); !ok {
-		return nil, fmt.Errorf("unsupported provider: %s", provider)
+func buildRunConfig(provider, payload, metadataOverride string, flags commandFlags) (map[string]string, error) {
+	sourceData, err := credentialDataFromFlags(flags)
+	if err != nil {
+		return nil, err
 	}
-	config, _ := catalog.DefaultProviderConfig(provider)
-	config[utils.Provider] = provider
+	sourceProvider := strings.TrimSpace(sourceData[utils.Provider])
+	resolvedProvider := strings.TrimSpace(provider)
+	if resolvedProvider == "" {
+		resolvedProvider = sourceProvider
+	}
+	if resolvedProvider == "" {
+		return nil, errors.New("provider is required unless supplied by the selected credential source")
+	}
+	if sourceProvider != "" && sourceProvider != resolvedProvider {
+		return nil, fmt.Errorf("provider mismatch: command selected %s but credential source is for %s", resolvedProvider, sourceProvider)
+	}
+	if _, ok := catalog.ProviderSpecFor(resolvedProvider); !ok {
+		return nil, fmt.Errorf("unsupported provider: %s", resolvedProvider)
+	}
+	config, _ := catalog.DefaultProviderConfig(resolvedProvider)
+	config[utils.Provider] = resolvedProvider
 	config[utils.Payload] = payload
-	config[utils.Metadata] = strings.TrimSpace(flags.Metadata)
+	config[utils.Metadata] = strings.TrimSpace(metadataOverride)
 
+	mergeConfig(config, sourceData)
+	mergeConfig(config, flags.explicitProviderOptions())
+
+	config[utils.Provider] = resolvedProvider
+	config[utils.Payload] = payload
+	if strings.TrimSpace(metadataOverride) != "" {
+		config[utils.Metadata] = strings.TrimSpace(metadataOverride)
+	} else if strings.TrimSpace(flags.Metadata) != "" {
+		config[utils.Metadata] = strings.TrimSpace(flags.Metadata)
+	}
+	return config, nil
+}
+
+func credentialDataFromFlags(flags commandFlags) (map[string]string, error) {
 	sourceCount := 0
 	if strings.TrimSpace(flags.Profile) != "" {
 		sourceCount++
@@ -448,42 +578,20 @@ func buildRunConfig(provider, payload string, flags commandFlags) (map[string]st
 	if flags.Stdin {
 		sourceCount++
 	}
-	if len(flags.explicitProviderOptions()) > 0 {
-		sourceCount++
-	}
 	if sourceCount > 1 {
-		return nil, errors.New("credential sources are mutually exclusive: choose one of --profile, --creds, --stdin, or explicit flags")
+		return nil, errors.New("credential sources are mutually exclusive: choose one of --profile, --creds, or --stdin")
 	}
 
 	switch {
 	case strings.TrimSpace(flags.Profile) != "":
-		data, err := loadProfile(flags.Profile)
-		if err != nil {
-			return nil, err
-		}
-		mergeConfig(config, data)
+		return loadProfile(flags.Profile)
 	case strings.TrimSpace(flags.CredsPath) != "":
-		data, err := loadCredentialFile(flags.CredsPath)
-		if err != nil {
-			return nil, err
-		}
-		mergeConfig(config, data)
+		return loadCredentialFile(flags.CredsPath)
 	case flags.Stdin:
-		data, err := loadCredentialStdin()
-		if err != nil {
-			return nil, err
-		}
-		mergeConfig(config, data)
+		return loadCredentialStdin()
 	default:
-		mergeConfig(config, flags.explicitProviderOptions())
+		return nil, nil
 	}
-
-	config[utils.Provider] = provider
-	config[utils.Payload] = payload
-	if strings.TrimSpace(flags.Metadata) != "" {
-		config[utils.Metadata] = strings.TrimSpace(flags.Metadata)
-	}
-	return config, nil
 }
 
 func (flags commandFlags) explicitProviderOptions() map[string]string {
@@ -537,16 +645,43 @@ func writeJSON(v any) int {
 	return exitSuccess
 }
 
+func requireApproval(config map[string]string, flags commandFlags) error {
+	sensitivity := payloads.DescribeSensitivity(config[utils.Payload], config[utils.Metadata])
+	if !sensitivity.RequiresConfirmation() {
+		return nil
+	}
+	if flags.Approval {
+		return nil
+	}
+	if canPromptForApproval(flags) {
+		if confirm.Ask(sensitivity.ConfirmKey, config[utils.Provider], sensitivity.Resource) {
+			return nil
+		}
+		return headlessError{
+			code:    "approval_rejected",
+			message: "sensitive action was not approved",
+		}
+	}
+	return headlessError{
+		code:    "approval_required",
+		message: "sensitive action requires -y or --yes",
+	}
+}
+
 func fail(jsonOutput bool, code int, err error) int {
 	if err == nil {
 		return code
 	}
 	if jsonOutput {
-		_ = writeJSON(map[string]any{
+		payload := map[string]any{
 			"schema_version": schemaVersionV1,
 			"error":          err.Error(),
 			"exit_code":      code,
-		})
+		}
+		if coded, ok := err.(codedError); ok {
+			payload["code"] = coded.ErrorCode()
+		}
+		_ = writeJSON(payload)
 		return code
 	}
 	fmt.Fprintln(os.Stderr, err.Error())
@@ -614,12 +749,79 @@ func decodeCredentialJSON(data []byte) (map[string]string, error) {
 	return items, nil
 }
 
-func newRunID() string {
-	buf := make([]byte, 16)
-	if _, err := rand.Read(buf); err != nil {
-		return fmt.Sprintf("run-%d", time.Now().UnixNano())
+func resolveRunRequest(command string, args []string, flags commandFlags) (string, string, error) {
+	command = strings.TrimSpace(command)
+	if spec, ok := actionSpecs[command]; ok {
+		if strings.TrimSpace(flags.Metadata) != "" {
+			return "", "", fmt.Errorf("%s does not accept --metadata; use `%s`", command, spec.usage)
+		}
+		if len(args) < spec.minArgs || len(args) > spec.maxArgs {
+			return "", "", fmt.Errorf("usage: %s", spec.usage)
+		}
+		return spec.payload, spec.build(args), nil
 	}
-	return hex.EncodeToString(buf)
+	if command == "iam-user-check" {
+		return "", "", errors.New("headless iam-user-check uses `useradd <username> <password>` or `userdel <username>`")
+	}
+	if _, _, ok := payloads.Lookup(command); ok {
+		if len(args) > 0 {
+			return "", "", fmt.Errorf("payload %s does not accept positional arguments here; use --metadata", command)
+		}
+		return command, "", nil
+	}
+	return "", "", fmt.Errorf("unsupported payload or action: %s", command)
+}
+
+func isHeadlessCommand(command string) bool {
+	if _, ok := actionSpecs[strings.TrimSpace(command)]; ok {
+		return true
+	}
+	_, _, ok := payloads.Lookup(strings.TrimSpace(command))
+	return ok
+}
+
+func canInferProvider(flags commandFlags) bool {
+	return strings.TrimSpace(flags.Profile) != "" || strings.TrimSpace(flags.CredsPath) != "" || flags.Stdin
+}
+
+func canPromptForApproval(flags commandFlags) bool {
+	if flags.JSON || flags.Agent || flags.Stdin {
+		return false
+	}
+	return isatty.IsTerminal(os.Stdin.Fd()) && isatty.IsTerminal(os.Stdout.Fd())
+}
+
+func headlessActionsForPayload(payload string) []headlessAction {
+	items := make([]headlessAction, 0)
+	for name, spec := range actionSpecs {
+		if spec.payload != payload {
+			continue
+		}
+		items = append(items, headlessAction{
+			Name:        name,
+			Usage:       spec.usage,
+			Description: spec.description,
+		})
+	}
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].Name < items[j].Name
+	})
+	return items
+}
+
+func headlessNotesForPayload(payload string) []string {
+	switch payload {
+	case "iam-user-check":
+		return []string{
+			"Headless mode accepts `useradd` and `userdel` for this payload.",
+		}
+	case "bucket-check":
+		return []string{
+			"Headless mode accepts `bls` and `bcnt` for this payload.",
+		}
+	default:
+		return nil
+	}
 }
 
 func providerSummaries() []providerInfo {
@@ -744,7 +946,7 @@ func parseFlagToken(arg string) (name string, hasValue bool) {
 
 func isBoolFlag(name string) bool {
 	switch name {
-	case "json", "quiet", "no-color", "agent", "stdin", "v":
+	case "json", "quiet", "no-color", "agent", "stdin", "v", "yes", "y":
 		return true
 	default:
 		return false
