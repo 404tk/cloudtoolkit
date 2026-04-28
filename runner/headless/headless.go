@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/mattn/go-isatty"
@@ -31,14 +32,11 @@ const (
 	exitApprovalRequired = 3
 	exitConfigError      = 4
 	exitUnsupported      = 5
-	schemaVersionV1      = "1"
 )
 
 type commandFlags struct {
 	JSON      bool
 	Quiet     bool
-	NoColor   bool
-	Agent     bool
 	Describe  bool
 	Stdin     bool
 	Approval  bool
@@ -76,7 +74,33 @@ type actionSpec struct {
 	minArgs int
 	maxArgs int
 	usage   string
+	summary string
 	build   func([]string) string
+}
+
+type flagKind int
+
+const (
+	flagBool flagKind = iota
+	flagValue
+)
+
+type helpSection int
+
+const (
+	helpHidden helpSection = iota
+	helpCommon
+	helpProvider
+)
+
+type headlessFlagSpec struct {
+	long      string
+	short     string
+	kind      flagKind
+	valueName string
+	help      string
+	section   helpSection
+	bind      func(*flag.FlagSet, *commandFlags)
 }
 
 var actionSpecs = map[string]actionSpec{
@@ -85,6 +109,7 @@ var actionSpecs = map[string]actionSpec{
 		minArgs: 0,
 		maxArgs: 1,
 		usage:   "ls [resource[,resource...]]",
+		summary: "list cloud resources",
 		build: func(args []string) string {
 			if len(args) == 0 {
 				return ""
@@ -97,6 +122,7 @@ var actionSpecs = map[string]actionSpec{
 		minArgs: 2,
 		maxArgs: 2,
 		usage:   "useradd <username> <password>",
+		summary: "create a validation IAM user",
 		build: func(args []string) string {
 			return "add " + args[0] + " " + args[1]
 		},
@@ -106,6 +132,7 @@ var actionSpecs = map[string]actionSpec{
 		minArgs: 1,
 		maxArgs: 1,
 		usage:   "userdel <username>",
+		summary: "remove a validation IAM user",
 		build: func(args []string) string {
 			return "del " + args[0]
 		},
@@ -115,6 +142,7 @@ var actionSpecs = map[string]actionSpec{
 		minArgs: 0,
 		maxArgs: 1,
 		usage:   "bls [bucket]",
+		summary: "list objects in bucket(s)",
 		build: func(args []string) string {
 			if len(args) == 0 {
 				return "list all"
@@ -127,6 +155,7 @@ var actionSpecs = map[string]actionSpec{
 		minArgs: 0,
 		maxArgs: 1,
 		usage:   "bcnt [bucket]",
+		summary: "count objects in bucket(s)",
 		build: func(args []string) string {
 			if len(args) == 0 {
 				return "total all"
@@ -139,8 +168,225 @@ var actionSpecs = map[string]actionSpec{
 		minArgs: 2,
 		maxArgs: -1,
 		usage:   "shell <instance-id> <cmd...> -r <region> (-sh | -cmd)",
+		summary: "run validation on a single instance",
 	},
 }
+
+var headlessFlagSpecs = []headlessFlagSpec{
+	{
+		long:    "json",
+		kind:    flagBool,
+		help:    "emit JSON",
+		section: helpCommon,
+		bind: func(fs *flag.FlagSet, cfg *commandFlags) {
+			fs.BoolVar(&cfg.JSON, "json", cfg.JSON, "emit JSON")
+		},
+	},
+	{
+		long:    "quiet",
+		kind:    flagBool,
+		help:    "reduce log chatter",
+		section: helpCommon,
+		bind: func(fs *flag.FlagSet, cfg *commandFlags) {
+			fs.BoolVar(&cfg.Quiet, "quiet", cfg.Quiet, "reduce log chatter")
+		},
+	},
+	{
+		long:    "v",
+		kind:    flagBool,
+		section: helpHidden,
+		bind: func(fs *flag.FlagSet, cfg *commandFlags) {
+			fs.BoolVar(&cfg.Describe, "v", cfg.Describe, "print version")
+		},
+	},
+	{
+		long:    "stdin",
+		kind:    flagBool,
+		help:    "read credentials JSON from stdin",
+		section: helpCommon,
+		bind: func(fs *flag.FlagSet, cfg *commandFlags) {
+			fs.BoolVar(&cfg.Stdin, "stdin", cfg.Stdin, "read credentials JSON from stdin")
+		},
+	},
+	{
+		long:    "yes",
+		short:   "y",
+		kind:    flagBool,
+		help:    "approve sensitive actions",
+		section: helpCommon,
+		bind: func(fs *flag.FlagSet, cfg *commandFlags) {
+			fs.BoolVar(&cfg.Approval, "yes", cfg.Approval, "approve sensitive execution")
+			fs.BoolVar(&cfg.Approval, "y", cfg.Approval, "approve sensitive execution")
+		},
+	},
+	{
+		long:    "sh",
+		kind:    flagBool,
+		section: helpHidden,
+		bind: func(fs *flag.FlagSet, cfg *commandFlags) {
+			fs.BoolVar(&cfg.ShellMode, "sh", cfg.ShellMode, "")
+		},
+	},
+	{
+		long:    "cmd",
+		kind:    flagBool,
+		section: helpHidden,
+		bind: func(fs *flag.FlagSet, cfg *commandFlags) {
+			fs.BoolVar(&cfg.CmdMode, "cmd", cfg.CmdMode, "")
+		},
+	},
+	{
+		long:      "profile",
+		short:     "P",
+		kind:      flagValue,
+		valueName: "name",
+		help:      "use cached credential profile",
+		section:   helpCommon,
+		bind: func(fs *flag.FlagSet, cfg *commandFlags) {
+			fs.StringVar(&cfg.Profile, "profile", cfg.Profile, "credential profile name")
+			fs.StringVar(&cfg.Profile, "P", cfg.Profile, "credential profile name")
+		},
+	},
+	{
+		long:      "creds",
+		kind:      flagValue,
+		valueName: "file",
+		help:      "read credentials JSON file",
+		section:   helpCommon,
+		bind: func(fs *flag.FlagSet, cfg *commandFlags) {
+			fs.StringVar(&cfg.CredsPath, "creds", cfg.CredsPath, "credentials JSON file")
+		},
+	},
+	{
+		long:      "metadata",
+		kind:      flagValue,
+		valueName: "value",
+		section:   helpHidden,
+		bind: func(fs *flag.FlagSet, cfg *commandFlags) {
+			fs.StringVar(&cfg.Metadata, "metadata", cfg.Metadata, "payload metadata")
+		},
+	},
+	{
+		long:      "accesskey",
+		short:     "ak",
+		kind:      flagValue,
+		valueName: "key",
+		help:      "provider access key",
+		section:   helpProvider,
+		bind: func(fs *flag.FlagSet, cfg *commandFlags) {
+			fs.StringVar(&cfg.AccessKey, "accesskey", cfg.AccessKey, "")
+			fs.StringVar(&cfg.AccessKey, "k", cfg.AccessKey, "")
+		},
+	},
+	{
+		long:      "secretkey",
+		short:     "sk",
+		kind:      flagValue,
+		valueName: "secret",
+		help:      "provider secret key",
+		section:   helpProvider,
+		bind: func(fs *flag.FlagSet, cfg *commandFlags) {
+			fs.StringVar(&cfg.SecretKey, "secretkey", cfg.SecretKey, "")
+			fs.StringVar(&cfg.SecretKey, "s", cfg.SecretKey, "")
+		},
+	},
+	{
+		long:      "token",
+		short:     "st",
+		kind:      flagValue,
+		valueName: "token",
+		help:      "provider security token",
+		section:   helpProvider,
+		bind: func(fs *flag.FlagSet, cfg *commandFlags) {
+			fs.StringVar(&cfg.SecurityToken, "token", cfg.SecurityToken, "")
+		},
+	},
+	{
+		long:      "region",
+		short:     "r",
+		kind:      flagValue,
+		valueName: "region",
+		help:      "provider region",
+		section:   helpProvider,
+		bind: func(fs *flag.FlagSet, cfg *commandFlags) {
+			fs.StringVar(&cfg.Region, "region", cfg.Region, "")
+			fs.StringVar(&cfg.Region, "r", cfg.Region, "")
+		},
+	},
+	{
+		long:      "projectId",
+		kind:      flagValue,
+		valueName: "id",
+		help:      "UCloud project ID",
+		section:   helpProvider,
+		bind: func(fs *flag.FlagSet, cfg *commandFlags) {
+			fs.StringVar(&cfg.ProjectID, "projectId", cfg.ProjectID, "")
+		},
+	},
+	{
+		long:      "version",
+		kind:      flagValue,
+		valueName: "value",
+		help:      "provider version or edition",
+		section:   helpProvider,
+		bind: func(fs *flag.FlagSet, cfg *commandFlags) {
+			fs.StringVar(&cfg.Version, "version", cfg.Version, "")
+		},
+	},
+	{
+		long:      "clientId",
+		kind:      flagValue,
+		valueName: "id",
+		help:      "Azure client ID",
+		section:   helpProvider,
+		bind: func(fs *flag.FlagSet, cfg *commandFlags) {
+			fs.StringVar(&cfg.AzureClientID, "clientId", cfg.AzureClientID, "")
+		},
+	},
+	{
+		long:      "clientSecret",
+		kind:      flagValue,
+		valueName: "secret",
+		help:      "Azure client secret",
+		section:   helpProvider,
+		bind: func(fs *flag.FlagSet, cfg *commandFlags) {
+			fs.StringVar(&cfg.AzureSecret, "clientSecret", cfg.AzureSecret, "")
+		},
+	},
+	{
+		long:      "tenantId",
+		kind:      flagValue,
+		valueName: "id",
+		help:      "Azure tenant ID",
+		section:   helpProvider,
+		bind: func(fs *flag.FlagSet, cfg *commandFlags) {
+			fs.StringVar(&cfg.AzureTenantID, "tenantId", cfg.AzureTenantID, "")
+		},
+	},
+	{
+		long:      "subscriptionId",
+		kind:      flagValue,
+		valueName: "id",
+		help:      "Azure subscription ID",
+		section:   helpProvider,
+		bind: func(fs *flag.FlagSet, cfg *commandFlags) {
+			fs.StringVar(&cfg.AzureSubID, "subscriptionId", cfg.AzureSubID, "")
+		},
+	},
+	{
+		long:      "base64Json",
+		kind:      flagValue,
+		valueName: "value",
+		help:      "Base64-encoded GCP service account JSON",
+		section:   helpProvider,
+		bind: func(fs *flag.FlagSet, cfg *commandFlags) {
+			fs.StringVar(&cfg.GCPBase64JSON, "base64Json", cfg.GCPBase64JSON, "")
+		},
+	},
+}
+
+var boolFlagNames = buildFlagNames(flagBool)
+var valueFlagNames = buildFlagNames(flagValue)
 
 func (e headlessError) Error() string {
 	return e.message
@@ -151,6 +397,9 @@ func (e headlessError) ErrorCode() string {
 }
 
 func Run(args []string) int {
+	if wantsHelp(args) {
+		return writeHelp()
+	}
 	flags, remaining, err := parseFlags(args)
 	if err != nil {
 		return fail(flags.JSON, exitConfigError, err)
@@ -168,7 +417,7 @@ func Run(args []string) int {
 	defer processbar.SetOutput(nil)
 	debugEnabled := logger.IsDebug()
 	defer logger.SetDebug(debugEnabled)
-	if flags.Quiet || flags.Agent {
+	if flags.Quiet {
 		logger.SetDebug(false)
 	}
 
@@ -201,52 +450,16 @@ func parseFlags(args []string) (commandFlags, []string, error) {
 	if err := fs.Parse(normalized); err != nil {
 		return commandFlags{}, nil, err
 	}
-	cfg.applyDerived()
 	return cfg, fs.Args(), nil
 }
 
 func newFlagSet(name string, cfg *commandFlags) *flag.FlagSet {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-
-	fs.BoolVar(&cfg.JSON, "json", cfg.JSON, "emit JSON")
-	fs.BoolVar(&cfg.Quiet, "quiet", cfg.Quiet, "reduce log chatter")
-	fs.BoolVar(&cfg.NoColor, "no-color", cfg.NoColor, "disable ANSI color")
-	fs.BoolVar(&cfg.Agent, "agent", cfg.Agent, "agent-friendly mode")
-	fs.BoolVar(&cfg.Describe, "v", cfg.Describe, "print version")
-	fs.BoolVar(&cfg.Stdin, "stdin", cfg.Stdin, "read credentials JSON from stdin")
-	fs.BoolVar(&cfg.Approval, "yes", cfg.Approval, "approve sensitive execution")
-	fs.BoolVar(&cfg.Approval, "y", cfg.Approval, "approve sensitive execution")
-	fs.BoolVar(&cfg.ShellMode, "sh", cfg.ShellMode, "")
-	fs.BoolVar(&cfg.CmdMode, "cmd", cfg.CmdMode, "")
-	fs.StringVar(&cfg.Profile, "profile", cfg.Profile, "credential profile name")
-	fs.StringVar(&cfg.Profile, "P", cfg.Profile, "credential profile name")
-	fs.StringVar(&cfg.CredsPath, "creds", cfg.CredsPath, "credentials JSON file")
-	fs.StringVar(&cfg.Metadata, "metadata", cfg.Metadata, "payload metadata")
-
-	fs.StringVar(&cfg.AccessKey, "accesskey", cfg.AccessKey, "")
-	fs.StringVar(&cfg.AccessKey, "k", cfg.AccessKey, "")
-	fs.StringVar(&cfg.SecretKey, "secretkey", cfg.SecretKey, "")
-	fs.StringVar(&cfg.SecretKey, "s", cfg.SecretKey, "")
-	fs.StringVar(&cfg.SecurityToken, "token", cfg.SecurityToken, "")
-	fs.StringVar(&cfg.Region, "region", cfg.Region, "")
-	fs.StringVar(&cfg.Region, "r", cfg.Region, "")
-	fs.StringVar(&cfg.ProjectID, "projectId", cfg.ProjectID, "")
-	fs.StringVar(&cfg.Version, "version", cfg.Version, "")
-	fs.StringVar(&cfg.AzureClientID, "clientId", cfg.AzureClientID, "")
-	fs.StringVar(&cfg.AzureSecret, "clientSecret", cfg.AzureSecret, "")
-	fs.StringVar(&cfg.AzureTenantID, "tenantId", cfg.AzureTenantID, "")
-	fs.StringVar(&cfg.AzureSubID, "subscriptionId", cfg.AzureSubID, "")
-	fs.StringVar(&cfg.GCPBase64JSON, "base64Json", cfg.GCPBase64JSON, "")
-	return fs
-}
-
-func (cfg *commandFlags) applyDerived() {
-	if cfg.Agent {
-		cfg.JSON = true
-		cfg.Quiet = true
-		cfg.NoColor = true
+	for _, spec := range headlessFlagSpecs {
+		spec.bind(fs, cfg)
 	}
+	return fs
 }
 
 func runShort(provider string, args []string, flags commandFlags) int {
@@ -464,6 +677,112 @@ func writeVersion(jsonOutput bool) int {
 	return exitSuccess
 }
 
+func writeHelp() int {
+	var b strings.Builder
+	b.WriteString("Usage:\n")
+	b.WriteString("  ctk                      start REPL\n")
+	b.WriteString("  ctk -v                   print version\n")
+	b.WriteString("  ctk -h | --help          show this help\n")
+	b.WriteString("  ctk <provider> <action> [args] [flags]\n")
+	b.WriteString("  ctk <action> [args] (-P <profile> | --creds <file> | --stdin) [flags]\n")
+
+	writeHelpActions(&b)
+	writeHelpFlags(&b, "Common flags:", helpCommon)
+	writeHelpFlags(&b, "Provider flags:", helpProvider)
+
+	if _, err := fmt.Fprint(os.Stdout, b.String()); err != nil {
+		fmt.Fprintln(os.Stderr, err.Error())
+		return exitConfigError
+	}
+	return exitSuccess
+}
+
+func writeHelpActions(b *strings.Builder) {
+	type actionHelp struct {
+		usage   string
+		summary string
+	}
+
+	actions := make([]actionHelp, 0, len(actionSpecs))
+	width := 0
+	for _, spec := range actionSpecs {
+		usage := strings.TrimSpace(spec.usage)
+		if usage == "" {
+			continue
+		}
+		actions = append(actions, actionHelp{
+			usage:   usage,
+			summary: strings.TrimSpace(spec.summary),
+		})
+		if len(usage) > width {
+			width = len(usage)
+		}
+	}
+	sort.Slice(actions, func(i, j int) bool {
+		return actions[i].usage < actions[j].usage
+	})
+
+	b.WriteString("\nActions:\n")
+	for _, action := range actions {
+		if action.summary == "" {
+			fmt.Fprintf(b, "  %s\n", action.usage)
+			continue
+		}
+		fmt.Fprintf(b, "  %-*s  %s\n", width, action.usage, action.summary)
+	}
+}
+
+func writeHelpFlags(b *strings.Builder, title string, section helpSection) {
+	specs := helpSpecsFor(section)
+	if len(specs) == 0 {
+		return
+	}
+
+	labels := make([]string, 0, len(specs))
+	width := 0
+	for _, spec := range specs {
+		label := helpLabel(spec)
+		labels = append(labels, label)
+		if len(label) > width {
+			width = len(label)
+		}
+	}
+
+	fmt.Fprintf(b, "\n%s\n", title)
+	for i, spec := range specs {
+		fmt.Fprintf(b, "  %-*s  %s\n", width, labels[i], spec.help)
+	}
+}
+
+func helpSpecsFor(section helpSection) []headlessFlagSpec {
+	out := make([]headlessFlagSpec, 0)
+	for _, spec := range headlessFlagSpecs {
+		if spec.section != section {
+			continue
+		}
+		if strings.TrimSpace(spec.help) == "" {
+			continue
+		}
+		out = append(out, spec)
+	}
+	return out
+}
+
+func helpLabel(spec headlessFlagSpec) string {
+	parts := make([]string, 0, 2)
+	if spec.short != "" {
+		parts = append(parts, "-"+spec.short)
+	}
+	if spec.long != "" {
+		parts = append(parts, "--"+spec.long)
+	}
+	label := strings.Join(parts, ", ")
+	if spec.kind == flagValue && spec.valueName != "" {
+		label += " <" + spec.valueName + ">"
+	}
+	return label
+}
+
 func requireApproval(config map[string]string, flags commandFlags) error {
 	sensitivity := payloads.DescribeSensitivity(config[utils.Payload], config[utils.Metadata])
 	if !sensitivity.RequiresConfirmation() {
@@ -493,9 +812,8 @@ func fail(jsonOutput bool, code int, err error) int {
 	}
 	if jsonOutput {
 		payload := map[string]any{
-			"schema_version": schemaVersionV1,
-			"error":          err.Error(),
-			"exit_code":      code,
+			"error":     err.Error(),
+			"exit_code": code,
 		}
 		if coded, ok := err.(codedError); ok {
 			payload["code"] = coded.ErrorCode()
@@ -629,10 +947,38 @@ func canInferProvider(flags commandFlags) bool {
 }
 
 func canPromptForApproval(flags commandFlags) bool {
-	if flags.JSON || flags.Agent || flags.Stdin {
+	if flags.JSON || flags.Stdin {
 		return false
 	}
 	return isatty.IsTerminal(os.Stdin.Fd()) && isatty.IsTerminal(os.Stdout.Fd())
+}
+
+func wantsHelp(args []string) bool {
+	sawShell := false
+	shellTargetSeen := false
+	for _, arg := range args {
+		if arg == "--" {
+			return false
+		}
+		if !strings.HasPrefix(arg, "-") || arg == "-" {
+			if arg == "shell" && !sawShell {
+				sawShell = true
+				shellTargetSeen = false
+				continue
+			}
+			if sawShell && !shellTargetSeen {
+				shellTargetSeen = true
+			}
+			continue
+		}
+		if sawShell && shellTargetSeen {
+			continue
+		}
+		if arg == "-h" || arg == "--help" {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeArgs(args []string) ([]string, error) {
@@ -743,19 +1089,27 @@ func parseFlagToken(arg string) (name string, hasValue bool) {
 }
 
 func isBoolFlag(name string) bool {
-	switch name {
-	case "json", "quiet", "no-color", "agent", "stdin", "v", "yes", "y", "sh", "cmd":
-		return true
-	default:
-		return false
-	}
+	_, ok := boolFlagNames[name]
+	return ok
 }
 
 func isValueFlag(name string) bool {
-	switch name {
-	case "profile", "P", "creds", "metadata", "accesskey", "k", "secretkey", "s", "token", "region", "r", "projectId", "version", "clientId", "clientSecret", "tenantId", "subscriptionId", "base64Json":
-		return true
-	default:
-		return false
+	_, ok := valueFlagNames[name]
+	return ok
+}
+
+func buildFlagNames(kind flagKind) map[string]struct{} {
+	names := make(map[string]struct{})
+	for _, spec := range headlessFlagSpecs {
+		if spec.kind != kind {
+			continue
+		}
+		if spec.long != "" {
+			names[spec.long] = struct{}{}
+		}
+		if spec.short != "" {
+			names[spec.short] = struct{}{}
+		}
 	}
+	return names
 }
