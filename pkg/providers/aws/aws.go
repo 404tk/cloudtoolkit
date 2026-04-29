@@ -24,6 +24,20 @@ type Provider struct {
 
 // New creates a new provider client for aws API
 func New(options schema.Options) (*Provider, error) {
+	return NewWithConfig(options, ClientConfig{})
+}
+
+// ClientConfig allows callers (e.g. demo replay) to inject custom api.Option
+// values and skip credential cache writes for ephemeral credentials.
+type ClientConfig struct {
+	APIOptions          []_api.Option
+	SkipCredentialCache bool
+}
+
+// NewWithConfig creates a new provider client for aws API with injected
+// transport options. Real callers use New; replay/test callers feed in a
+// mock HTTP client through cfg.APIOptions.
+func NewWithConfig(options schema.Options, cfg ClientConfig) (*Provider, error) {
 	credential, err := _auth.FromOptions(options)
 	if err != nil {
 		return nil, err
@@ -34,14 +48,14 @@ func New(options schema.Options) (*Provider, error) {
 	region, _ := options.GetMetadata(utils.Region)
 	version, _ := options.GetMetadata(utils.Version)
 	defaultRegion := resolveBootstrapRegion(region, version)
-	apiClient := _api.NewClient(credential)
+	apiClient := _api.NewClient(credential, cfg.APIOptions...)
 	provider := &Provider{
 		region:        region,
 		defaultRegion: defaultRegion,
 		apiClient:     apiClient,
 	}
 
-	if err := credverify.ForCloudlist(options, provider, false, func(ctx context.Context) (credverify.Result, error) {
+	if err := credverify.ForCloudlist(options, provider, cfg.SkipCredentialCache, func(ctx context.Context) (credverify.Result, error) {
 		resp, err := apiClient.GetCallerIdentity(ctx, defaultRegion)
 		if err != nil {
 			return credverify.Result{}, err

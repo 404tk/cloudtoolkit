@@ -7,6 +7,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba"
 	alireplay "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/replay"
 	"github.com/404tk/cloudtoolkit/pkg/providers/aws"
+	awsreplay "github.com/404tk/cloudtoolkit/pkg/providers/aws/replay"
 	"github.com/404tk/cloudtoolkit/pkg/providers/azure"
 	"github.com/404tk/cloudtoolkit/pkg/providers/gcp"
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei"
@@ -43,6 +44,9 @@ var catalog = []entry{
 	{
 		info: Info{Name: "aws", Desc: "Amazon Web Service"},
 		new: func(block schema.Options) (schema.Provider, error) {
+			if replay.IsActiveForProvider("aws") {
+				return aws.NewWithConfig(block, awsreplay.ClientConfig())
+			}
 			return aws.New(block)
 		},
 	},

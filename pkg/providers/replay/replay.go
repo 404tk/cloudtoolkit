@@ -64,6 +64,17 @@ var providers = map[string]providerMeta{
 			"instance-cmd-check",
 		},
 	},
+	"aws": {
+		Credentials: Credentials{
+			AccessKey: "AKIAIOSFODNN7EXAMPLE",
+			SecretKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+		},
+		Payloads: []string{
+			"cloudlist",
+			"iam-user-check",
+			"bucket-check",
+		},
+	},
 }
 
 func Enable(provider string) {
