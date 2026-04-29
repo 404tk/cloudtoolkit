@@ -1,14 +1,11 @@
 package replay
 
 import (
-	"bytes"
 	"context"
-	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"sort"
@@ -17,17 +14,10 @@ import (
 	"sync"
 	"time"
 
+	demoreplay "github.com/404tk/cloudtoolkit/pkg/providers/replay"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/api"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/auth"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cos"
-)
-
-type authFailureKind int
-
-const (
-	authOK authFailureKind = iota
-	authInvalidAccessKey
-	authInvalidSignature
 )
 
 type invocationResult struct {
@@ -55,7 +45,7 @@ func newTransport() *transport {
 }
 
 func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
-	body, err := readRequestBody(req)
+	body, err := demoreplay.ReadRequestBody(req)
 	if err != nil {
 		return nil, err
 	}
@@ -67,9 +57,9 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 func (t *transport) handleOpenAPI(req *http.Request, body []byte) (*http.Response, error) {
 	switch verifyOpenAPIAuth(req, body) {
-	case authInvalidAccessKey:
+	case demoreplay.AuthInvalidAccessKey:
 		return openAPIErrorResponse(req, http.StatusForbidden, "AuthFailure.SecretIdNotFound", "The SecretId is not found."), nil
-	case authInvalidSignature:
+	case demoreplay.AuthInvalidSignature:
 		return openAPIErrorResponse(req, http.StatusForbidden, "AuthFailure.SignatureFailure", "The provided credentials could not be validated. Please check your SecretId and SecretKey."), nil
 	}
 
@@ -112,7 +102,7 @@ func (t *transport) handleSTS(req *http.Request, action string) (*http.Response,
 	resp.Response.Type = "root"
 	resp.Response.UserID = demoOwnerUIN
 	resp.Response.RequestID = "req-replay-sts"
-	return jsonResponse(req, http.StatusOK, resp), nil
+	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 }
 
 func (t *transport) handleBilling(req *http.Request, action string) (*http.Response, error) {
@@ -123,7 +113,7 @@ func (t *transport) handleBilling(req *http.Request, action string) (*http.Respo
 	resp := api.DescribeAccountBalanceResponse{}
 	resp.Response.Balance = &balance
 	resp.Response.RequestID = "req-replay-billing"
-	return jsonResponse(req, http.StatusOK, resp), nil
+	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 }
 
 func (t *transport) handleCAM(req *http.Request, action string, body []byte) (*http.Response, error) {
@@ -149,7 +139,7 @@ func (t *transport) handleCAM(req *http.Request, action string, body []byte) (*h
 				CreateTime:   &createTime,
 			})
 		}
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "ListAttachedUserAllPolicies":
 		var payload api.ListAttachedUserAllPoliciesRequest
 		_ = json.Unmarshal(body, &payload)
@@ -172,7 +162,7 @@ func (t *transport) handleCAM(req *http.Request, action string, body []byte) (*h
 				StrategyType: &strategyType,
 			})
 		}
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "GetPolicy":
 		var payload api.GetPolicyRequest
 		_ = json.Unmarshal(body, &payload)
@@ -183,7 +173,7 @@ func (t *transport) handleCAM(req *http.Request, action string, body []byte) (*h
 		resp := api.GetPolicyResponse{}
 		resp.Response.PolicyDocument = stringPtr(policy.Document)
 		resp.Response.RequestID = "req-replay-cam-get-policy"
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "AddUser":
 		var payload api.AddUserRequest
 		_ = json.Unmarshal(body, &payload)
@@ -193,7 +183,7 @@ func (t *transport) handleCAM(req *http.Request, action string, body []byte) (*h
 		resp.Response.Name = stringPtr(user.Name)
 		resp.Response.Password = stringPtr(derefString(payload.Password))
 		resp.Response.RequestID = "req-replay-cam-add-user"
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "GetUser":
 		var payload api.GetUserRequest
 		_ = json.Unmarshal(body, &payload)
@@ -205,44 +195,44 @@ func (t *transport) handleCAM(req *http.Request, action string, body []byte) (*h
 		resp.Response.Uin = uint64Ptr(user.UIN)
 		resp.Response.Name = stringPtr(user.Name)
 		resp.Response.RequestID = "req-replay-cam-get-user"
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "AttachUserPolicy":
 		resp := api.AttachUserPolicyResponse{}
 		resp.Response.RequestID = "req-replay-cam-attach-user-policy"
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "DetachUserPolicy":
 		resp := api.DetachUserPolicyResponse{}
 		resp.Response.RequestID = "req-replay-cam-detach-user-policy"
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "GetUserAppId":
 		resp := api.GetUserAppIDResponse{}
 		resp.Response.OwnerUin = stringPtr(demoOwnerUIN)
 		resp.Response.RequestID = "req-replay-cam-get-user-appid"
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "DeleteUser":
 		var payload api.DeleteUserRequest
 		_ = json.Unmarshal(body, &payload)
 		t.deleteUser(derefString(payload.Name))
 		resp := api.DeleteUserResponse{}
 		resp.Response.RequestID = "req-replay-cam-delete-user"
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "CreateRole":
 		resp := api.CreateRoleResponse{}
 		resp.Response.RoleID = stringPtr("qcs::cam::roleName/ctk-demo-role")
 		resp.Response.RequestID = "req-replay-cam-create-role"
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "AttachRolePolicy":
 		resp := api.AttachRolePolicyResponse{}
 		resp.Response.RequestID = "req-replay-cam-attach-role-policy"
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "DetachRolePolicy":
 		resp := api.DetachRolePolicyResponse{}
 		resp.Response.RequestID = "req-replay-cam-detach-role-policy"
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "DeleteRole":
 		resp := api.DeleteRoleResponse{}
 		resp.Response.RequestID = "req-replay-cam-delete-role"
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	default:
 		return openAPIErrorResponse(req, http.StatusNotFound, "InvalidAction.NotFound", fmt.Sprintf("Unsupported replay action: %s", action)), nil
 	}
@@ -258,13 +248,14 @@ func (t *transport) handleCVM(req *http.Request, action string, body []byte) (*h
 			r := region
 			resp.Response.RegionSet = append(resp.Response.RegionSet, api.CVMRegionInfo{Region: &r})
 		}
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "DescribeInstances":
 		var payload api.DescribeCVMInstancesRequest
 		_ = json.Unmarshal(body, &payload)
 		region := tcRegion(req)
 		items := cvmForRegion(region)
-		start, end := offsetWindow(len(items), derefInt64(payload.Offset), derefInt64(payload.Limit, 100))
+		w := demoreplay.OffsetWindow(len(items), int(derefInt64(payload.Offset)), int(derefInt64(payload.Limit, 100)))
+		start, end := w.Start, w.End
 		resp := api.DescribeCVMInstancesResponse{}
 		total := int64(len(items))
 		resp.Response.TotalCount = &total
@@ -279,12 +270,12 @@ func (t *transport) handleCVM(req *http.Request, action string, body []byte) (*h
 				InstanceID:         &instanceID,
 				InstanceName:       &instanceName,
 				InstanceState:      &state,
-				PublicIPAddresses:  nonEmptyStrings(item.PublicIP),
-				PrivateIPAddresses: nonEmptyStrings(item.PrivateIP),
+				PublicIPAddresses:  demoreplay.NonEmptyStrings(item.PublicIP),
+				PrivateIPAddresses: demoreplay.NonEmptyStrings(item.PrivateIP),
 				OSName:             &osName,
 			})
 		}
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	default:
 		return openAPIErrorResponse(req, http.StatusNotFound, "InvalidAction.NotFound", fmt.Sprintf("Unsupported replay action: %s", action)), nil
 	}
@@ -300,13 +291,14 @@ func (t *transport) handleLighthouse(req *http.Request, action string, body []by
 			r := region
 			resp.Response.RegionSet = append(resp.Response.RegionSet, api.LighthouseRegionInfo{Region: &r})
 		}
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "DescribeInstances":
 		var payload api.DescribeLighthouseInstancesRequest
 		_ = json.Unmarshal(body, &payload)
 		region := tcRegion(req)
 		items := lighthouseForRegion(region)
-		start, end := offsetWindow(len(items), derefInt64(payload.Offset), derefInt64(payload.Limit, 100))
+		w := demoreplay.OffsetWindow(len(items), int(derefInt64(payload.Offset)), int(derefInt64(payload.Limit, 100)))
+		start, end := w.Start, w.End
 		resp := api.DescribeLighthouseInstancesResponse{}
 		total := int64(len(items))
 		resp.Response.TotalCount = &total
@@ -321,12 +313,12 @@ func (t *transport) handleLighthouse(req *http.Request, action string, body []by
 				InstanceID:       &instanceID,
 				InstanceName:     &instanceName,
 				InstanceState:    &state,
-				PublicAddresses:  nonEmptyStrings(item.PublicAddress),
-				PrivateAddresses: nonEmptyStrings(item.PrivateIP),
+				PublicAddresses:  demoreplay.NonEmptyStrings(item.PublicAddress),
+				PrivateAddresses: demoreplay.NonEmptyStrings(item.PrivateIP),
 				PlatformType:     &platformType,
 			})
 		}
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	default:
 		return openAPIErrorResponse(req, http.StatusNotFound, "InvalidAction.NotFound", fmt.Sprintf("Unsupported replay action: %s", action)), nil
 	}
@@ -337,7 +329,8 @@ func (t *transport) handleDNSPod(req *http.Request, action string, body []byte) 
 	case "DescribeDomainList":
 		var payload api.DescribeDomainListRequest
 		_ = json.Unmarshal(body, &payload)
-		start, end := offsetWindow(len(demoDomains), payload.Offset, payload.Limit)
+		w := demoreplay.OffsetWindow(len(demoDomains), int(payload.Offset), int(payload.Limit))
+		start, end := w.Start, w.End
 		resp := api.DescribeDomainListResponse{}
 		total := uint64(len(demoDomains))
 		resp.Response.DomainCountInfo.DomainTotal = &total
@@ -353,7 +346,7 @@ func (t *transport) handleDNSPod(req *http.Request, action string, body []byte) 
 				DNSStatus: &dnsStatus,
 			})
 		}
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "DescribeRecordList":
 		var payload api.DescribeRecordListRequest
 		_ = json.Unmarshal(body, &payload)
@@ -361,7 +354,8 @@ func (t *transport) handleDNSPod(req *http.Request, action string, body []byte) 
 		if !ok {
 			return openAPIErrorResponse(req, http.StatusNotFound, "ResourceNotFound.Domain", "The specified domain does not exist."), nil
 		}
-		start, end := offsetWindowUint64(len(domain.Records), payload.Offset, payload.Limit)
+		w := demoreplay.OffsetWindow(len(domain.Records), int(payload.Offset), int(payload.Limit))
+		start, end := w.Start, w.End
 		resp := api.DescribeRecordListResponse{}
 		total := uint64(len(domain.Records))
 		listCount := uint64(end - start)
@@ -381,7 +375,7 @@ func (t *transport) handleDNSPod(req *http.Request, action string, body []byte) 
 				Status: &status,
 			})
 		}
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	default:
 		return openAPIErrorResponse(req, http.StatusNotFound, "InvalidAction.NotFound", fmt.Sprintf("Unsupported replay action: %s", action)), nil
 	}
@@ -397,7 +391,7 @@ func (t *transport) handleCDB(req *http.Request, action string) (*http.Response,
 			r := region
 			resp.Response.DataResult.Regions = append(resp.Response.DataResult.Regions, api.CDBRegionSellConf{Region: &r})
 		}
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "DescribeDBInstances":
 		region := tcRegion(req)
 		items := mysqlForRegion(region)
@@ -424,7 +418,7 @@ func (t *transport) handleCDB(req *http.Request, action string) (*http.Response,
 			}
 			resp.Response.Items = append(resp.Response.Items, instance)
 		}
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	default:
 		return openAPIErrorResponse(req, http.StatusNotFound, "InvalidAction.NotFound", fmt.Sprintf("Unsupported replay action: %s", action)), nil
 	}
@@ -440,7 +434,7 @@ func (t *transport) handleMariaDB(req *http.Request, action string) (*http.Respo
 			r := region
 			resp.Response.RegionList = append(resp.Response.RegionList, api.MariaDBRegionInfo{Region: &r})
 		}
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "DescribeDBInstances":
 		region := tcRegion(req)
 		items := mariadbForRegion(region)
@@ -467,7 +461,7 @@ func (t *transport) handleMariaDB(req *http.Request, action string) (*http.Respo
 			}
 			resp.Response.Instances = append(resp.Response.Instances, instance)
 		}
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	default:
 		return openAPIErrorResponse(req, http.StatusNotFound, "InvalidAction.NotFound", fmt.Sprintf("Unsupported replay action: %s", action)), nil
 	}
@@ -487,7 +481,7 @@ func (t *transport) handlePostgres(req *http.Request, action string) (*http.Resp
 				RegionState: &state,
 			})
 		}
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "DescribeDBInstances":
 		region := tcRegion(req)
 		items := postgresForRegion(region)
@@ -525,7 +519,7 @@ func (t *transport) handlePostgres(req *http.Request, action string) (*http.Resp
 				},
 			})
 		}
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	default:
 		return openAPIErrorResponse(req, http.StatusNotFound, "InvalidAction.NotFound", fmt.Sprintf("Unsupported replay action: %s", action)), nil
 	}
@@ -545,7 +539,7 @@ func (t *transport) handleSQLServer(req *http.Request, action string) (*http.Res
 				RegionState: &state,
 			})
 		}
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "DescribeDBInstances":
 		region := tcRegion(req)
 		items := sqlServerForRegion(region)
@@ -573,7 +567,7 @@ func (t *transport) handleSQLServer(req *http.Request, action string) (*http.Res
 			}
 			resp.Response.DBInstances = append(resp.Response.DBInstances, instance)
 		}
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	default:
 		return openAPIErrorResponse(req, http.StatusNotFound, "InvalidAction.NotFound", fmt.Sprintf("Unsupported replay action: %s", action)), nil
 	}
@@ -594,7 +588,7 @@ func (t *transport) handleTAT(req *http.Request, action string, body []byte) (*h
 		resp.Response.CommandID = stringPtr(result.CommandID)
 		resp.Response.InvocationID = stringPtr(result.InvocationID)
 		resp.Response.RequestID = "req-replay-tat-run-command"
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "DescribeInvocations":
 		var payload api.DescribeTATInvocationsRequest
 		_ = json.Unmarshal(body, &payload)
@@ -620,7 +614,7 @@ func (t *transport) handleTAT(req *http.Request, action string, body []byte) (*h
 				},
 			})
 		}
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "DescribeInvocationTasks":
 		var payload api.DescribeTATInvocationTasksRequest
 		_ = json.Unmarshal(body, &payload)
@@ -647,7 +641,7 @@ func (t *transport) handleTAT(req *http.Request, action string, body []byte) (*h
 				},
 			})
 		}
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	default:
 		return openAPIErrorResponse(req, http.StatusNotFound, "InvalidAction.NotFound", fmt.Sprintf("Unsupported replay action: %s", action)), nil
 	}
@@ -655,9 +649,9 @@ func (t *transport) handleTAT(req *http.Request, action string, body []byte) (*h
 
 func (t *transport) handleCOS(req *http.Request) (*http.Response, error) {
 	switch verifyCOSAuth(req) {
-	case authInvalidAccessKey:
+	case demoreplay.AuthInvalidAccessKey:
 		return xmlErrorResponse(req, http.StatusForbidden, "InvalidAccessKeyId", "The Access Key Id you provided does not exist in our records."), nil
-	case authInvalidSignature:
+	case demoreplay.AuthInvalidSignature:
 		return xmlErrorResponse(req, http.StatusForbidden, "SignatureDoesNotMatch", "The request signature we calculated does not match the signature you provided."), nil
 	}
 
@@ -674,7 +668,7 @@ func (t *transport) handleCOS(req *http.Request) (*http.Response, error) {
 				CreationDate: bucket.CreationDate,
 			})
 		}
-		return xmlResponse(req, http.StatusOK, resp), nil
+		return demoreplay.XMLResponse(req, http.StatusOK, resp), nil
 	case req.Method == http.MethodGet:
 		bucketName, region, ok := parseBucketHost(host)
 		if !ok {
@@ -684,7 +678,7 @@ func (t *transport) handleCOS(req *http.Request) (*http.Response, error) {
 		if !found || bucket.Region != region {
 			return xmlErrorResponse(req, http.StatusNotFound, "NoSuchBucket", "The specified bucket does not exist."), nil
 		}
-		maxKeys := parseInt(req.URL.Query().Get("max-keys"), 1000)
+		maxKeys := demoreplay.ParseInt(req.URL.Query().Get("max-keys"), 1000)
 		marker := strings.TrimSpace(req.URL.Query().Get("marker"))
 		objects, nextMarker, truncated := bucketPage(bucket.Objects, marker, maxKeys)
 		resp := cos.ListObjectsResponse{
@@ -701,24 +695,24 @@ func (t *transport) handleCOS(req *http.Request) (*http.Response, error) {
 				Size: object.Size,
 			})
 		}
-		return xmlResponse(req, http.StatusOK, resp), nil
+		return demoreplay.XMLResponse(req, http.StatusOK, resp), nil
 	default:
 		return xmlErrorResponse(req, http.StatusMethodNotAllowed, "MethodNotAllowed", "The specified method is not allowed against this resource."), nil
 	}
 }
 
-func verifyOpenAPIAuth(req *http.Request, body []byte) authFailureKind {
+func verifyOpenAPIAuth(req *http.Request, body []byte) demoreplay.AuthFailureKind {
 	authHeader := strings.TrimSpace(req.Header.Get("Authorization"))
 	secretID, service, ok := parseTC3Credential(authHeader)
 	if !ok {
-		return authInvalidSignature
+		return demoreplay.AuthInvalidSignature
 	}
-	if subtle.ConstantTimeCompare([]byte(secretID), []byte(demoCredentials.AccessKey)) != 1 {
-		return authInvalidAccessKey
+	if !demoreplay.SubtleEqual(secretID, demoCredentials.AccessKey) {
+		return demoreplay.AuthInvalidAccessKey
 	}
 	timestamp, err := parseUnixHeader(req.Header.Get("X-TC-Timestamp"))
 	if err != nil {
-		return authInvalidSignature
+		return demoreplay.AuthInvalidSignature
 	}
 	host := strings.TrimSpace(req.Host)
 	if host == "" {
@@ -728,54 +722,54 @@ func verifyOpenAPIAuth(req *http.Request, body []byte) authFailureKind {
 		Method:      req.Method,
 		Service:     service,
 		Host:        host,
-		Path:        firstNonEmpty(req.URL.Path, "/"),
+		Path:        demoreplay.FirstNonEmpty(req.URL.Path, "/"),
 		Query:       req.URL.RawQuery,
-		ContentType: firstNonEmpty(req.Header.Get("Content-Type"), "application/json"),
+		ContentType: demoreplay.FirstNonEmpty(req.Header.Get("Content-Type"), "application/json"),
 		Timestamp:   timestamp,
 		Payload:     body,
 	})
 	if err != nil {
-		return authInvalidSignature
+		return demoreplay.AuthInvalidSignature
 	}
-	if subtle.ConstantTimeCompare([]byte(signature.Authorization), []byte(authHeader)) != 1 {
-		return authInvalidSignature
+	if !demoreplay.SubtleEqual(signature.Authorization, authHeader) {
+		return demoreplay.AuthInvalidSignature
 	}
-	return authOK
+	return demoreplay.AuthOK
 }
 
-func verifyCOSAuth(req *http.Request) authFailureKind {
+func verifyCOSAuth(req *http.Request) demoreplay.AuthFailureKind {
 	authHeader := strings.TrimSpace(req.Header.Get("Authorization"))
 	values, err := parseCOSAuthorization(authHeader)
 	if err != nil {
-		return authInvalidSignature
+		return demoreplay.AuthInvalidSignature
 	}
-	if subtle.ConstantTimeCompare([]byte(values["q-ak"]), []byte(demoCredentials.AccessKey)) != 1 {
-		return authInvalidAccessKey
+	if !demoreplay.SubtleEqual(values["q-ak"], demoCredentials.AccessKey) {
+		return demoreplay.AuthInvalidAccessKey
 	}
 	signRange := strings.TrimSpace(values["q-sign-time"])
 	parts := strings.Split(signRange, ";")
 	if len(parts) != 2 {
-		return authInvalidSignature
+		return demoreplay.AuthInvalidSignature
 	}
 	startUnix, err := strconv.ParseInt(parts[0], 10, 64)
 	if err != nil {
-		return authInvalidSignature
+		return demoreplay.AuthInvalidSignature
 	}
 	endUnix, err := strconv.ParseInt(parts[1], 10, 64)
 	if err != nil || endUnix-startUnix != int64(time.Hour/time.Second) {
-		return authInvalidSignature
+		return demoreplay.AuthInvalidSignature
 	}
 
 	clone := req.Clone(context.Background())
 	clone.Header = req.Header.Clone()
 	clone.Header.Del("Authorization")
 	if err := cos.Sign(clone, auth.New(demoCredentials.AccessKey, demoCredentials.SecretKey, ""), time.Unix(startUnix, 0).UTC()); err != nil {
-		return authInvalidSignature
+		return demoreplay.AuthInvalidSignature
 	}
-	if subtle.ConstantTimeCompare([]byte(strings.TrimSpace(clone.Header.Get("Authorization"))), []byte(authHeader)) != 1 {
-		return authInvalidSignature
+	if !demoreplay.SubtleEqual(strings.TrimSpace(clone.Header.Get("Authorization")), authHeader) {
+		return demoreplay.AuthInvalidSignature
 	}
-	return authOK
+	return demoreplay.AuthOK
 }
 
 func parseCOSAuthorization(authHeader string) (map[string]string, error) {
@@ -860,50 +854,12 @@ func parseBucketHost(host string) (string, string, bool) {
 	return prefix, region, true
 }
 
-func readRequestBody(req *http.Request) ([]byte, error) {
-	if req == nil || req.Body == nil {
-		return nil, nil
-	}
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		return nil, err
-	}
-	req.Body = io.NopCloser(bytes.NewReader(body))
-	return body, nil
-}
-
-func jsonResponse(req *http.Request, statusCode int, payload any) *http.Response {
-	body, _ := json.Marshal(payload)
-	return &http.Response{
-		StatusCode: statusCode,
-		Status:     fmt.Sprintf("%d %s", statusCode, http.StatusText(statusCode)),
-		Header: http.Header{
-			"Content-Type": []string{"application/json"},
-		},
-		Body:    io.NopCloser(bytes.NewReader(body)),
-		Request: req,
-	}
-}
-
-func xmlResponse(req *http.Request, statusCode int, payload any) *http.Response {
-	body, _ := xml.Marshal(payload)
-	return &http.Response{
-		StatusCode: statusCode,
-		Status:     fmt.Sprintf("%d %s", statusCode, http.StatusText(statusCode)),
-		Header: http.Header{
-			"Content-Type": []string{"application/xml"},
-		},
-		Body:    io.NopCloser(bytes.NewReader(body)),
-		Request: req,
-	}
-}
-
 func openAPIErrorResponse(req *http.Request, statusCode int, code, message string) *http.Response {
 	requestID := "req-replay-auth"
 	if !strings.HasPrefix(code, "AuthFailure.") {
 		requestID = requestIDForAction(req)
 	}
-	return jsonResponse(req, statusCode, map[string]any{
+	return demoreplay.JSONResponse(req, statusCode, map[string]any{
 		"Response": map[string]any{
 			"Error": map[string]string{
 				"Code":    code,
@@ -946,7 +902,7 @@ func sanitizeAction(action string) string {
 }
 
 func xmlErrorResponse(req *http.Request, statusCode int, code, message string) *http.Response {
-	return xmlResponse(req, statusCode, cosErrorResponse{
+	return demoreplay.XMLResponse(req, statusCode, cosErrorResponse{
 		Code:      code,
 		Message:   message,
 		Resource:  req.URL.Path,
@@ -1080,66 +1036,6 @@ func decodeCommandContent(content string) string {
 		return content
 	}
 	return string(decoded)
-}
-
-func nonEmptyStrings(values ...string) []string {
-	list := make([]string, 0, len(values))
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			list = append(list, value)
-		}
-	}
-	return list
-}
-
-func offsetWindow(total int, offset, limit int64) (int, int) {
-	if limit <= 0 {
-		limit = int64(total)
-	}
-	if offset < 0 {
-		offset = 0
-	}
-	start := int(offset)
-	if start > total {
-		start = total
-	}
-	end := start + int(limit)
-	if end > total {
-		end = total
-	}
-	return start, end
-}
-
-func offsetWindowUint64(total int, offset, limit uint64) (int, int) {
-	if limit == 0 {
-		limit = uint64(total)
-	}
-	start := int(offset)
-	if start > total {
-		start = total
-	}
-	end := start + int(limit)
-	if end > total {
-		end = total
-	}
-	return start, end
-}
-
-func parseInt(value string, fallback int) int {
-	parsed, err := strconv.Atoi(strings.TrimSpace(value))
-	if err != nil || parsed <= 0 {
-		return fallback
-	}
-	return parsed
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if v := strings.TrimSpace(value); v != "" {
-			return v
-		}
-	}
-	return ""
 }
 
 func tcAction(req *http.Request) string {

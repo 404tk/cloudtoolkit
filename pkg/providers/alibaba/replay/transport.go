@@ -1,16 +1,12 @@
 package replay
 
 import (
-	"bytes"
 	"context"
 	"crypto/hmac"
 	"crypto/sha1"
-	"crypto/subtle"
 	"encoding/base64"
-	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"sort"
@@ -24,14 +20,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/oss"
 	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/sls"
 	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
-)
-
-type authFailureKind int
-
-const (
-	authOK authFailureKind = iota
-	authInvalidAccessKey
-	authInvalidSignature
+	demoreplay "github.com/404tk/cloudtoolkit/pkg/providers/replay"
 )
 
 type invocationResult struct {
@@ -62,9 +51,9 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 func (t *transport) handleRPC(req *http.Request) (*http.Response, error) {
 	switch verifyRPCAuth(req) {
-	case authInvalidAccessKey:
+	case demoreplay.AuthInvalidAccessKey:
 		return rpcErrorResponse(req, http.StatusForbidden, "InvalidAccessKeyId.NotFound", "Specified access key is not found."), nil
-	case authInvalidSignature:
+	case demoreplay.AuthInvalidSignature:
 		return rpcErrorResponse(req, http.StatusForbidden, "SignatureDoesNotMatch", "Specified signature is not matched with our calculation."), nil
 	}
 
@@ -73,7 +62,7 @@ func (t *transport) handleRPC(req *http.Request) (*http.Response, error) {
 	switch rpcProductFromHost(host) {
 	case "sts":
 		if action == "GetCallerIdentity" {
-			return jsonResponse(req, http.StatusOK, api.GetCallerIdentityResponse{
+			return demoreplay.JSONResponse(req, http.StatusOK, api.GetCallerIdentityResponse{
 				IdentityType: "RAMUser",
 				AccountID:    "235000000000000001",
 				RequestID:    "req-sts-caller",
@@ -84,7 +73,7 @@ func (t *transport) handleRPC(req *http.Request) (*http.Response, error) {
 		}
 	case "bssopenapi":
 		if action == "QueryAccountBalance" {
-			return jsonResponse(req, http.StatusOK, api.QueryAccountBalanceResponse{
+			return demoreplay.JSONResponse(req, http.StatusOK, api.QueryAccountBalanceResponse{
 				Code:      "Success",
 				Message:   "success",
 				RequestID: "req-bss-balance",
@@ -128,7 +117,7 @@ func (t *transport) handleLocation(req *http.Request, action string) (*http.Resp
 	case "ecs":
 		host = replayECSEndpoint(region)
 	}
-	return jsonResponse(req, http.StatusOK, map[string]any{
+	return demoreplay.JSONResponse(req, http.StatusOK, map[string]any{
 		"RequestId": "req-location-endpoints",
 		"Success":   true,
 		"Endpoints": map[string]any{
@@ -147,23 +136,23 @@ func (t *transport) handleECS(req *http.Request, action string) (*http.Response,
 		for _, region := range demoRegions {
 			regions = append(regions, api.ECSRegion{RegionID: region})
 		}
-		return jsonResponse(req, http.StatusOK, api.DescribeECSRegionsResponse{
+		return demoreplay.JSONResponse(req, http.StatusOK, api.DescribeECSRegionsResponse{
 			RequestID: "req-ecs-regions",
 			Regions:   api.ECSRegionList{Region: regions},
 		}), nil
 	case "DescribeInstances":
 		region := strings.TrimSpace(query.Get("RegionId"))
-		pageNumber := parseInt(query.Get("PageNumber"), 1)
-		pageSize := parseInt(query.Get("PageSize"), 100)
+		pageNumber := demoreplay.ParseInt(query.Get("PageNumber"), 1)
+		pageSize := demoreplay.ParseInt(query.Get("PageSize"), 100)
 		hosts := hostsForRegion(region)
-		window := pageWindow(len(hosts), pageNumber, pageSize)
-		items := make([]api.ECSInstance, 0, window.end-window.start)
-		for _, host := range hosts[window.start:window.end] {
+		window := demoreplay.PageWindow(len(hosts), pageNumber, pageSize)
+		items := make([]api.ECSInstance, 0, window.End-window.Start)
+		for _, host := range hosts[window.Start:window.End] {
 			instance := api.ECSInstance{
 				HostName:   host.HostName,
 				InstanceID: host.ID,
 				OSType:     host.OSType,
-				PublicIP:   api.ECSPublicIPList{IPAddress: nonEmptyStrings(host.PublicIPv4)},
+				PublicIP:   api.ECSPublicIPList{IPAddress: demoreplay.NonEmptyStrings(host.PublicIPv4)},
 				NetworkInterfaces: api.ECSNetworkInterfaces{
 					NetworkInterface: []api.ECSNetworkInterface{
 						{
@@ -179,7 +168,7 @@ func (t *transport) handleECS(req *http.Request, action string) (*http.Response,
 			}
 			items = append(items, instance)
 		}
-		return jsonResponse(req, http.StatusOK, api.DescribeECSInstancesResponse{
+		return demoreplay.JSONResponse(req, http.StatusOK, api.DescribeECSInstancesResponse{
 			PageSize:   pageSize,
 			PageNumber: pageNumber,
 			RequestID:  "req-ecs-instances",
@@ -187,7 +176,7 @@ func (t *transport) handleECS(req *http.Request, action string) (*http.Response,
 			Instances:  api.ECSInstanceList{Instance: items},
 		}), nil
 	case "RunCommand":
-		instanceID := strings.TrimSpace(firstNonEmpty(query.Get("InstanceId.1"), query.Get("InstanceId")))
+		instanceID := strings.TrimSpace(demoreplay.FirstNonEmpty(query.Get("InstanceId.1"), query.Get("InstanceId")))
 		command := strings.TrimSpace(query.Get("CommandContent"))
 		if strings.EqualFold(query.Get("ContentEncoding"), "Base64") {
 			if decoded, err := base64.StdEncoding.DecodeString(command); err == nil {
@@ -200,7 +189,7 @@ func (t *transport) handleECS(req *http.Request, action string) (*http.Response,
 			Output: shellOutput(instanceID, command),
 		}
 		t.mu.Unlock()
-		return jsonResponse(req, http.StatusOK, api.RunECSCommandResponse{
+		return demoreplay.JSONResponse(req, http.StatusOK, api.RunECSCommandResponse{
 			RequestID: "req-ecs-run-command",
 			CommandID: commandID,
 			InvokeID:  "invoke-" + commandID,
@@ -213,7 +202,7 @@ func (t *transport) handleECS(req *http.Request, action string) (*http.Response,
 		if !ok {
 			return rpcErrorResponse(req, http.StatusNotFound, "InvalidCommandId.NotFound", "Specified command ID does not exist."), nil
 		}
-		return jsonResponse(req, http.StatusOK, api.DescribeECSInvocationResultsResponse{
+		return demoreplay.JSONResponse(req, http.StatusOK, api.DescribeECSInvocationResultsResponse{
 			RequestID: "req-ecs-invocation",
 			Invocation: api.ECSInvocation{
 				CommandID: commandID,
@@ -236,11 +225,11 @@ func (t *transport) handleRAM(req *http.Request, action string) (*http.Response,
 	query := req.URL.Query()
 	switch action {
 	case "ListUsers":
-		maxItems := parseInt(query.Get("MaxItems"), 100)
+		maxItems := demoreplay.ParseInt(query.Get("MaxItems"), 100)
 		offset := markerOffset(query.Get("Marker"))
-		window := offsetWindow(len(demoRAMUsers), offset, maxItems)
-		items := make([]api.RAMUser, 0, window.end-window.start)
-		for _, user := range demoRAMUsers[window.start:window.end] {
+		window := demoreplay.OffsetWindow(len(demoRAMUsers), offset, maxItems)
+		items := make([]api.RAMUser, 0, window.End-window.Start)
+		for _, user := range demoRAMUsers[window.Start:window.End] {
 			items = append(items, api.RAMUser{
 				UserName:   user.UserName,
 				UserID:     user.UserID,
@@ -249,19 +238,19 @@ func (t *transport) handleRAM(req *http.Request, action string) (*http.Response,
 		}
 		resp := api.ListRAMUsersResponse{
 			RequestID:   "req-ram-list-users",
-			IsTruncated: window.end < len(demoRAMUsers),
+			IsTruncated: window.End < len(demoRAMUsers),
 			Users:       api.RAMUserList{User: items},
 		}
 		if resp.IsTruncated {
-			resp.Marker = strconv.Itoa(window.end)
+			resp.Marker = strconv.Itoa(window.End)
 		}
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "GetLoginProfile":
 		user, ok := findRAMUser(query.Get("UserName"))
 		if !ok || !user.HasLogin {
 			return rpcErrorResponse(req, http.StatusNotFound, "EntityNotExist.LoginProfile", "Login policy not exists"), nil
 		}
-		return jsonResponse(req, http.StatusOK, api.GetRAMLoginProfileResponse{
+		return demoreplay.JSONResponse(req, http.StatusOK, api.GetRAMLoginProfileResponse{
 			RequestID: "req-ram-login-profile",
 			LoginProfile: api.RAMLoginProfile{
 				UserName:              user.UserName,
@@ -275,7 +264,7 @@ func (t *transport) handleRAM(req *http.Request, action string) (*http.Response,
 		if !ok {
 			return rpcErrorResponse(req, http.StatusNotFound, "EntityNotExist.User", "The specified RAM user does not exist."), nil
 		}
-		return jsonResponse(req, http.StatusOK, api.GetRAMUserResponse{
+		return demoreplay.JSONResponse(req, http.StatusOK, api.GetRAMUserResponse{
 			RequestID: "req-ram-get-user",
 			User: api.RAMUser{
 				UserName:      user.UserName,
@@ -296,7 +285,7 @@ func (t *transport) handleRAM(req *http.Request, action string) (*http.Response,
 				PolicyType: policy.Type,
 			})
 		}
-		return jsonResponse(req, http.StatusOK, api.ListRAMPoliciesForUserResponse{
+		return demoreplay.JSONResponse(req, http.StatusOK, api.ListRAMPoliciesForUserResponse{
 			RequestID: "req-ram-list-policies",
 			Policies:  api.RAMPolicyList{Policy: policies},
 		}), nil
@@ -305,7 +294,7 @@ func (t *transport) handleRAM(req *http.Request, action string) (*http.Response,
 		for _, user := range demoRAMUsers {
 			for _, policy := range user.AttachedPolicy {
 				if policy.Name == policyName {
-					return jsonResponse(req, http.StatusOK, api.GetRAMPolicyResponse{
+					return demoreplay.JSONResponse(req, http.StatusOK, api.GetRAMPolicyResponse{
 						RequestID: "req-ram-get-policy",
 						Policy: api.RAMPolicy{
 							PolicyName: policy.Name,
@@ -322,12 +311,12 @@ func (t *transport) handleRAM(req *http.Request, action string) (*http.Response,
 		}
 		return rpcErrorResponse(req, http.StatusNotFound, "EntityNotExist.Policy", "The specified policy does not exist."), nil
 	case "GetAccountAlias":
-		return jsonResponse(req, http.StatusOK, api.GetRAMAccountAliasResponse{
+		return demoreplay.JSONResponse(req, http.StatusOK, api.GetRAMAccountAliasResponse{
 			RequestID:    "req-ram-account-alias",
 			AccountAlias: demoAccountAlias(),
 		}), nil
 	case "CreateUser":
-		return jsonResponse(req, http.StatusOK, api.CreateRAMUserResponse{
+		return demoreplay.JSONResponse(req, http.StatusOK, api.CreateRAMUserResponse{
 			RequestID: "req-ram-create-user",
 			User: api.RAMUser{
 				UserName:   query.Get("UserName"),
@@ -336,7 +325,7 @@ func (t *transport) handleRAM(req *http.Request, action string) (*http.Response,
 			},
 		}), nil
 	case "CreateLoginProfile":
-		return jsonResponse(req, http.StatusOK, api.CreateRAMLoginProfileResponse{
+		return demoreplay.JSONResponse(req, http.StatusOK, api.CreateRAMLoginProfileResponse{
 			RequestID: "req-ram-create-login-profile",
 			LoginProfile: api.RAMLoginProfile{
 				UserName:              query.Get("UserName"),
@@ -346,19 +335,19 @@ func (t *transport) handleRAM(req *http.Request, action string) (*http.Response,
 			},
 		}), nil
 	case "AttachPolicyToUser":
-		return jsonResponse(req, http.StatusOK, api.AttachRAMPolicyToUserResponse{RequestID: "req-ram-attach-user-policy"}), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, api.AttachRAMPolicyToUserResponse{RequestID: "req-ram-attach-user-policy"}), nil
 	case "DetachPolicyFromUser":
-		return jsonResponse(req, http.StatusOK, api.DetachRAMPolicyFromUserResponse{RequestID: "req-ram-detach-user-policy"}), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, api.DetachRAMPolicyFromUserResponse{RequestID: "req-ram-detach-user-policy"}), nil
 	case "DeleteUser":
-		return jsonResponse(req, http.StatusOK, api.DeleteRAMUserResponse{RequestID: "req-ram-delete-user"}), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, api.DeleteRAMUserResponse{RequestID: "req-ram-delete-user"}), nil
 	case "CreateRole":
-		return jsonResponse(req, http.StatusOK, api.CreateRAMRoleResponse{RequestID: "req-ram-create-role"}), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, api.CreateRAMRoleResponse{RequestID: "req-ram-create-role"}), nil
 	case "AttachPolicyToRole":
-		return jsonResponse(req, http.StatusOK, api.AttachRAMPolicyToRoleResponse{RequestID: "req-ram-attach-role-policy"}), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, api.AttachRAMPolicyToRoleResponse{RequestID: "req-ram-attach-role-policy"}), nil
 	case "DetachPolicyFromRole":
-		return jsonResponse(req, http.StatusOK, api.DetachRAMPolicyFromRoleResponse{RequestID: "req-ram-detach-role-policy"}), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, api.DetachRAMPolicyFromRoleResponse{RequestID: "req-ram-detach-role-policy"}), nil
 	case "DeleteRole":
-		return jsonResponse(req, http.StatusOK, api.DeleteRAMRoleResponse{RequestID: "req-ram-delete-role"}), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, api.DeleteRAMRoleResponse{RequestID: "req-ram-delete-role"}), nil
 	}
 	return rpcErrorResponse(req, http.StatusNotFound, "InvalidAction.NotFound", fmt.Sprintf("Unsupported RAM replay action: %s", action)), nil
 }
@@ -371,18 +360,18 @@ func (t *transport) handleRDS(req *http.Request, action string) (*http.Response,
 		for _, region := range demoRegions {
 			regions = append(regions, api.RDSRegion{RegionID: region})
 		}
-		return jsonResponse(req, http.StatusOK, api.DescribeRDSRegionsResponse{
+		return demoreplay.JSONResponse(req, http.StatusOK, api.DescribeRDSRegionsResponse{
 			RequestID: "req-rds-regions",
 			Regions:   api.RDSRegionList{RDSRegion: regions},
 		}), nil
 	case "DescribeDBInstances":
 		region := strings.TrimSpace(query.Get("RegionId"))
-		pageNumber := parseInt(query.Get("PageNumber"), 1)
-		pageSize := parseInt(query.Get("PageSize"), 100)
+		pageNumber := demoreplay.ParseInt(query.Get("PageNumber"), 1)
+		pageSize := demoreplay.ParseInt(query.Get("PageSize"), 100)
 		items := databasesForRegion(region)
-		window := pageWindow(len(items), pageNumber, pageSize)
-		pageItems := make([]api.RDSInstance, 0, window.end-window.start)
-		for _, item := range items[window.start:window.end] {
+		window := demoreplay.PageWindow(len(items), pageNumber, pageSize)
+		pageItems := make([]api.RDSInstance, 0, window.End-window.Start)
+		for _, item := range items[window.Start:window.End] {
 			pageItems = append(pageItems, api.RDSInstance{
 				DBInstanceID:        item.InstanceID,
 				Engine:              item.Engine,
@@ -392,7 +381,7 @@ func (t *transport) handleRDS(req *http.Request, action string) (*http.Response,
 				InstanceNetworkType: item.NetworkType,
 			})
 		}
-		return jsonResponse(req, http.StatusOK, api.DescribeRDSInstancesResponse{
+		return demoreplay.JSONResponse(req, http.StatusOK, api.DescribeRDSInstancesResponse{
 			RequestID:        "req-rds-instances",
 			PageNumber:       pageNumber,
 			PageRecordCount:  pageSize,
@@ -409,18 +398,18 @@ func (t *transport) handleRDS(req *http.Request, action string) (*http.Response,
 			for _, dbName := range item.DBNames {
 				databases = append(databases, api.RDSDatabase{DBName: dbName})
 			}
-			return jsonResponse(req, http.StatusOK, api.DescribeRDSDatabasesResponse{
+			return demoreplay.JSONResponse(req, http.StatusOK, api.DescribeRDSDatabasesResponse{
 				RequestID: "req-rds-databases",
 				Databases: api.RDSDatabaseList{Database: databases},
 			}), nil
 		}
 		return rpcErrorResponse(req, http.StatusNotFound, "InvalidDBInstance.NotFound", "Specified DB instance does not exist."), nil
 	case "CreateAccount":
-		return jsonResponse(req, http.StatusOK, api.CreateRDSAccountResponse{RequestID: "req-rds-create-account"}), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, api.CreateRDSAccountResponse{RequestID: "req-rds-create-account"}), nil
 	case "GrantAccountPrivilege":
-		return jsonResponse(req, http.StatusOK, api.GrantRDSAccountPrivilegeResponse{RequestID: "req-rds-grant-account"}), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, api.GrantRDSAccountPrivilegeResponse{RequestID: "req-rds-grant-account"}), nil
 	case "DeleteAccount":
-		return jsonResponse(req, http.StatusOK, api.DeleteRDSAccountResponse{RequestID: "req-rds-delete-account"}), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, api.DeleteRDSAccountResponse{RequestID: "req-rds-delete-account"}), nil
 	}
 	return rpcErrorResponse(req, http.StatusNotFound, "InvalidAction.NotFound", fmt.Sprintf("Unsupported RDS replay action: %s", action)), nil
 }
@@ -443,7 +432,7 @@ func (t *transport) handleSAS(req *http.Request, action string) (*http.Response,
 				},
 			})
 		}
-		return jsonResponse(req, http.StatusOK, api.DescribeSASSuspEventsResponse{
+		return demoreplay.JSONResponse(req, http.StatusOK, api.DescribeSASSuspEventsResponse{
 			CurrentPage: 1,
 			PageSize:    len(events),
 			RequestID:   "req-sas-events",
@@ -452,7 +441,7 @@ func (t *transport) handleSAS(req *http.Request, action string) (*http.Response,
 			SuspEvents:  events,
 		}), nil
 	case "HandleSecurityEvents":
-		return jsonResponse(req, http.StatusOK, api.HandleSASSecurityEventsResponse{
+		return demoreplay.JSONResponse(req, http.StatusOK, api.HandleSASSecurityEventsResponse{
 			RequestID: "req-sas-handle-events",
 			HandleSecurityEventsResponse: api.HandleSASSecurityEventsResponseItem{
 				TaskID: 2026042001,
@@ -466,14 +455,14 @@ func (t *transport) handleDNS(req *http.Request, action string) (*http.Response,
 	query := req.URL.Query()
 	switch action {
 	case "DescribeDomains":
-		pageNumber := parseInt(query.Get("PageNumber"), 1)
-		pageSize := parseInt(query.Get("PageSize"), 100)
-		window := pageWindow(len(demoDomains), pageNumber, pageSize)
-		items := make([]api.DomainSummary, 0, window.end-window.start)
-		for _, domain := range demoDomains[window.start:window.end] {
+		pageNumber := demoreplay.ParseInt(query.Get("PageNumber"), 1)
+		pageSize := demoreplay.ParseInt(query.Get("PageSize"), 100)
+		window := demoreplay.PageWindow(len(demoDomains), pageNumber, pageSize)
+		items := make([]api.DomainSummary, 0, window.End-window.Start)
+		for _, domain := range demoDomains[window.Start:window.End] {
 			items = append(items, api.DomainSummary{DomainName: domain.DomainName})
 		}
-		return jsonResponse(req, http.StatusOK, api.DescribeDomainsResponse{
+		return demoreplay.JSONResponse(req, http.StatusOK, api.DescribeDomainsResponse{
 			TotalCount: len(demoDomains),
 			PageSize:   pageSize,
 			RequestID:  "req-dns-domains",
@@ -483,10 +472,10 @@ func (t *transport) handleDNS(req *http.Request, action string) (*http.Response,
 	case "DescribeDomainRecords":
 		domain, ok := findDomain(query.Get("DomainName"))
 		if !ok {
-			return jsonResponse(req, http.StatusOK, api.DescribeDomainRecordsResponse{
-				PageSize:      parseInt(query.Get("PageSize"), 100),
+			return demoreplay.JSONResponse(req, http.StatusOK, api.DescribeDomainRecordsResponse{
+				PageSize:      demoreplay.ParseInt(query.Get("PageSize"), 100),
 				RequestID:     "req-dns-domain-records",
-				PageNumber:    parseInt(query.Get("PageNumber"), 1),
+				PageNumber:    demoreplay.ParseInt(query.Get("PageNumber"), 1),
 				DomainRecords: api.DomainRecordList{},
 			}), nil
 		}
@@ -499,11 +488,11 @@ func (t *transport) handleDNS(req *http.Request, action string) (*http.Response,
 				Status: record.Status,
 			})
 		}
-		return jsonResponse(req, http.StatusOK, api.DescribeDomainRecordsResponse{
+		return demoreplay.JSONResponse(req, http.StatusOK, api.DescribeDomainRecordsResponse{
 			TotalCount:    len(records),
-			PageSize:      parseInt(query.Get("PageSize"), 100),
+			PageSize:      demoreplay.ParseInt(query.Get("PageSize"), 100),
 			RequestID:     "req-dns-domain-records",
-			PageNumber:    parseInt(query.Get("PageNumber"), 1),
+			PageNumber:    demoreplay.ParseInt(query.Get("PageNumber"), 1),
 			DomainRecords: api.DomainRecordList{Record: records},
 		}), nil
 	}
@@ -528,7 +517,7 @@ func (t *transport) handleSMS(req *http.Request, action string) (*http.Response,
 				BusinessType: sign["BusinessType"],
 			})
 		}
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "QuerySmsTemplateList":
 		resp := api.QuerySMSTemplateListResponse{
 			RequestID:   "req-sms-templates",
@@ -545,9 +534,9 @@ func (t *transport) handleSMS(req *http.Request, action string) (*http.Response,
 				TemplateContent: template["TemplateContent"],
 			})
 		}
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "QuerySendStatistics":
-		return jsonResponse(req, http.StatusOK, api.QuerySMSSendStatisticsResponse{
+		return demoreplay.JSONResponse(req, http.StatusOK, api.QuerySMSSendStatisticsResponse{
 			RequestID: "req-sms-stats",
 			Code:      "OK",
 			Message:   "OK",
@@ -561,9 +550,9 @@ func (t *transport) handleSMS(req *http.Request, action string) (*http.Response,
 
 func (t *transport) handleOSS(req *http.Request) (*http.Response, error) {
 	switch verifyOSSAuth(req) {
-	case authInvalidAccessKey:
+	case demoreplay.AuthInvalidAccessKey:
 		return ossErrorResponse(req, http.StatusForbidden, "InvalidAccessKeyId", "The OSS Access Key Id you provided does not exist in our records."), nil
-	case authInvalidSignature:
+	case demoreplay.AuthInvalidSignature:
 		return ossErrorResponse(req, http.StatusForbidden, "SignatureDoesNotMatch", "The request signature we calculated does not match the signature you provided."), nil
 	}
 
@@ -577,7 +566,7 @@ func (t *transport) handleOSS(req *http.Request) (*http.Response, error) {
 				Region:   bucket.Region,
 			})
 		}
-		return xmlResponse(req, http.StatusOK, oss.ListBucketsResponse{
+		return demoreplay.XMLResponse(req, http.StatusOK, oss.ListBucketsResponse{
 			MaxKeys: 1000,
 			Buckets: buckets,
 		}), nil
@@ -591,37 +580,37 @@ func (t *transport) handleOSS(req *http.Request) (*http.Response, error) {
 		return ossErrorResponse(req, http.StatusNotFound, "NoSuchBucket", "The specified bucket does not exist."), nil
 	}
 	query := req.URL.Query()
-	maxKeys := parseInt(query.Get("max-keys"), 1000)
-	window := pageWindow(len(bucket.Objects), 1, maxKeys)
-	return xmlResponse(req, http.StatusOK, oss.ListObjectsResponse{
+	maxKeys := demoreplay.ParseInt(query.Get("max-keys"), 1000)
+	window := demoreplay.PageWindow(len(bucket.Objects), 1, maxKeys)
+	return demoreplay.XMLResponse(req, http.StatusOK, oss.ListObjectsResponse{
 		Name:        bucket.Name,
 		MaxKeys:     maxKeys,
-		IsTruncated: window.end < len(bucket.Objects),
-		Objects:     append([]oss.OSSObject(nil), bucket.Objects[window.start:window.end]...),
+		IsTruncated: window.End < len(bucket.Objects),
+		Objects:     append([]oss.OSSObject(nil), bucket.Objects[window.Start:window.End]...),
 	}), nil
 }
 
 func (t *transport) handleSLS(req *http.Request) (*http.Response, error) {
 	switch verifySLSAuth(req) {
-	case authInvalidAccessKey:
+	case demoreplay.AuthInvalidAccessKey:
 		return slsErrorResponse(req, http.StatusUnauthorized, "Unauthorized", "The provided AccessKeyId is invalid."), nil
-	case authInvalidSignature:
+	case demoreplay.AuthInvalidSignature:
 		return slsErrorResponse(req, http.StatusUnauthorized, "Unauthorized", "The request signature we calculated does not match the signature you provided."), nil
 	}
 
 	region := slsRegionFromHost(requestHost(req))
 	if req.Method == http.MethodGet && req.URL.Path == "/" {
-		offset := parseInt(req.URL.Query().Get("offset"), 0)
-		size := parseInt(req.URL.Query().Get("size"), 100)
+		offset := demoreplay.ParseInt(req.URL.Query().Get("offset"), 0)
+		size := demoreplay.ParseInt(req.URL.Query().Get("size"), 100)
 		projects := logProjectsForRegion(region)
-		window := offsetWindow(len(projects), offset, size)
-		count := int64(window.end - window.start)
+		window := demoreplay.OffsetWindow(len(projects), offset, size)
+		count := int64(window.End - window.Start)
 		total := int64(len(projects))
 		resp := sls.ListProjectResponse{
 			Count: &count,
 			Total: &total,
 		}
-		for _, project := range projects[window.start:window.end] {
+		for _, project := range projects[window.Start:window.End] {
 			projectName := project.ProjectName
 			projectRegion := project.Region
 			description := project.Description
@@ -633,63 +622,63 @@ func (t *transport) handleSLS(req *http.Request) (*http.Response, error) {
 				LastModifyTime: &lastModifyTime,
 			})
 		}
-		return jsonResponse(req, http.StatusOK, resp), nil
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	}
 
 	return slsErrorResponse(req, http.StatusNotFound, "NotFound", "Unsupported SLS replay request."), nil
 }
 
-func verifyRPCAuth(req *http.Request) authFailureKind {
+func verifyRPCAuth(req *http.Request) demoreplay.AuthFailureKind {
 	query := httpclient.CloneValues(req.URL.Query())
 	accessKeyID := strings.TrimSpace(query.Get("AccessKeyId"))
 	if accessKeyID != DemoAccessKeyID {
-		return authInvalidAccessKey
+		return demoreplay.AuthInvalidAccessKey
 	}
 	signature := strings.TrimSpace(query.Get("Signature"))
 	query.Del("Signature")
 	expected := signRPC(req.Method, query, DemoAccessKeySecret+"&")
-	if subtle.ConstantTimeCompare([]byte(signature), []byte(expected)) != 1 {
-		return authInvalidSignature
+	if !demoreplay.SubtleEqual(signature, expected) {
+		return demoreplay.AuthInvalidSignature
 	}
-	return authOK
+	return demoreplay.AuthOK
 }
 
-func verifyOSSAuth(req *http.Request) authFailureKind {
+func verifyOSSAuth(req *http.Request) demoreplay.AuthFailureKind {
 	authHeader := strings.TrimSpace(req.Header.Get("Authorization"))
 	accessKey, signature, ok := parseAuthorization(authHeader, "OSS ")
 	if !ok {
-		return authInvalidSignature
+		return demoreplay.AuthInvalidSignature
 	}
 	if accessKey != DemoAccessKeyID {
-		return authInvalidAccessKey
+		return demoreplay.AuthInvalidAccessKey
 	}
 	clone := cloneRequest(req)
 	clone.Header.Del("Authorization")
 	if err := oss.Sign(clone, demoCredential(), bucketFromOSSHost(requestHost(req)), time.Time{}); err != nil {
-		return authInvalidSignature
+		return demoreplay.AuthInvalidSignature
 	}
 	cloneAuthHeader := strings.TrimSpace(clone.Header.Get("Authorization"))
 	_, expectedSignature, ok := parseAuthorization(cloneAuthHeader, "OSS ")
-	if !ok || subtle.ConstantTimeCompare([]byte(signature), []byte(expectedSignature)) != 1 {
-		return authInvalidSignature
+	if !ok || !demoreplay.SubtleEqual(signature, expectedSignature) {
+		return demoreplay.AuthInvalidSignature
 	}
-	return authOK
+	return demoreplay.AuthOK
 }
 
-func verifySLSAuth(req *http.Request) authFailureKind {
+func verifySLSAuth(req *http.Request) demoreplay.AuthFailureKind {
 	authHeader := strings.TrimSpace(req.Header.Get("Authorization"))
 	accessKey, signature, ok := parseAuthorization(authHeader, "LOG ")
 	if !ok {
-		return authInvalidSignature
+		return demoreplay.AuthInvalidSignature
 	}
 	if accessKey != DemoAccessKeyID {
-		return authInvalidAccessKey
+		return demoreplay.AuthInvalidAccessKey
 	}
 	expected := signSLSRequest(req, DemoAccessKeySecret)
-	if subtle.ConstantTimeCompare([]byte(signature), []byte(expected)) != 1 {
-		return authInvalidSignature
+	if !demoreplay.SubtleEqual(signature, expected) {
+		return demoreplay.AuthInvalidSignature
 	}
-	return authOK
+	return demoreplay.AuthOK
 }
 
 func demoCredential() aliauth.Credential {
@@ -805,59 +794,6 @@ func cloneRequest(req *http.Request) *http.Request {
 	return clone
 }
 
-func parseInt(value string, fallback int) int {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return fallback
-	}
-	parsed, err := strconv.Atoi(value)
-	if err != nil || parsed <= 0 {
-		return fallback
-	}
-	return parsed
-}
-
-type window struct {
-	start int
-	end   int
-}
-
-func pageWindow(total, pageNumber, pageSize int) window {
-	if pageNumber <= 0 {
-		pageNumber = 1
-	}
-	if pageSize <= 0 {
-		pageSize = total
-	}
-	start := (pageNumber - 1) * pageSize
-	if start > total {
-		start = total
-	}
-	end := start + pageSize
-	if end > total {
-		end = total
-	}
-	return window{start: start, end: end}
-}
-
-func offsetWindow(total, offset, size int) window {
-	if offset < 0 {
-		offset = 0
-	}
-	if size <= 0 {
-		size = total
-	}
-	start := offset
-	if start > total {
-		start = total
-	}
-	end := start + size
-	if end > total {
-		end = total
-	}
-	return window{start: start, end: end}
-}
-
 func markerOffset(marker string) int {
 	marker = strings.TrimSpace(marker)
 	offset, err := strconv.Atoi(marker)
@@ -875,25 +811,6 @@ func buildCommandID(instanceID, command string) string {
 	_, _ = mac.Write([]byte{':'})
 	_, _ = mac.Write([]byte(command))
 	return fmt.Sprintf("c-%x", mac.Sum(nil)[:6])
-}
-
-func nonEmptyStrings(values ...string) []string {
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		if v := strings.TrimSpace(value); v != "" {
-			out = append(out, v)
-		}
-	}
-	return out
-}
-
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if v := strings.TrimSpace(value); v != "" {
-			return v
-		}
-	}
-	return ""
 }
 
 func isOSSHost(req *http.Request) bool {
@@ -1031,7 +948,7 @@ func slsRegionFromHost(host string) string {
 }
 
 func rpcErrorResponse(req *http.Request, statusCode int, code, message string) *http.Response {
-	return jsonResponse(req, statusCode, map[string]string{
+	return demoreplay.JSONResponse(req, statusCode, map[string]string{
 		"Code":      code,
 		"Message":   message,
 		"RequestId": "req-replay-auth",
@@ -1039,7 +956,7 @@ func rpcErrorResponse(req *http.Request, statusCode int, code, message string) *
 }
 
 func ossErrorResponse(req *http.Request, statusCode int, code, message string) *http.Response {
-	return xmlResponse(req, statusCode, ossErrorEnvelope{
+	return demoreplay.XMLResponse(req, statusCode, ossErrorEnvelope{
 		Code:      code,
 		Message:   message,
 		RequestID: "req-replay-oss",
@@ -1048,7 +965,7 @@ func ossErrorResponse(req *http.Request, statusCode int, code, message string) *
 }
 
 func slsErrorResponse(req *http.Request, statusCode int, code, message string) *http.Response {
-	return jsonResponse(req, statusCode, map[string]string{
+	return demoreplay.JSONResponse(req, statusCode, map[string]string{
 		"errorCode":    code,
 		"errorMessage": message,
 	})
@@ -1060,28 +977,4 @@ type ossErrorEnvelope struct {
 	Message   string   `xml:"Message"`
 	RequestID string   `xml:"RequestId"`
 	HostID    string   `xml:"HostId"`
-}
-
-func jsonResponse(req *http.Request, statusCode int, payload any) *http.Response {
-	body, _ := json.Marshal(payload)
-	return response(req, statusCode, "application/json", body)
-}
-
-func xmlResponse(req *http.Request, statusCode int, payload any) *http.Response {
-	body, _ := xml.Marshal(payload)
-	return response(req, statusCode, "application/xml", body)
-}
-
-func response(req *http.Request, statusCode int, contentType string, body []byte) *http.Response {
-	if body == nil {
-		body = []byte{}
-	}
-	return &http.Response{
-		StatusCode:    statusCode,
-		Status:        fmt.Sprintf("%d %s", statusCode, http.StatusText(statusCode)),
-		Header:        http.Header{"Content-Type": []string{contentType}},
-		Body:          io.NopCloser(bytes.NewReader(body)),
-		ContentLength: int64(len(body)),
-		Request:       req,
-	}
 }
