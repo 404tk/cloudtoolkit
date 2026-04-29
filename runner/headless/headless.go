@@ -9,9 +9,9 @@ import (
 	"github.com/mattn/go-isatty"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers"
+	"github.com/404tk/cloudtoolkit/pkg/providers/registry"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/runner"
-	"github.com/404tk/cloudtoolkit/runner/catalog"
 	"github.com/404tk/cloudtoolkit/runner/payloads"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/confirm"
@@ -93,8 +93,8 @@ func executeRun(providerName, payloadName, metadataOverride string, flags comman
 		return fail(flags.JSON, exitConfigError, err)
 	}
 	provider = config[utils.Provider]
-	capability := catalog.PayloadCapability(payloadName)
-	if capability != "" && !catalog.ProviderSupportsCapability(provider, capability) {
+	capability := payloads.PayloadCapability(payloadName)
+	if capability != "" && !registry.SupportsCapability(provider, capability) {
 		return fail(flags.JSON, exitUnsupported, fmt.Errorf("%s does not support %s", provider, payloadName))
 	}
 	if err := requireApproval(config, flags); err != nil {

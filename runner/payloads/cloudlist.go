@@ -164,6 +164,10 @@ func (p CloudList) Desc() string {
 	return "Enumerate cloud assets in authorized environments to verify CSPM and CNAPP inventory coverage, telemetry quality, and investigation readiness."
 }
 
+func (p CloudList) Capability() string {
+	return "cloudlist"
+}
+
 func (p CloudList) Help() HelpDoc {
 	return HelpDoc{
 		MetadataSyntax: []string{

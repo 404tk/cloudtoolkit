@@ -116,6 +116,45 @@ func TestDriverGetDatabasesSkipsRegionsWithoutProject(t *testing.T) {
 	}
 }
 
+func TestDriverGetDatabasesSkipsLaterRegionsWithoutProject(t *testing.T) {
+	transport := &routingTransport{
+		t: t,
+		routes: map[string]routeResponse{
+			"GET iam.cn-north-4.myhuaweicloud.com /v3/projects?name=cn-north-4": {
+				body: `{"projects":[{"id":"project-n4","name":"cn-north-4","domain_id":"d-1","enabled":true}]}`,
+			},
+			"GET rds.cn-north-4.myhuaweicloud.com /v3/project-n4/instances?limit=100&offset=0": {
+				body: `{"instances":[{"id":"db-1","region":"cn-north-4","port":3306,"private_ips":["10.0.0.1"],"datastore":{"type":"MySQL","version":"8.0"}}],"total_count":1}`,
+			},
+			"GET iam.cn-north-4.myhuaweicloud.com /v3/projects?name=cn-east-201": {
+				body: `{"projects":[]}`,
+			},
+			"GET iam.cn-north-4.myhuaweicloud.com /v3/projects?name=cn-east-3": {
+				body: `{"projects":[{"id":"project-e3","name":"cn-east-3","domain_id":"d-1","enabled":true}]}`,
+			},
+			"GET rds.cn-east-3.myhuaweicloud.com /v3/project-e3/instances?limit=100&offset=0": {
+				body: `{"instances":[{"id":"db-2","region":"cn-east-3","port":5432,"private_ips":["10.0.0.2"],"datastore":{"type":"PostgreSQL","version":"14"}}],"total_count":1}`,
+			},
+		},
+	}
+
+	driver := newTestDriver([]string{"cn-north-4", "cn-east-201", "cn-east-3"}, "d-1", transport)
+	got, err := driver.GetDatabases(context.Background())
+	if err != nil {
+		t.Fatalf("GetDatabases() error = %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("unexpected databases: %+v", got)
+	}
+	ids := map[string]bool{}
+	for _, item := range got {
+		ids[item.InstanceId] = true
+	}
+	if !ids["db-1"] || !ids["db-2"] {
+		t.Fatalf("unexpected databases: %+v", got)
+	}
+}
+
 func newTestDriver(regions []string, domainID string, transport http.RoundTripper) *Driver {
 	cred := auth.New("AKID", "SECRET", "cn-north-4", false)
 	return &Driver{

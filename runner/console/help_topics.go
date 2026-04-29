@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/404tk/cloudtoolkit/runner/catalog"
+	"github.com/404tk/cloudtoolkit/pkg/providers/registry"
 	"github.com/404tk/cloudtoolkit/runner/payloads"
 	"github.com/404tk/cloudtoolkit/utils"
 )
@@ -524,7 +524,7 @@ func providerRequiredOptionLines() []string {
 		if value != "" {
 			status = "set"
 		}
-		desc := catalog.OptionDescription(key)
+		desc := registry.OptionDescription(key)
 		lines = append(lines, fmt.Sprintf("%s: %s - %s", key, status, desc))
 	}
 	if len(lines) == 0 {
@@ -623,7 +623,7 @@ func providerConfigKeys() []string {
 }
 
 func isOptionalHelpOption(key string) bool {
-	desc := catalog.OptionDescription(key)
+	desc := registry.OptionDescription(key)
 	return strings.Contains(desc, "Optional") || strings.Contains(desc, "Default:")
 }
 
@@ -632,7 +632,7 @@ func summarizeConfigValue(key, value string) string {
 	if value == "" {
 		return "(empty)"
 	}
-	if catalog.SensitiveOption(key) {
+	if registry.SensitiveOption(key) {
 		return "(set)"
 	}
 	if len(value) > 72 {

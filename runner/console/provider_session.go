@@ -1,12 +1,12 @@
 package console
 
 import (
-	"github.com/404tk/cloudtoolkit/runner/catalog"
+	"github.com/404tk/cloudtoolkit/pkg/providers/registry"
 	"github.com/404tk/go-prompt"
 )
 
 func defaultProviderConfig(provider string) (map[string]string, bool) {
-	return catalog.DefaultProviderConfig(provider)
+	return registry.DefaultConfig(provider)
 }
 
 func startProviderConsole(provider string) {

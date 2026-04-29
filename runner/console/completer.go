@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers"
-	"github.com/404tk/cloudtoolkit/runner/catalog"
+	"github.com/404tk/cloudtoolkit/pkg/providers/registry"
 	"github.com/404tk/cloudtoolkit/runner/payloads"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/go-prompt"
@@ -226,7 +226,7 @@ func optionSuggestions(ctx CompletionContext) []prompt.Suggest {
 
 	suggestions := make([]prompt.Suggest, 0, len(keys))
 	for _, k := range keys {
-		if v := catalog.OptionDescription(k); v != "" {
+		if v := registry.OptionDescription(k); v != "" {
 			suggestions = append(suggestions, prompt.Suggest{Text: k, Description: v})
 		}
 	}

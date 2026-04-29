@@ -33,6 +33,14 @@ type ResultProducer interface {
 	Result(context.Context, map[string]string) (any, error)
 }
 
+// CapabilityProvider lets a payload declare which provider capability it needs
+// (e.g. "iam", "bucket", "vm"). headless uses this to short-circuit before
+// calling into the provider for a payload it cannot satisfy. Payloads that do
+// not implement this interface are treated as universally applicable.
+type CapabilityProvider interface {
+	Capability() string
+}
+
 type ResultError interface {
 	error
 	ResultPayload() any
@@ -118,6 +126,21 @@ func HelpFor(name string) (HelpDoc, bool) {
 		return HelpDoc{}, false
 	}
 	return cloneHelpDoc(helpProvider.Help()), true
+}
+
+// PayloadCapability returns the provider capability this payload requires, or
+// "" if the payload does not implement CapabilityProvider (treated as
+// universally applicable). Mirrors the DescribeSensitivity pattern.
+func PayloadCapability(name string) string {
+	p, _, ok := Lookup(name)
+	if !ok {
+		return ""
+	}
+	cp, ok := p.(CapabilityProvider)
+	if !ok {
+		return ""
+	}
+	return cp.Capability()
 }
 
 func MetadataSuggestions(name string) []Suggestion {

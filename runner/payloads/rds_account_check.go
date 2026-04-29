@@ -134,6 +134,10 @@ func (p RDSAccountCheck) Desc() string {
 	return "Provision a read-only test database account in an authorized environment to validate database telemetry, investigation readiness, and control coverage."
 }
 
+func (p RDSAccountCheck) Capability() string {
+	return "database"
+}
+
 func (p RDSAccountCheck) Sensitivity(metadata string) Sensitivity {
 	data := argparse.Split(metadata)
 	if len(data) < 2 {

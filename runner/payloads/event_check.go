@@ -118,6 +118,10 @@ func (p EventCheck) Desc() string {
 	return "Review cloud security events from an authorized environment to validate alert context and investigation workflows."
 }
 
+func (p EventCheck) Capability() string {
+	return "event"
+}
+
 func (p EventCheck) Help() HelpDoc {
 	return HelpDoc{
 		MetadataSyntax: []string{

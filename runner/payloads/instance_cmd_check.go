@@ -118,6 +118,10 @@ func (p InstanceCmdCheck) Desc() string {
 	return "Run an authorized validation command on a cloud instance to generate telemetry for detection and investigation verification."
 }
 
+func (p InstanceCmdCheck) Capability() string {
+	return "vm"
+}
+
 func (p InstanceCmdCheck) Sensitivity(metadata string) Sensitivity {
 	data := argparse.SplitN(metadata, 2)
 	if len(data) < 2 {

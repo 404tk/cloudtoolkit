@@ -11,6 +11,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/api"
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/auth"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/paginate"
+	"github.com/404tk/cloudtoolkit/pkg/runtime/regionrun"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 	"github.com/404tk/cloudtoolkit/utils/processbar"
@@ -80,19 +81,24 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 	}
 
 	trackerUsed = true
-	for _, r := range regions {
-		instances, err := d.listRegionDatabases(ctx, r)
+	got, runErrs := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, region string) ([]schema.Database, error) {
+		instances, err := d.listRegionDatabases(ctx, region)
 		if err != nil {
-			tracker.Update(r, 0)
 			if api.IsProjectNotFound(err) {
-				logger.Warning("Skip RDS region", r, ":", err.Error())
-				continue
+				logger.Warning("Skip RDS region", region, ":", err.Error())
+				return nil, nil
 			}
-			regionErrs = append(regionErrs, fmt.Sprintf("%s: %s", r, err))
+			return nil, err
+		}
+		return instances, nil
+	})
+	list = append(list, got...)
+	for _, region := range regions {
+		err := runErrs[region]
+		if err == nil {
 			continue
 		}
-		tracker.Update(r, len(instances))
-		list = append(list, instances...)
+		regionErrs = append(regionErrs, fmt.Sprintf("%s: %s", region, err))
 	}
 
 	if len(regionErrs) > 0 {

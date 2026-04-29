@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	demoreplay "github.com/404tk/cloudtoolkit/pkg/providers/replay"
-	"github.com/404tk/cloudtoolkit/runner/catalog"
+	"github.com/404tk/cloudtoolkit/pkg/providers/registry"
 	"github.com/404tk/cloudtoolkit/runner/payloads"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/argparse"
@@ -220,14 +220,14 @@ func sessionIDSuggestions() []prompt.Suggest {
 }
 
 func getProviderRegionSuggestions(provider string) []prompt.Suggest {
-	return promptSuggestions(catalog.ProviderRegions(provider))
+	return promptSuggestions(registry.Regions(provider))
 }
 
 func getPayloadMetadataSuggestions(payload string) []prompt.Suggest {
 	return payloadPromptSuggestions(payloads.MetadataSuggestions(payload))
 }
 
-func promptSuggestions(items []catalog.Suggestion) []prompt.Suggest {
+func promptSuggestions(items []registry.Suggestion) []prompt.Suggest {
 	suggestions := make([]prompt.Suggest, 0, len(items))
 	for _, item := range items {
 		suggestions = append(suggestions, prompt.Suggest{

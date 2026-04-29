@@ -143,6 +143,10 @@ func (p BucketCheck) Desc() string {
 	return "Review bucket contents in an authorized test environment to validate storage visibility and investigation workflows."
 }
 
+func (p BucketCheck) Capability() string {
+	return "bucket"
+}
+
 func (p BucketCheck) Help() HelpDoc {
 	return HelpDoc{
 		MetadataSyntax: []string{

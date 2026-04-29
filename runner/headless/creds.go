@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/404tk/cloudtoolkit/runner/catalog"
+	"github.com/404tk/cloudtoolkit/pkg/providers/registry"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
 )
@@ -31,10 +31,10 @@ func buildRunConfig(provider, payload, metadataOverride string, flags commandFla
 	if sourceProvider != "" && sourceProvider != resolvedProvider {
 		return nil, fmt.Errorf("provider mismatch: command selected %s but credential source is for %s", resolvedProvider, sourceProvider)
 	}
-	if _, ok := catalog.ProviderSpecFor(resolvedProvider); !ok {
+	if _, ok := registry.Lookup(resolvedProvider); !ok {
 		return nil, fmt.Errorf("unsupported provider: %s", resolvedProvider)
 	}
-	config, _ := catalog.DefaultProviderConfig(resolvedProvider)
+	config, _ := registry.DefaultConfig(resolvedProvider)
 	config[utils.Provider] = resolvedProvider
 	config[utils.Payload] = payload
 	config[utils.Metadata] = metadata

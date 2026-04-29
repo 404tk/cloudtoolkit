@@ -108,6 +108,10 @@ func (p IAMUserCheck) Desc() string {
 	return "Provision or remove a test IAM user in an authorized environment to validate identity telemetry, alerting, and persistence detection coverage."
 }
 
+func (p IAMUserCheck) Capability() string {
+	return "iam"
+}
+
 func (p IAMUserCheck) Help() HelpDoc {
 	return HelpDoc{
 		MetadataSyntax: []string{

@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/404tk/cloudtoolkit/runner/catalog"
+	"github.com/404tk/cloudtoolkit/pkg/providers/registry"
 	"github.com/404tk/cloudtoolkit/utils"
 )
 
@@ -362,7 +362,7 @@ func providerOptionFlagSpecs() []headlessFlagSpec {
 		short := binding.short
 		aliases := append([]string(nil), binding.aliases...)
 		valueName := firstNonEmpty(binding.valueName, "value")
-		help := firstNonEmpty(binding.help, catalog.OptionDescription(optionName))
+		help := firstNonEmpty(binding.help, registry.OptionDescription(optionName))
 		specs = append(specs, headlessFlagSpec{
 			long:      long,
 			short:     short,
@@ -381,7 +381,7 @@ func providerOptionFlagSpecs() []headlessFlagSpec {
 
 func orderedProviderOptionNames() []string {
 	available := make(map[string]struct{})
-	for _, name := range catalog.OptionNames() {
+	for _, name := range registry.OptionNames() {
 		if name == utils.Payload || name == utils.Metadata {
 			continue
 		}
