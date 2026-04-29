@@ -39,12 +39,11 @@ func isDemoRunHandledByProviderReplay() bool {
 }
 
 func demoCommand() {
-	if config == nil || strings.TrimSpace(config[utils.Provider]) == "" {
+	provider := strings.TrimSpace(config[utils.Provider])
+	if config == nil || provider == "" {
 		logger.Error("Demo replay only works inside provider mode. Run `use <provider>` first.")
 		return
 	}
-
-	provider := strings.TrimSpace(config[utils.Provider])
 	if _, ok := replay.CredentialsFor(provider); !ok {
 		logger.Error("Demo replay is not available for", provider)
 		return

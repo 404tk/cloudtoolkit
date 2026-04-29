@@ -523,26 +523,29 @@ func verifyOpenAPIAuth(req *http.Request, body []byte) authFailureKind {
 	if parsed.AccessKey != demoCredentials.AccessKey {
 		return authInvalidAccessKey
 	}
-	timestamp, err := time.Parse(api.DateFormat, strings.TrimSpace(req.Header.Get(api.HeaderXDate)))
+	xDate := strings.TrimSpace(req.Header.Get(api.HeaderXDate))
+	timestamp, err := time.Parse(api.DateFormat, xDate)
 	if err != nil {
 		return authInvalidSignature
 	}
-	host := req.Host
-	if strings.TrimSpace(host) == "" {
-		host = req.URL.Host
+	host := normalizeHost(req.Host)
+	if host == "" {
+		host = normalizeHost(req.URL.Host)
 	}
+	contentType := strings.TrimSpace(req.Header.Get("Content-Type"))
+	sessionToken := strings.TrimSpace(req.Header.Get(api.HeaderXSecurityToken))
 	expected, err := api.Sign(api.SignInput{
 		Method:       req.Method,
 		Host:         host,
 		Path:         req.URL.Path,
 		Query:        httpclient.CloneValues(req.URL.Query()),
 		Body:         body,
-		ContentType:  strings.TrimSpace(req.Header.Get("Content-Type")),
+		ContentType:  contentType,
 		Service:      parsed.Service,
 		Region:       parsed.Region,
 		AccessKey:    demoCredentials.AccessKey,
 		SecretKey:    demoCredentials.SecretKey,
-		SessionToken: strings.TrimSpace(req.Header.Get(api.HeaderXSecurityToken)),
+		SessionToken: sessionToken,
 		Headers:      req.Header.Clone(),
 		Timestamp:    timestamp,
 	})
@@ -563,7 +566,8 @@ func verifyTOSAuth(req *http.Request, body []byte) authFailureKind {
 	if parsed.AccessKey != demoCredentials.AccessKey {
 		return authInvalidAccessKey
 	}
-	timestamp, err := time.Parse("20060102T150405Z", strings.TrimSpace(req.Header.Get("X-Tos-Date")))
+	xTosDate := strings.TrimSpace(req.Header.Get("X-Tos-Date"))
+	timestamp, err := time.Parse("20060102T150405Z", xTosDate)
 	if err != nil {
 		return authInvalidSignature
 	}
@@ -601,10 +605,13 @@ func parseAuthorization(value string) (authorization, bool) {
 	if len(scope) < 5 {
 		return authorization{}, false
 	}
+	accessKey := strings.TrimSpace(scope[0])
+	region := strings.TrimSpace(scope[2])
+	service := strings.TrimSpace(scope[3])
 	return authorization{
-		AccessKey: strings.TrimSpace(scope[0]),
-		Region:    strings.TrimSpace(scope[2]),
-		Service:   strings.TrimSpace(scope[3]),
+		AccessKey: accessKey,
+		Region:    region,
+		Service:   service,
 	}, true
 }
 
@@ -726,12 +733,14 @@ func jsonResponse(req *http.Request, statusCode int, payload any) *http.Response
 }
 
 func openAPIErrorResponse(req *http.Request, statusCode int, code, message string) *http.Response {
+	code = strings.TrimSpace(code)
+	message = strings.TrimSpace(message)
 	payload := map[string]any{
 		"ResponseMetadata": map[string]any{
 			"RequestId": "req-error",
 			"Error": map[string]any{
-				"Code":    strings.TrimSpace(code),
-				"Message": strings.TrimSpace(message),
+				"Code":    code,
+				"Message": message,
 			},
 		},
 	}
@@ -739,9 +748,11 @@ func openAPIErrorResponse(req *http.Request, statusCode int, code, message strin
 }
 
 func tosErrorResponse(req *http.Request, statusCode int, code, message string) *http.Response {
+	code = strings.TrimSpace(code)
+	message = strings.TrimSpace(message)
 	payload := map[string]any{
-		"Code":      strings.TrimSpace(code),
-		"Message":   strings.TrimSpace(message),
+		"Code":      code,
+		"Message":   message,
 		"RequestId": "req-tos-error",
 	}
 	return jsonResponse(req, statusCode, payload)
@@ -776,7 +787,10 @@ func requestRegion(req *http.Request) string {
 	host := normalizeHost(req.URL.Hostname())
 	parts := strings.Split(host, ".")
 	if len(parts) >= 3 {
-		return strings.TrimSpace(parts[1])
+		region := strings.TrimSpace(parts[1])
+		if region != "" {
+			return region
+		}
 	}
 	return api.DefaultRegion
 }
@@ -880,8 +894,8 @@ func offsetWindow(total, offset, limit int) window {
 
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
+		if v := strings.TrimSpace(value); v != "" {
+			return v
 		}
 	}
 	return ""

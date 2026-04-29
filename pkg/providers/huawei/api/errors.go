@@ -54,29 +54,34 @@ func DecodeError(statusCode int, body []byte) error {
 	}
 
 	var legacy legacyErrorBody
-	if err := json.Unmarshal(body, &legacy); err == nil &&
-		(strings.TrimSpace(legacy.Code) != "" || strings.TrimSpace(legacy.Message) != "") {
-		return &APIError{
-			StatusCode: statusCode,
-			Code:       strings.TrimSpace(legacy.Code),
-			Message:    strings.TrimSpace(legacy.Message),
+	if err := json.Unmarshal(body, &legacy); err == nil {
+		code := strings.TrimSpace(legacy.Code)
+		message := strings.TrimSpace(legacy.Message)
+		if code != "" || message != "" {
+			return &APIError{
+				StatusCode: statusCode,
+				Code:       code,
+				Message:    message,
+			}
 		}
 	}
 
 	var keystone keystoneErrorBody
-	if err := json.Unmarshal(body, &keystone); err == nil &&
-		(strings.TrimSpace(keystone.Error.Code) != "" || strings.TrimSpace(keystone.Error.Message) != "" || strings.TrimSpace(keystone.Error.Title) != "") {
+	if err := json.Unmarshal(body, &keystone); err == nil {
+		code := strings.TrimSpace(keystone.Error.Code)
 		message := strings.TrimSpace(keystone.Error.Message)
-		if message == "" {
-			message = strings.TrimSpace(keystone.Error.Title)
-		}
-		return &APIError{
-			StatusCode: statusCode,
-			Code:       strings.TrimSpace(keystone.Error.Code),
-			Message:    message,
+		title := strings.TrimSpace(keystone.Error.Title)
+		if code != "" || message != "" || title != "" {
+			if message == "" {
+				message = title
+			}
+			return &APIError{
+				StatusCode: statusCode,
+				Code:       code,
+				Message:    message,
+			}
 		}
 	}
-
 	message := strings.TrimSpace(string(body))
 	if message == "" {
 		message = http.StatusText(statusCode)

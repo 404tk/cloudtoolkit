@@ -48,11 +48,12 @@ type APIError struct {
 }
 
 func (e *APIError) Error() string {
+	message := strings.TrimSpace(e.Message)
 	switch {
-	case e.Code > 0 && strings.TrimSpace(e.Message) != "":
-		return fmt.Sprintf("ucloud code=%d %s", e.Code, strings.TrimSpace(e.Message))
-	case strings.TrimSpace(e.Message) != "":
-		return fmt.Sprintf("ucloud %s", strings.TrimSpace(e.Message))
+	case e.Code > 0 && message != "":
+		return fmt.Sprintf("ucloud code=%d %s", e.Code, message)
+	case message != "":
+		return fmt.Sprintf("ucloud %s", message)
 	case e.StatusCode > 0:
 		return fmt.Sprintf("ucloud status %d", e.StatusCode)
 	default:
@@ -74,8 +75,9 @@ func NewClient(credential ucloudauth.Credential, opts ...Option) *Client {
 }
 
 func WithBaseURL(baseURL string) Option {
+	baseURL = strings.TrimSpace(baseURL)
 	return func(c *Client) {
-		if strings.TrimSpace(baseURL) == "" {
+		if baseURL == "" {
 			return
 		}
 		c.baseURL = baseURL
@@ -194,7 +196,7 @@ func (c *Client) decodeResponse(action string, statusCode int, body []byte, out 
 	if baseErr == nil && (base.RetCode != 0 || statusCode >= http.StatusBadRequest) {
 		message := strings.TrimSpace(base.Message)
 		if message == "" {
-			message = strings.TrimSpace(http.StatusText(statusCode))
+			message = http.StatusText(statusCode)
 		}
 		return &APIError{
 			Action:     action,
@@ -205,9 +207,10 @@ func (c *Client) decodeResponse(action string, statusCode int, body []byte, out 
 		}
 	}
 	if baseErr != nil && statusCode >= http.StatusBadRequest {
+		rawBody := strings.TrimSpace(string(body))
 		return &APIError{
 			Action:     action,
-			Message:    strings.TrimSpace(string(body)),
+			Message:    rawBody,
 			RawBody:    string(body),
 			StatusCode: statusCode,
 		}
@@ -228,7 +231,8 @@ func encodeForm(params map[string]any) (map[string]string, error) {
 	}
 
 	for _, key := range sortedAnyKeys(params) {
-		if strings.TrimSpace(key) == "" {
+		key = strings.TrimSpace(key)
+		if key == "" {
 			continue
 		}
 		if err := encodeValue(result, key, reflect.ValueOf(params[key])); err != nil {

@@ -12,10 +12,10 @@ import (
 	_iam "github.com/404tk/cloudtoolkit/pkg/providers/huawei/iam"
 	_obs "github.com/404tk/cloudtoolkit/pkg/providers/huawei/obs"
 	_rds "github.com/404tk/cloudtoolkit/pkg/providers/huawei/rds"
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/credverify"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
-	"github.com/404tk/cloudtoolkit/utils/cache"
 	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
@@ -44,13 +44,18 @@ func New(options schema.Options) (*Provider, error) {
 	payload, _ := options.GetMetadata(utils.Payload)
 	if payload == "cloudlist" {
 		probe := &_iam.Driver{Cred: controlPlaneCred}
-		userName, err := probe.GetUserName(context.Background())
-		if err != nil {
+		if err := credverify.ForCloudlist(options, provider, false, func(ctx context.Context) (credverify.Result, error) {
+			userName, err := probe.GetUserName(ctx)
+			if err != nil {
+				return credverify.Result{}, err
+			}
+			return credverify.Result{
+				Summary:     "Current user: " + userName,
+				SessionUser: userName,
+			}, nil
+		}); err != nil {
 			return nil, err
 		}
-		msg := "Current user: " + userName
-		cache.Cfg.CredInsert(userName, provider, options)
-		logger.Warning(msg)
 		domainID = probe.DomainID
 	}
 
@@ -91,38 +96,37 @@ func (p *Provider) Name() string {
 
 // Resources returns the provider for a resource deployment source.
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
-	list := schema.NewResources()
-	list.Provider = p.Name()
-	for _, product := range env.From(ctx).Cloudlist {
-		switch product {
-		case "balance":
+	collector := schema.NewResourceCollector(p.Name()).
+		Register("balance", func(ctx context.Context, _ *schema.Resources) {
 			d := &_bss.Driver{Cred: p.cred}
 			d.QueryAccountBalance(ctx)
-		case "host":
+		}).
+		Register("host", func(ctx context.Context, list *schema.Resources) {
 			ecsprovider := &ecs.Driver{Cred: p.iamCredential(), Regions: p.serviceRegions("ecs"), DomainID: p.domainID}
 			hosts, err := ecsprovider.GetResource(ctx)
-			schema.AppendAssets(&list, hosts)
+			schema.AppendAssets(list, hosts)
 			list.AddError("host", err)
-		case "account":
+		}).
+		Register("account", func(ctx context.Context, list *schema.Resources) {
 			iamprovider := &_iam.Driver{Cred: p.iamCredential(), DomainID: p.domainID}
 			users, err := iamprovider.ListUsers(ctx)
-			schema.AppendAssets(&list, users)
+			schema.AppendAssets(list, users)
 			list.AddError("account", err)
-		case "database":
+		}).
+		Register("database", func(ctx context.Context, list *schema.Resources) {
 			rdsprovider := &_rds.Driver{Cred: p.iamCredential(), Regions: p.serviceRegions("rds"), DomainID: p.domainID}
 			databases, err := rdsprovider.GetDatabases(ctx)
-			schema.AppendAssets(&list, databases)
+			schema.AppendAssets(list, databases)
 			list.AddError("database", err)
-		case "bucket":
+		}).
+		Register("bucket", func(ctx context.Context, list *schema.Resources) {
 			obsprovider := &_obs.Driver{Cred: p.iamCredential(), Regions: p.regions}
 			storages, err := obsprovider.GetBuckets(ctx)
-			schema.AppendAssets(&list, storages)
+			schema.AppendAssets(list, storages)
 			list.AddError("bucket", err)
-		default:
-		}
-	}
+		})
 
-	return list, list.Err()
+	return collector.Collect(ctx, env.From(ctx).Cloudlist)
 }
 
 func (p *Provider) UserManagement(action, username, password string) (schema.IAMResult, error) {

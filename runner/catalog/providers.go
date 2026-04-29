@@ -167,7 +167,8 @@ var optionDescriptions = buildOptionDescriptions()
 var sensitiveOptions = buildSensitiveOptions()
 
 func ProviderSpecFor(name string) (ProviderSpec, bool) {
-	spec, ok := providerSpecs[strings.TrimSpace(name)]
+	name = strings.TrimSpace(name)
+	spec, ok := providerSpecs[name]
 	return spec, ok
 }
 

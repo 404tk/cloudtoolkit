@@ -224,11 +224,12 @@ func TestProviderExecuteCloudVMCommandUsesTATDriver(t *testing.T) {
 		t.Fatalf("newProvider() error = %v", err)
 	}
 
-	output := captureStdout(t, func() {
-		provider.ExecuteCloudVMCommand("ins-1", base64.StdEncoding.EncodeToString([]byte("echo hello")))
-	})
-	if !strings.Contains(output, "ok") {
-		t.Fatalf("unexpected exec output: %q", output)
+	result, err := provider.ExecuteCloudVMCommand(context.Background(), "ins-1", base64.StdEncoding.EncodeToString([]byte("echo hello")))
+	if err != nil {
+		t.Fatalf("ExecuteCloudVMCommand() error = %v", err)
+	}
+	if !strings.Contains(result.Output, "ok") {
+		t.Fatalf("unexpected exec output: %q", result.Output)
 	}
 }
 

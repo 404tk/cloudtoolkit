@@ -13,6 +13,22 @@ type Payload interface {
 	Desc() string
 }
 
+type Suggestion struct {
+	Text        string
+	Description string
+}
+
+type HelpDoc struct {
+	MetadataSyntax      []string
+	MetadataExamples    []string
+	MetadataSuggestions []Suggestion
+	SafetyNotes         []string
+}
+
+type HelpProvider interface {
+	Help() HelpDoc
+}
+
 type ResultProducer interface {
 	Result(context.Context, map[string]string) (any, error)
 }
@@ -90,4 +106,32 @@ func Visible() []Entry {
 		entries = append(entries, Entry{Name: name, Payload: Payloads[name]})
 	}
 	return entries
+}
+
+func HelpFor(name string) (HelpDoc, bool) {
+	p, _, ok := Lookup(name)
+	if !ok {
+		return HelpDoc{}, false
+	}
+	helpProvider, ok := p.(HelpProvider)
+	if !ok {
+		return HelpDoc{}, false
+	}
+	return cloneHelpDoc(helpProvider.Help()), true
+}
+
+func MetadataSuggestions(name string) []Suggestion {
+	doc, ok := HelpFor(name)
+	if !ok {
+		return nil
+	}
+	return append([]Suggestion(nil), doc.MetadataSuggestions...)
+}
+
+func cloneHelpDoc(doc HelpDoc) HelpDoc {
+	doc.MetadataSyntax = append([]string(nil), doc.MetadataSyntax...)
+	doc.MetadataExamples = append([]string(nil), doc.MetadataExamples...)
+	doc.MetadataSuggestions = append([]Suggestion(nil), doc.MetadataSuggestions...)
+	doc.SafetyNotes = append([]string(nil), doc.SafetyNotes...)
+	return doc
 }

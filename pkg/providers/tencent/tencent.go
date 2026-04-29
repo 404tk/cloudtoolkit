@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/credverify"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/api"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/auth"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/billing"
@@ -20,8 +21,6 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/runtime/vmexecspec"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
-	"github.com/404tk/cloudtoolkit/utils/cache"
-	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
 // Provider is a data provider for tencent API
@@ -60,6 +59,10 @@ func newProviderWithConfig(options schema.Options, cfg ClientConfig) (*Provider,
 		return nil, err
 	}
 	region, _ := options.GetMetadata(utils.Region)
+	region = strings.TrimSpace(region)
+	if strings.EqualFold(region, "all") {
+		region = "all"
+	}
 	opts := append([]api.Option(nil), cfg.APIOptions...)
 	apiClient := api.NewClient(credential, opts...)
 	provider := &Provider{
@@ -70,11 +73,10 @@ func newProviderWithConfig(options schema.Options, cfg ClientConfig) (*Provider,
 		region:        region,
 	}
 
-	payload, _ := options.GetMetadata(utils.Payload)
-	if payload == "cloudlist" {
+	if err := credverify.ForCloudlist(options, provider, cfg.SkipCredentialCache, func(ctx context.Context) (credverify.Result, error) {
 		var response api.GetCallerIdentityResponse
 		err := apiClient.DoJSON(
-			context.Background(),
+			ctx,
 			"sts",
 			"2018-08-13",
 			"GetCallerIdentity",
@@ -83,13 +85,14 @@ func newProviderWithConfig(options schema.Options, cfg ClientConfig) (*Provider,
 			&response,
 		)
 		if err != nil {
-			return nil, err
+			return credverify.Result{}, err
 		}
-		msg := "Current account ARN: " + response.Response.Arn
-		if !cfg.SkipCredentialCache {
-			cache.Cfg.CredInsert(response.Response.Type, provider, options)
-		}
-		logger.Warning(msg)
+		return credverify.Result{
+			Summary:     "Current account ARN: " + response.Response.Arn,
+			SessionUser: response.Response.Type,
+		}, nil
+	}); err != nil {
+		return nil, err
 	}
 
 	return provider, nil
@@ -102,70 +105,72 @@ func (p *Provider) Name() string {
 
 // Resources returns the provider for a resource deployment source.
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
-	list := schema.NewResources()
-	list.Provider = p.Name()
-	for _, product := range env.From(ctx).Cloudlist {
-		switch product {
-		case "balance":
+	collector := schema.NewResourceCollector(p.Name()).
+		Register("balance", func(ctx context.Context, _ *schema.Resources) {
 			d := &billing.Driver{Cred: p.apiCredential, Region: p.region}
 			d.SetClientOptions(p.clientOptions...)
 			d.QueryAccountBalance(ctx)
-		case "host":
+		}).
+		Register("host", func(ctx context.Context, list *schema.Resources) {
 			cvmprovider := &cvm.Driver{Credential: p.apiCredential, Region: p.region}
 			cvmprovider.SetClientOptions(p.clientOptions...)
 			cvms, err := cvmprovider.GetResource(ctx)
-			schema.AppendAssets(&list, cvms)
+			schema.AppendAssets(list, cvms)
 			list.AddError("host/cvm", err)
 			list.AddError("host/cvm", cvmprovider.PartialError())
+
 			light := &lighthouse.Driver{Credential: p.apiCredential, Region: p.region}
 			light.SetClientOptions(p.clientOptions...)
 			lights, err := light.GetResource(ctx)
-			schema.AppendAssets(&list, lights)
+			schema.AppendAssets(list, lights)
 			list.AddError("host/lighthouse", err)
 			list.AddError("host/lighthouse", light.PartialError())
+
 			allHosts := append(cvms, lights...)
 			tat.SetCacheHostList(allHosts)
-		case "domain":
+		}).
+		Register("domain", func(ctx context.Context, list *schema.Resources) {
 			dnsprovider := &dns.Driver{Credential: p.apiCredential, Region: p.region}
 			dnsprovider.SetClientOptions(p.clientOptions...)
 			domains, err := dnsprovider.GetDomains(ctx)
-			schema.AppendAssets(&list, domains)
+			schema.AppendAssets(list, domains)
 			list.AddError("domain", err)
-		case "account":
+		}).
+		Register("account", func(ctx context.Context, list *schema.Resources) {
 			camprovider := &iam.Driver{Credential: p.apiCredential}
 			camprovider.SetClientOptions(p.clientOptions...)
 			users, err := camprovider.ListUsers(ctx)
-			schema.AppendAssets(&list, users)
+			schema.AppendAssets(list, users)
 			list.AddError("account", err)
-		case "database":
+		}).
+		Register("database", func(ctx context.Context, list *schema.Resources) {
 			cdbprovider := &cdb.Driver{Credential: p.apiCredential, Region: p.region}
 			cdbprovider.SetClientOptions(p.clientOptions...)
 			mysqls, err := cdbprovider.ListMySQL(ctx)
-			schema.AppendAssets(&list, mysqls)
+			schema.AppendAssets(list, mysqls)
 			list.AddError("database/mysql", err)
 			list.AddError("database/mysql", cdbprovider.PartialError())
 			mariadbs, err := cdbprovider.ListMariaDB(ctx)
-			schema.AppendAssets(&list, mariadbs)
+			schema.AppendAssets(list, mariadbs)
 			list.AddError("database/mariadb", err)
 			list.AddError("database/mariadb", cdbprovider.PartialError())
 			postgres, err := cdbprovider.ListPostgreSQL(ctx)
-			schema.AppendAssets(&list, postgres)
+			schema.AppendAssets(list, postgres)
 			list.AddError("database/postgresql", err)
 			list.AddError("database/postgresql", cdbprovider.PartialError())
 			mssqls, err := cdbprovider.ListSQLServer(ctx)
-			schema.AppendAssets(&list, mssqls)
+			schema.AppendAssets(list, mssqls)
 			list.AddError("database/sqlserver", err)
 			list.AddError("database/sqlserver", cdbprovider.PartialError())
-		case "bucket":
+		}).
+		Register("bucket", func(ctx context.Context, list *schema.Resources) {
 			cosprovider := p.newCOSDriver()
 			storages, err := cosprovider.GetBuckets(ctx)
-			schema.AppendAssets(&list, storages)
+			schema.AppendAssets(list, storages)
 			list.AddError("bucket", err)
-		default:
-		}
-	}
+		})
 
-	return list, list.Err()
+	return collector.Collect(ctx, env.From(ctx).Cloudlist)
 }
 
 func (p *Provider) UserManagement(action, username, password string) (schema.IAMResult, error) {
@@ -211,38 +216,29 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([
 	}
 }
 
-func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {
+func (p *Provider) ExecuteCloudVMCommand(ctx context.Context, instanceID, cmd string) (schema.CommandResult, error) {
 	if osType, command, ok := vmexecspec.Parse(cmd); ok {
-		region := strings.TrimSpace(p.region)
-		if region == "" || strings.EqualFold(region, "all") {
-			logger.Error("headless shell requires explicit region")
-			return
+		if p.region == "" || p.region == "all" {
+			return schema.CommandResult{}, fmt.Errorf("headless shell requires explicit region")
 		}
-		d := tat.Driver{Credential: p.apiCredential, Region: region}
+		d := tat.Driver{Credential: p.apiCredential, Region: p.region}
 		d.SetClientOptions(p.clientOptions...)
 		output := d.RunCommand(instanceID, osType, command)
-		if output != "" {
-			fmt.Println(output)
-		}
-		return
+		return schema.CommandResult{Output: output}, nil
 	}
 
 	host, ok := p.lookupHost(instanceID)
 	if !ok {
-		logger.Error("Unable to resolve instance metadata, retry: shell <instance-id>")
-		return
+		return schema.CommandResult{}, fmt.Errorf("unable to resolve instance metadata, retry: shell <instance-id>")
 	}
 	d := tat.Driver{Credential: p.apiCredential, Region: host.Region}
 	d.SetClientOptions(p.clientOptions...)
 	command, err := base64.StdEncoding.DecodeString(cmd)
 	if err != nil {
-		logger.Error(err.Error())
-		return
+		return schema.CommandResult{}, err
 	}
 	output := d.RunCommand(instanceID, host.OSType, string(command))
-	if output != "" {
-		fmt.Println(output)
-	}
+	return schema.CommandResult{Output: output}, nil
 }
 
 func (p *Provider) lookupHost(instanceID string) (schema.Host, bool) {
@@ -257,7 +253,6 @@ func (p *Provider) lookupHost(instanceID string) (schema.Host, bool) {
 func (p *Provider) bucketInfos(ctx context.Context, driver *cos.Driver, bucketName string) (map[string]string, error) {
 	infos := make(map[string]string)
 	bucketName = strings.TrimSpace(bucketName)
-	region := strings.TrimSpace(p.region)
 	switch {
 	case bucketName == "":
 		return nil, fmt.Errorf("empty bucket name")
@@ -273,8 +268,8 @@ func (p *Provider) bucketInfos(ctx context.Context, driver *cos.Driver, bucketNa
 			return nil, fmt.Errorf("no buckets found")
 		}
 		return infos, nil
-	case region != "" && region != "all":
-		infos[bucketName] = region
+	case p.region != "" && p.region != "all":
+		infos[bucketName] = p.region
 		return infos, nil
 	default:
 		buckets, err := driver.GetBuckets(ctx)

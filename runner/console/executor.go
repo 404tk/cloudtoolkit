@@ -61,35 +61,7 @@ func Executor(s string) {
 		return
 	}
 
-	timeout := env.Active().RunTimeout
-	if timeout <= 0 {
-		timeout = 10 * time.Minute
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	defer signal.Stop(c)
-
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		run(ctx)
-	}()
-
-	select {
-	case <-done:
-	case <-c:
-		logger.Info("Interrupted, cancelling...")
-		cancel()
-		<-done
-	case <-ctx.Done():
-		if ctx.Err() == context.DeadlineExceeded {
-			logger.Error(fmt.Sprintf("Run timed out after %s", timeout))
-		}
-		<-done
-	}
+	runWithCancellation(context.Background())
 }
 
 // confirmIfSensitive prompts the user before dispatching payloads that mutate
@@ -178,5 +150,41 @@ func run(ctx context.Context) {
 		v.Run(ctx, config)
 	} else {
 		logger.Error("Please type `show payloads` to confirm the required payload.")
+	}
+}
+
+func runWithCancellation(parent context.Context) {
+	if parent == nil {
+		parent = context.Background()
+	}
+
+	timeout := env.From(parent).RunTimeout
+	if timeout <= 0 {
+		timeout = 10 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(parent, timeout)
+	defer cancel()
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	defer signal.Stop(c)
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		run(ctx)
+	}()
+
+	select {
+	case <-done:
+	case <-c:
+		logger.Info("Interrupted, cancelling...")
+		cancel()
+		<-done
+	case <-ctx.Done():
+		if ctx.Err() == context.DeadlineExceeded {
+			logger.Error(fmt.Sprintf("Run timed out after %s", timeout))
+		}
+		<-done
 	}
 }

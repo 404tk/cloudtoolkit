@@ -129,16 +129,24 @@ func (d *Driver) listRegion(ctx context.Context, region string) ([]schema.Host, 
 }
 
 func (d *Driver) requestRegions() []string {
-	if strings.EqualFold(strings.TrimSpace(d.Region), "all") {
+	if d.normalizedRegion() == "all" {
 		return append([]string(nil), knownJDCloudLAVMRegions...)
 	}
 	return []string{d.requestRegion()}
 }
 
 func (d *Driver) requestRegion() string {
-	region := strings.TrimSpace(d.Region)
-	if region == "" || strings.EqualFold(region, "all") {
+	region := d.normalizedRegion()
+	if region == "" || region == "all" {
 		return "cn-north-1"
+	}
+	return region
+}
+
+func (d *Driver) normalizedRegion() string {
+	region := strings.TrimSpace(d.Region)
+	if strings.EqualFold(region, "all") {
+		return "all"
 	}
 	return region
 }

@@ -37,11 +37,14 @@ func (d *Driver) ListMySQL(ctx context.Context) ([]schema.Database, error) {
 		items := make([]schema.Database, 0, len(resp.Result.Instances))
 		for _, instance := range resp.Result.Instances {
 			address, networkType := pickAddress(instance.AddressObject)
+			instanceID := strings.TrimSpace(instance.InstanceID)
+			engineVersion := strings.TrimSpace(instance.DBEngineVersion)
+			regionID := strings.TrimSpace(instance.RegionID)
 			items = append(items, schema.Database{
-				InstanceId:    strings.TrimSpace(instance.InstanceID),
+				InstanceId:    instanceID,
 				Engine:        "MySQL",
-				EngineVersion: normalizeVersion(strings.TrimSpace(instance.DBEngineVersion), "MySQL_"),
-				Region:        strings.TrimSpace(instance.RegionID),
+				EngineVersion: normalizeVersion(engineVersion, "MySQL_"),
+				Region:        regionID,
 				Address:       address,
 				NetworkType:   networkType,
 			})
@@ -59,11 +62,14 @@ func (d *Driver) ListPostgreSQL(ctx context.Context) ([]schema.Database, error) 
 		items := make([]schema.Database, 0, len(resp.Result.Instances))
 		for _, instance := range resp.Result.Instances {
 			address, networkType := pickAddress(instance.AddressObject)
+			instanceID := strings.TrimSpace(instance.InstanceID)
+			engineVersion := strings.TrimSpace(instance.DBEngineVersion)
+			regionID := strings.TrimSpace(instance.RegionID)
 			items = append(items, schema.Database{
-				InstanceId:    strings.TrimSpace(instance.InstanceID),
+				InstanceId:    instanceID,
 				Engine:        "PostgreSQL",
-				EngineVersion: normalizeVersion(strings.TrimSpace(instance.DBEngineVersion), "PostgreSQL_"),
-				Region:        strings.TrimSpace(instance.RegionID),
+				EngineVersion: normalizeVersion(engineVersion, "PostgreSQL_"),
+				Region:        regionID,
 				Address:       address,
 				NetworkType:   networkType,
 			})
@@ -80,11 +86,14 @@ func (d *Driver) ListSQLServer(ctx context.Context) ([]schema.Database, error) {
 		}
 		items := make([]schema.Database, 0, len(resp.Result.InstancesInfo))
 		for _, instance := range resp.Result.InstancesInfo {
+			instanceID := strings.TrimSpace(instance.InstanceID)
+			engineVersion := strings.TrimSpace(instance.DBEngineVersion)
+			regionID := strings.TrimSpace(instance.RegionID)
 			items = append(items, schema.Database{
-				InstanceId:    strings.TrimSpace(instance.InstanceID),
+				InstanceId:    instanceID,
 				Engine:        "SQL Server",
-				EngineVersion: strings.TrimSpace(instance.DBEngineVersion),
-				Region:        strings.TrimSpace(instance.RegionID),
+				EngineVersion: engineVersion,
+				Region:        regionID,
 				Address:       pickSQLServerAddress(instance.NodeDetailInfo, instance.Port),
 			})
 		}
@@ -237,12 +246,15 @@ func pickAddress(addresses []api.RDSAddressObject) (string, string) {
 	bestAddress := ""
 	bestNetworkType := ""
 	for _, item := range addresses {
-		host := firstNonEmpty(strings.TrimSpace(item.Domain), strings.TrimSpace(item.IPAddress))
+		domain := strings.TrimSpace(item.Domain)
+		ipAddress := strings.TrimSpace(item.IPAddress)
+		host := firstNonEmpty(domain, ipAddress)
 		if host == "" {
 			continue
 		}
-		address := formatAddress(host, strings.TrimSpace(item.Port))
+		port := strings.TrimSpace(item.Port)
 		networkType := strings.TrimSpace(item.NetworkType)
+		address := formatAddress(host, port)
 		if strings.EqualFold(networkType, "Public") {
 			return address, networkType
 		}
@@ -257,15 +269,18 @@ func pickAddress(addresses []api.RDSAddressObject) (string, string) {
 func pickSQLServerAddress(nodes []api.RDSSQLServerNode, port string) string {
 	port = strings.TrimSpace(port)
 	for _, node := range nodes {
-		if !strings.EqualFold(strings.TrimSpace(node.NodeType), "Primary") {
+		nodeType := strings.TrimSpace(node.NodeType)
+		if !strings.EqualFold(nodeType, "Primary") {
 			continue
 		}
-		if host := strings.TrimSpace(node.NodeIP); host != "" {
+		host := strings.TrimSpace(node.NodeIP)
+		if host != "" {
 			return formatAddress(host, port)
 		}
 	}
 	for _, node := range nodes {
-		if host := strings.TrimSpace(node.NodeIP); host != "" {
+		host := strings.TrimSpace(node.NodeIP)
+		if host != "" {
 			return formatAddress(host, port)
 		}
 	}
@@ -287,8 +302,8 @@ func formatAddress(host, port string) string {
 
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
+		if v := strings.TrimSpace(value); v != "" {
+			return v
 		}
 	}
 	return ""

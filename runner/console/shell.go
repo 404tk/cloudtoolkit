@@ -86,7 +86,7 @@ func shellExecutor(cmd string) {
 
 	cmd = base64.StdEncoding.EncodeToString([]byte(cmd))
 	config[utils.Metadata] = fmt.Sprintf("%s %s", instanceId, cmd)
-	run(context.TODO())
+	runWithCancellation(context.Background())
 }
 
 func closeShell() {

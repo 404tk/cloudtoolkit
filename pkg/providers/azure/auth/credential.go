@@ -96,7 +96,8 @@ func (c Cloud) ResourceManagerEndpoint() string {
 }
 
 func cloudFromVersion(version string) Cloud {
-	switch strings.TrimSpace(strings.ToLower(version)) {
+	version = strings.ToLower(strings.TrimSpace(version))
+	switch version {
 	case "", "public":
 		return CloudPublic
 	case "china":
@@ -111,7 +112,8 @@ func cloudFromVersion(version string) Cloud {
 }
 
 func normalizeCloud(cloud Cloud) Cloud {
-	switch Cloud(strings.ToLower(strings.TrimSpace(string(cloud)))) {
+	normalized := Cloud(strings.ToLower(strings.TrimSpace(string(cloud))))
+	switch normalized {
 	case CloudChina:
 		return CloudChina
 	case CloudUSGov:

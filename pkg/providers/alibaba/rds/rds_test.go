@@ -184,18 +184,15 @@ func TestCreateAccountCreatesReadonlyUserAndGrantsPrivilege(t *testing.T) {
 	driver := newTestDriver(server.URL)
 	driver.Region = "cn-hangzhou"
 
-	var ok bool
-	output := captureStdout(t, func() {
-		ok = driver.CreateAccount("rm-1", "appdb")
-	})
-	if !ok {
-		t.Fatalf("CreateAccount() returned false")
+	result, err := driver.CreateAccount(context.Background(), "rm-1", "appdb")
+	if err != nil {
+		t.Fatalf("CreateAccount() error = %v", err)
 	}
 	if strings.Join(actions, ",") != "CreateAccount,GrantAccountPrivilege" {
 		t.Fatalf("unexpected action sequence: %v", actions)
 	}
-	if !strings.Contains(output, "readonly") || !strings.Contains(output, "Secret!1") || !strings.Contains(output, "ReadOnly") {
-		t.Fatalf("unexpected output: %s", output)
+	if result.Username != "readonly" || result.Password != "Secret!1" || result.Privilege != "ReadOnly" {
+		t.Fatalf("unexpected result: %+v", result)
 	}
 }
 
@@ -228,10 +225,16 @@ func TestDeleteAccountUsesConfiguredCredential(t *testing.T) {
 
 	driver := newTestDriver(server.URL)
 	driver.Region = "cn-hangzhou"
-	driver.DeleteAccount("rm-1")
+	result, err := driver.DeleteAccount(context.Background(), "rm-1")
+	if err != nil {
+		t.Fatalf("DeleteAccount() error = %v", err)
+	}
 
 	if strings.Join(actions, ",") != "DeleteAccount" {
 		t.Fatalf("unexpected action sequence: %v", actions)
+	}
+	if result.Username != "readonly" {
+		t.Fatalf("unexpected result: %+v", result)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/api"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
 func (d *Driver) AddRole() (schema.IAMResult, error) {
@@ -15,7 +16,11 @@ func (d *Driver) AddRole() (schema.IAMResult, error) {
 	if err != nil {
 		return schema.IAMResult{}, fmt.Errorf("create role failed: %w", err)
 	}
-	_ = attachPolicyToRole(ctx, client, d.RoleName)
+	message := "Role created successfully with AdministratorAccess policy"
+	if err := attachPolicyToRole(ctx, client, d.RoleName); err != nil {
+		logger.Warning("attach AdministratorAccess policy to role failed:", err)
+		message = "Role created, but failed to attach AdministratorAccess policy: " + err.Error()
+	}
 	ownerID := getOwnerUin(ctx, client)
 	switchURL := fmt.Sprintf("https://cloud.tencent.com/cam/switchrole?ownerUin=%s&roleName=%s", ownerID, d.RoleName)
 
@@ -23,7 +28,7 @@ func (d *Driver) AddRole() (schema.IAMResult, error) {
 		Username:  d.RoleName,
 		AccountID: ownerID,
 		LoginURL:  switchURL,
-		Message:   "Role created successfully with AdministratorAccess policy",
+		Message:   message,
 	}, nil
 }
 

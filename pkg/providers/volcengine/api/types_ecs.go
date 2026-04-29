@@ -162,8 +162,8 @@ func (c *Client) DescribeInstances(ctx context.Context, region string, maxResult
 
 func (c *Client) CreateCommand(ctx context.Context, region, name, commandType, commandContent, contentEncoding string) (CreateCommandResponse, error) {
 	query := url.Values{}
-	query.Set("Name", strings.TrimSpace(name))
-	query.Set("Type", strings.TrimSpace(commandType))
+	setTrimmedQueryValue(query, "Name", name)
+	setTrimmedQueryValue(query, "Type", commandType)
 	query.Set("CommandContent", commandContent)
 	if encoding := strings.TrimSpace(contentEncoding); encoding != "" {
 		query.Set("ContentEncoding", encoding)
@@ -184,8 +184,8 @@ func (c *Client) CreateCommand(ctx context.Context, region, name, commandType, c
 
 func (c *Client) InvokeCommand(ctx context.Context, region, commandID, invocationName string, instanceIDs []string) (InvokeCommandResponse, error) {
 	query := url.Values{}
-	query.Set("CommandId", strings.TrimSpace(commandID))
-	query.Set("InvocationName", strings.TrimSpace(invocationName))
+	setTrimmedQueryValue(query, "CommandId", commandID)
+	setTrimmedQueryValue(query, "InvocationName", invocationName)
 	for i, instanceID := range instanceIDs {
 		instanceID = strings.TrimSpace(instanceID)
 		if instanceID == "" {
@@ -209,7 +209,7 @@ func (c *Client) InvokeCommand(ctx context.Context, region, commandID, invocatio
 
 func (c *Client) DeleteCommand(ctx context.Context, region, commandID string) (DeleteCommandResponse, error) {
 	query := url.Values{}
-	query.Set("CommandId", strings.TrimSpace(commandID))
+	setTrimmedQueryValue(query, "CommandId", commandID)
 	var out DeleteCommandResponse
 	err := c.DoOpenAPI(ctx, Request{
 		Service:    "ecs",
@@ -257,15 +257,9 @@ func (c *Client) DescribeCloudAssistantStatus(ctx context.Context, region string
 
 func (c *Client) DescribeInvocationResults(ctx context.Context, region, invocationID, commandID, instanceID string, maxResults int32) (DescribeInvocationResultsResponse, error) {
 	query := url.Values{}
-	if invocationID = strings.TrimSpace(invocationID); invocationID != "" {
-		query.Set("InvocationId", invocationID)
-	}
-	if commandID = strings.TrimSpace(commandID); commandID != "" {
-		query.Set("CommandId", commandID)
-	}
-	if instanceID = strings.TrimSpace(instanceID); instanceID != "" {
-		query.Set("InstanceId", instanceID)
-	}
+	setTrimmedQueryValueIfNotEmpty(query, "InvocationId", invocationID)
+	setTrimmedQueryValueIfNotEmpty(query, "CommandId", commandID)
+	setTrimmedQueryValueIfNotEmpty(query, "InstanceId", instanceID)
 	if maxResults > 0 {
 		query.Set("PageNumber", "1")
 		query.Set("PageSize", strconv.FormatInt(int64(maxResults), 10))
@@ -282,4 +276,10 @@ func (c *Client) DescribeInvocationResults(ctx context.Context, region, invocati
 		Idempotent: true,
 	}, &out)
 	return out, err
+}
+
+func setTrimmedQueryValueIfNotEmpty(query url.Values, key, value string) {
+	if value = strings.TrimSpace(value); value != "" {
+		query.Set(key, value)
+	}
 }

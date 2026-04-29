@@ -82,10 +82,11 @@ func unsupportedRegion(err error) bool {
 		return false
 	}
 	var apiErr *api.APIError
-	if errors.As(err, &apiErr) && strings.Contains(apiErr.Code, "UnsupportedRegion") {
-		return true
+	if errors.As(err, &apiErr) {
+		code := strings.TrimSpace(apiErr.Code)
+		return code == "UnsupportedRegion" || strings.HasSuffix(code, ".UnsupportedRegion")
 	}
-	return strings.Contains(err.Error(), "UnsupportedRegion")
+	return false
 }
 
 func mergeRegionErrors(base, extra map[string]error) map[string]error {

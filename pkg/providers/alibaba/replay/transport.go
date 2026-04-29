@@ -641,7 +641,8 @@ func (t *transport) handleSLS(req *http.Request) (*http.Response, error) {
 
 func verifyRPCAuth(req *http.Request) authFailureKind {
 	query := httpclient.CloneValues(req.URL.Query())
-	if strings.TrimSpace(query.Get("AccessKeyId")) != DemoAccessKeyID {
+	accessKeyID := strings.TrimSpace(query.Get("AccessKeyId"))
+	if accessKeyID != DemoAccessKeyID {
 		return authInvalidAccessKey
 	}
 	signature := strings.TrimSpace(query.Get("Signature"))
@@ -654,7 +655,8 @@ func verifyRPCAuth(req *http.Request) authFailureKind {
 }
 
 func verifyOSSAuth(req *http.Request) authFailureKind {
-	accessKey, signature, ok := parseAuthorization(strings.TrimSpace(req.Header.Get("Authorization")), "OSS ")
+	authHeader := strings.TrimSpace(req.Header.Get("Authorization"))
+	accessKey, signature, ok := parseAuthorization(authHeader, "OSS ")
 	if !ok {
 		return authInvalidSignature
 	}
@@ -666,7 +668,8 @@ func verifyOSSAuth(req *http.Request) authFailureKind {
 	if err := oss.Sign(clone, demoCredential(), bucketFromOSSHost(requestHost(req)), time.Time{}); err != nil {
 		return authInvalidSignature
 	}
-	_, expectedSignature, ok := parseAuthorization(strings.TrimSpace(clone.Header.Get("Authorization")), "OSS ")
+	cloneAuthHeader := strings.TrimSpace(clone.Header.Get("Authorization"))
+	_, expectedSignature, ok := parseAuthorization(cloneAuthHeader, "OSS ")
 	if !ok || subtle.ConstantTimeCompare([]byte(signature), []byte(expectedSignature)) != 1 {
 		return authInvalidSignature
 	}
@@ -674,7 +677,8 @@ func verifyOSSAuth(req *http.Request) authFailureKind {
 }
 
 func verifySLSAuth(req *http.Request) authFailureKind {
-	accessKey, signature, ok := parseAuthorization(strings.TrimSpace(req.Header.Get("Authorization")), "LOG ")
+	authHeader := strings.TrimSpace(req.Header.Get("Authorization"))
+	accessKey, signature, ok := parseAuthorization(authHeader, "LOG ")
 	if !ok {
 		return authInvalidSignature
 	}
@@ -697,7 +701,8 @@ func signRPC(method string, params url.Values, secret string) string {
 	formed = strings.ReplaceAll(formed, "+", "%20")
 	formed = strings.ReplaceAll(formed, "*", "%2A")
 	formed = strings.ReplaceAll(formed, "%7E", "~")
-	stringToSign := strings.ToUpper(strings.TrimSpace(method))
+	method = strings.ToUpper(strings.TrimSpace(method))
+	stringToSign := method
 	if stringToSign == "" {
 		stringToSign = http.MethodGet
 	}
@@ -769,15 +774,21 @@ func canonicalizeSLSResource(u *url.URL) string {
 }
 
 func parseAuthorization(value, prefix string) (string, string, bool) {
+	value = strings.TrimSpace(value)
 	if !strings.HasPrefix(value, prefix) {
 		return "", "", false
 	}
 	value = strings.TrimSpace(strings.TrimPrefix(value, prefix))
 	parts := strings.SplitN(value, ":", 2)
-	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+	if len(parts) != 2 {
 		return "", "", false
 	}
-	return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1]), true
+	accessKey := strings.TrimSpace(parts[0])
+	signature := strings.TrimSpace(parts[1])
+	if accessKey == "" || signature == "" {
+		return "", "", false
+	}
+	return accessKey, signature, true
 }
 
 func cloneRequest(req *http.Request) *http.Request {
@@ -848,7 +859,8 @@ func offsetWindow(total, offset, size int) window {
 }
 
 func markerOffset(marker string) int {
-	offset, err := strconv.Atoi(strings.TrimSpace(marker))
+	marker = strings.TrimSpace(marker)
+	offset, err := strconv.Atoi(marker)
 	if err != nil || offset < 0 {
 		return 0
 	}
@@ -856,10 +868,12 @@ func markerOffset(marker string) int {
 }
 
 func buildCommandID(instanceID, command string) string {
+	instanceID = strings.TrimSpace(instanceID)
+	command = strings.TrimSpace(command)
 	mac := hmac.New(sha1.New, []byte("ctk-replay"))
-	_, _ = mac.Write([]byte(strings.TrimSpace(instanceID)))
+	_, _ = mac.Write([]byte(instanceID))
 	_, _ = mac.Write([]byte{':'})
-	_, _ = mac.Write([]byte(strings.TrimSpace(command)))
+	_, _ = mac.Write([]byte(command))
 	return fmt.Sprintf("c-%x", mac.Sum(nil)[:6])
 }
 

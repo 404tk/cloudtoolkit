@@ -19,15 +19,7 @@ type ProviderSpec struct {
 	Capabilities []string
 }
 
-type PayloadHelp struct {
-	MetadataSyntax   []string
-	MetadataExamples []string
-	SafetyNotes      []string
-}
-
 type PayloadSpec struct {
-	Capability        string
-	Sensitivity       string
-	MetadataTemplates []Suggestion
-	Help              PayloadHelp
+	Capability  string
+	Sensitivity string
 }

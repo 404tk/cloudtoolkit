@@ -62,10 +62,13 @@ type responseEnvelope struct {
 func DecodeError(statusCode int, body []byte) error {
 	var envelope responseEnvelope
 	if err := json.Unmarshal(body, &envelope); err == nil && envelope.Response.Error != nil {
+		code := strings.TrimSpace(envelope.Response.Error.Code)
+		message := strings.TrimSpace(envelope.Response.Error.Message)
+		requestID := strings.TrimSpace(envelope.Response.RequestID)
 		return &APIError{
-			Code:       envelope.Response.Error.Code,
-			Message:    envelope.Response.Error.Message,
-			RequestID:  envelope.Response.RequestID,
+			Code:       code,
+			Message:    message,
+			RequestID:  requestID,
 			StatusCode: statusCode,
 		}
 	}

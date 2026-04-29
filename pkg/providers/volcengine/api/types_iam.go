@@ -121,7 +121,7 @@ func (c *Client) ListUsers(ctx context.Context, region string, limit, offset int
 
 func (c *Client) GetLoginProfile(ctx context.Context, region, userName string) (GetLoginProfileResponse, error) {
 	query := url.Values{}
-	query.Set("UserName", strings.TrimSpace(userName))
+	setTrimmedQueryValue(query, "UserName", userName)
 	var out GetLoginProfileResponse
 	err := c.DoOpenAPI(ctx, Request{
 		Service:    "iam",
@@ -138,7 +138,7 @@ func (c *Client) GetLoginProfile(ctx context.Context, region, userName string) (
 
 func (c *Client) CreateUser(ctx context.Context, region, userName, displayName string) (CreateUserResponse, error) {
 	query := url.Values{}
-	query.Set("UserName", strings.TrimSpace(userName))
+	setTrimmedQueryValue(query, "UserName", userName)
 	if displayName = strings.TrimSpace(displayName); displayName != "" {
 		query.Set("DisplayName", displayName)
 	}
@@ -156,13 +156,14 @@ func (c *Client) CreateUser(ctx context.Context, region, userName, displayName s
 }
 
 func (c *Client) CreateLoginProfile(ctx context.Context, region, userName, password string) (CreateLoginProfileResponse, error) {
+	userName = strings.TrimSpace(userName)
 	body, err := json.Marshal(struct {
 		UserName              string `json:"UserName"`
 		Password              string `json:"Password"`
 		LoginAllowed          bool   `json:"LoginAllowed"`
 		PasswordResetRequired bool   `json:"PasswordResetRequired"`
 	}{
-		UserName:              strings.TrimSpace(userName),
+		UserName:              userName,
 		Password:              password,
 		LoginAllowed:          true,
 		PasswordResetRequired: false,
@@ -185,7 +186,7 @@ func (c *Client) CreateLoginProfile(ctx context.Context, region, userName, passw
 
 func (c *Client) DeleteLoginProfile(ctx context.Context, region, userName string) (DeleteLoginProfileResponse, error) {
 	query := url.Values{}
-	query.Set("UserName", strings.TrimSpace(userName))
+	setTrimmedQueryValue(query, "UserName", userName)
 	var out DeleteLoginProfileResponse
 	err := c.DoOpenAPI(ctx, Request{
 		Service: "iam",
@@ -201,9 +202,9 @@ func (c *Client) DeleteLoginProfile(ctx context.Context, region, userName string
 
 func (c *Client) AttachUserPolicy(ctx context.Context, region, userName, policyName, policyType string) (AttachUserPolicyResponse, error) {
 	query := url.Values{}
-	query.Set("UserName", strings.TrimSpace(userName))
-	query.Set("PolicyName", strings.TrimSpace(policyName))
-	query.Set("PolicyType", strings.TrimSpace(policyType))
+	setTrimmedQueryValue(query, "UserName", userName)
+	setTrimmedQueryValue(query, "PolicyName", policyName)
+	setTrimmedQueryValue(query, "PolicyType", policyType)
 	var out AttachUserPolicyResponse
 	err := c.DoOpenAPI(ctx, Request{
 		Service: "iam",
@@ -219,9 +220,9 @@ func (c *Client) AttachUserPolicy(ctx context.Context, region, userName, policyN
 
 func (c *Client) DetachUserPolicy(ctx context.Context, region, userName, policyName, policyType string) (DetachUserPolicyResponse, error) {
 	query := url.Values{}
-	query.Set("UserName", strings.TrimSpace(userName))
-	query.Set("PolicyName", strings.TrimSpace(policyName))
-	query.Set("PolicyType", strings.TrimSpace(policyType))
+	setTrimmedQueryValue(query, "UserName", userName)
+	setTrimmedQueryValue(query, "PolicyName", policyName)
+	setTrimmedQueryValue(query, "PolicyType", policyType)
 	var out DetachUserPolicyResponse
 	err := c.DoOpenAPI(ctx, Request{
 		Service: "iam",
@@ -237,7 +238,7 @@ func (c *Client) DetachUserPolicy(ctx context.Context, region, userName, policyN
 
 func (c *Client) DeleteUser(ctx context.Context, region, userName string) (DeleteUserResponse, error) {
 	query := url.Values{}
-	query.Set("UserName", strings.TrimSpace(userName))
+	setTrimmedQueryValue(query, "UserName", userName)
 	var out DeleteUserResponse
 	err := c.DoOpenAPI(ctx, Request{
 		Service: "iam",
@@ -249,4 +250,8 @@ func (c *Client) DeleteUser(ctx context.Context, region, userName string) (Delet
 		Query:   query,
 	}, &out)
 	return out, err
+}
+
+func setTrimmedQueryValue(query url.Values, key, value string) {
+	query.Set(key, strings.TrimSpace(value))
 }

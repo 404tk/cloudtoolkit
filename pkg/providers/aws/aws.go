@@ -9,11 +9,10 @@ import (
 	_ec2 "github.com/404tk/cloudtoolkit/pkg/providers/aws/ec2"
 	_iam "github.com/404tk/cloudtoolkit/pkg/providers/aws/iam"
 	_s3 "github.com/404tk/cloudtoolkit/pkg/providers/aws/s3"
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/credverify"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
-	"github.com/404tk/cloudtoolkit/utils/cache"
-	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
 // Provider is a data provider for aws API
@@ -42,19 +41,18 @@ func New(options schema.Options) (*Provider, error) {
 		apiClient:     apiClient,
 	}
 
-	payload, _ := options.GetMetadata(utils.Payload)
-	if payload == "cloudlist" {
-		resp, err := apiClient.GetCallerIdentity(
-			context.Background(),
-			defaultRegion,
-		)
+	if err := credverify.ForCloudlist(options, provider, false, func(ctx context.Context) (credverify.Result, error) {
+		resp, err := apiClient.GetCallerIdentity(ctx, defaultRegion)
 		if err != nil {
-			return nil, err
+			return credverify.Result{}, err
 		}
-		accountArn := resp.Arn
-		userName := currentUserNameFromARN(accountArn)
-		logger.Warning(fmt.Sprintf("Current user: %s", userName))
-		cache.Cfg.CredInsert(userName, provider, options)
+		userName := currentUserNameFromARN(resp.Arn)
+		return credverify.Result{
+			Summary:     fmt.Sprintf("Current user: %s", userName),
+			SessionUser: userName,
+		}, nil
+	}); err != nil {
+		return nil, err
 	}
 
 	return provider, nil
@@ -67,39 +65,36 @@ func (p *Provider) Name() string {
 
 // Resources returns the provider for an resource deployment source.
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
-	list := schema.NewResources()
-	list.Provider = p.Name()
-	for _, product := range env.From(ctx).Cloudlist {
-		switch product {
-		case "host":
+	collector := schema.NewResourceCollector(p.Name()).
+		Register("host", func(ctx context.Context, list *schema.Resources) {
 			ec2provider := &_ec2.Driver{
 				Client:        p.apiClient,
 				Region:        p.region,
 				DefaultRegion: p.defaultRegion,
 			}
 			hosts, err := ec2provider.GetResource(ctx)
-			schema.AppendAssets(&list, hosts)
+			schema.AppendAssets(list, hosts)
 			list.AddError("host", err)
 			list.AddError("host", ec2provider.PartialError())
-		case "account":
+		}).
+		Register("account", func(ctx context.Context, list *schema.Resources) {
 			iamprovider := &_iam.Driver{
 				Client:        p.apiClient,
 				Region:        p.region,
 				DefaultRegion: p.defaultRegion,
 			}
 			users, err := iamprovider.ListUsers(ctx)
-			schema.AppendAssets(&list, users)
+			schema.AppendAssets(list, users)
 			list.AddError("account", err)
-		case "bucket":
+		}).
+		Register("bucket", func(ctx context.Context, list *schema.Resources) {
 			s3provider := &_s3.Driver{Client: p.apiClient, DefaultRegion: p.defaultRegion}
 			storages, err := s3provider.GetBuckets(ctx)
-			schema.AppendAssets(&list, storages)
+			schema.AppendAssets(list, storages)
 			list.AddError("bucket", err)
-		default:
-		}
-	}
+		})
 
-	return list, list.Err()
+	return collector.Collect(ctx, env.From(ctx).Cloudlist)
 }
 
 func (p *Provider) UserManagement(action, username, password string) (schema.IAMResult, error) {

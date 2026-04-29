@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/credverify"
 	_api "github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/api"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/asset"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/assistant"
@@ -18,8 +19,6 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/runtime/vmexecspec"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
-	"github.com/404tk/cloudtoolkit/utils/cache"
-	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
 type Provider struct {
@@ -36,6 +35,10 @@ func New(options schema.Options) (*Provider, error) {
 		return nil, err
 	}
 	region, _ := options.GetMetadata(utils.Region)
+	region = strings.TrimSpace(region)
+	if strings.EqualFold(region, "all") {
+		region = "all"
+	}
 	apiClient := _api.NewClient(credential)
 	provider := &Provider{
 		credential: credential,
@@ -43,22 +46,26 @@ func New(options schema.Options) (*Provider, error) {
 		accessKey:  credential.AccessKey,
 		apiClient:  apiClient,
 	}
-	payload, _ := options.GetMetadata(utils.Payload)
-
-	if payload == "cloudlist" {
+	if err := credverify.ForCloudlist(options, provider, false, func(context.Context) (credverify.Result, error) {
 		d := &iam.Driver{Client: apiClient, AccessKey: credential.AccessKey}
 		pin, ok := d.Validator()
 		if !ok {
-			return nil, fmt.Errorf("invalid accesskey")
-		}
-		if pin != "" {
-			logger.Warning(fmt.Sprintf("Current user: %s", pin))
+			return credverify.Result{}, fmt.Errorf("invalid accesskey")
 		}
 		sessionUser := pin
 		if sessionUser == "" {
 			sessionUser = "default"
 		}
-		cache.Cfg.CredInsert(sessionUser, provider, options)
+		summary := ""
+		if pin != "" {
+			summary = fmt.Sprintf("Current user: %s", pin)
+		}
+		return credverify.Result{
+			Summary:     summary,
+			SessionUser: sessionUser,
+		}, nil
+	}); err != nil {
+		return nil, err
 	}
 
 	return provider, nil
@@ -71,21 +78,19 @@ func (p *Provider) Name() string {
 
 // Resources returns the provider for a resource deployment source.
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
-	list := schema.NewResources()
-	list.Provider = p.Name()
-	for _, product := range env.From(ctx).Cloudlist {
-		switch product {
-		case "balance":
+	collector := schema.NewResourceCollector(p.Name()).
+		Register("balance", func(ctx context.Context, _ *schema.Resources) {
 			(&asset.Driver{Client: p.apiClient, Region: p.region}).QueryAccountBalance(ctx)
-		case "host":
+		}).
+		Register("host", func(ctx context.Context, list *schema.Resources) {
 			vmDriver := &vm.Driver{Client: p.apiClient, Region: p.region}
 			vmHosts, vmErr := vmDriver.GetResource(ctx)
-			schema.AppendAssets(&list, vmHosts)
+			schema.AppendAssets(list, vmHosts)
 			list.AddError("host/vm", vmErr)
 
 			lavmDriver := &lavm.Driver{Client: p.apiClient, Region: p.region}
 			lavmHosts, lavmErr := lavmDriver.GetResource(ctx)
-			schema.AppendAssets(&list, lavmHosts)
+			schema.AppendAssets(list, lavmHosts)
 			list.AddError("host/lavm", lavmErr)
 
 			allHosts := append([]schema.Host{}, vmHosts...)
@@ -93,25 +98,21 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			if len(allHosts) > 0 || (vmErr == nil && lavmErr == nil) {
 				vm.SetCacheHostList(allHosts)
 			}
-		case "domain":
-		case "account":
+		}).
+		Register("account", func(ctx context.Context, list *schema.Resources) {
 			d := &iam.Driver{Client: p.apiClient}
 			users, err := d.ListUsers(ctx)
-			schema.AppendAssets(&list, users)
+			schema.AppendAssets(list, users)
 			list.AddError("account", err)
-		case "database":
-		case "bucket":
+		}).
+		Register("bucket", func(ctx context.Context, list *schema.Resources) {
 			d := p.newOSSDriver(p.region)
 			storages, err := d.ListBuckets(ctx)
-			schema.AppendAssets(&list, storages)
+			schema.AppendAssets(list, storages)
 			list.AddError("bucket", err)
-		case "sms":
-		case "log":
-		default:
-		}
-	}
+		})
 
-	return list, list.Err()
+	return collector.Collect(ctx, env.From(ctx).Cloudlist)
 }
 
 // UserManagement powers the iam-user-check payload. JDCloud's CreateSubUser is
@@ -155,40 +156,30 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([
 // Region must be a real VM region (cn-north-1 / cn-east-2 / ...); we resolve it
 // from the host cache populated by `cloudlist` so `shell <instance-id>` works
 // regardless of the session's current region setting.
-func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {
+func (p *Provider) ExecuteCloudVMCommand(ctx context.Context, instanceID, cmd string) (schema.CommandResult, error) {
 	if osType, command, ok := vmexecspec.Parse(cmd); ok {
-		region := strings.TrimSpace(p.region)
-		if region == "" || strings.EqualFold(region, "all") {
-			logger.Error("headless shell requires explicit region")
-			return
+		if p.region == "" || p.region == "all" {
+			return schema.CommandResult{}, fmt.Errorf("headless shell requires explicit region")
 		}
-		driver := &assistant.Driver{Client: p.apiClient, Region: region}
+		driver := &assistant.Driver{Client: p.apiClient, Region: p.region}
 		output := driver.RunCommand(instanceID, osType, command)
-		if output != "" {
-			fmt.Println(output)
-		}
-		return
+		return schema.CommandResult{Output: output}, nil
 	}
 
 	if strings.HasPrefix(instanceID, "lavm-") {
-		logger.Error("JDCloud shell currently supports VM only")
-		return
+		return schema.CommandResult{}, fmt.Errorf("JDCloud shell currently supports VM only")
 	}
 	host, ok := p.lookupHost(instanceID)
 	if !ok {
-		logger.Error("Unable to resolve instance metadata, run `cloudlist` first and retry.")
-		return
+		return schema.CommandResult{}, fmt.Errorf("unable to resolve instance metadata, run `cloudlist` first and retry")
 	}
 	command, err := base64.StdEncoding.DecodeString(cmd)
 	if err != nil {
-		logger.Error(err.Error())
-		return
+		return schema.CommandResult{}, err
 	}
 	driver := &assistant.Driver{Client: p.apiClient, Region: host.Region}
 	output := driver.RunCommand(instanceID, host.OSType, string(command))
-	if output != "" {
-		fmt.Println(output)
-	}
+	return schema.CommandResult{Output: output}, nil
 }
 
 func (p *Provider) lookupHost(instanceID string) (schema.Host, bool) {
@@ -211,7 +202,6 @@ func (p *Provider) newOSSDriver(region string) *oss.Driver {
 func (p *Provider) bucketInfos(ctx context.Context, driver *oss.Driver, bucketName string) (map[string]string, error) {
 	infos := make(map[string]string)
 	bucketName = strings.TrimSpace(bucketName)
-	region := strings.TrimSpace(p.region)
 	switch {
 	case bucketName == "":
 		return nil, fmt.Errorf("empty bucket name")
@@ -234,8 +224,8 @@ func (p *Provider) bucketInfos(ctx context.Context, driver *oss.Driver, bucketNa
 			return nil, fmt.Errorf("no buckets found")
 		}
 		return infos, nil
-	case region != "" && !strings.EqualFold(region, "all"):
-		infos[bucketName] = region
+	case p.region != "" && p.region != "all":
+		infos[bucketName] = p.region
 		return infos, nil
 	default:
 		resolved, err := driver.ResolveBucketRegion(ctx, bucketName)

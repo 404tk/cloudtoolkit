@@ -33,13 +33,9 @@ type Config struct {
 		TimeoutMinutes int    `yaml:"timeout_minutes"`
 		LogFormat      string `yaml:"log_format"`
 	} `yaml:"common"`
-	Cloudlist                 []string              `yaml:"cloudlist"`
-	IAMUserCheck              userValidationConfig  `yaml:"iam-user-check"`
-	LegacyIAMUserValidation   userValidationConfig  `yaml:"iam-user-validation"`
-	LegacyBackdoorUser        userValidationConfig  `yaml:"backdoor-user"`
-	RDSAccountCheck           databaseAccountConfig `yaml:"rds-account-check"`
-	LegacyDBAccountValidation databaseAccountConfig `yaml:"database-account-validation"`
-	LegacyDatabaseAccount     databaseAccountConfig `yaml:"database-account"`
+	Cloudlist       []string              `yaml:"cloudlist"`
+	IAMUserCheck    userValidationConfig  `yaml:"iam-user-check"`
+	RDSAccountCheck databaseAccountConfig `yaml:"rds-account-check"`
 }
 
 func resolveConfigPath() string {
@@ -64,24 +60,6 @@ func resolveConfigPath() string {
 		logger.Error("Could not seed default config:", err)
 	}
 	return path
-}
-
-func firstUserValidationConfig(values ...userValidationConfig) userValidationConfig {
-	for _, value := range values {
-		if value != (userValidationConfig{}) {
-			return value
-		}
-	}
-	return userValidationConfig{}
-}
-
-func firstDatabaseAccountConfig(values ...databaseAccountConfig) databaseAccountConfig {
-	for _, value := range values {
-		if value != (databaseAccountConfig{}) {
-			return value
-		}
-	}
-	return databaseAccountConfig{}
 }
 
 // InitConfig parses config.yaml (CWD or XDG) and returns the resulting *env.Env.
@@ -127,27 +105,17 @@ func configToEnv(cfg Config) *env.Env {
 	} else {
 		e.RunTimeout = 10 * time.Minute
 	}
-	logger.SetFormat(logger.Format(strings.ToLower(strings.TrimSpace(cfg.Common.LogFormat))))
+	logFormat := strings.ToLower(strings.TrimSpace(cfg.Common.LogFormat))
+	logger.SetFormat(logger.Format(logFormat))
 
-	iamUserCheck := firstUserValidationConfig(
-		cfg.IAMUserCheck,
-		cfg.LegacyIAMUserValidation,
-		cfg.LegacyBackdoorUser,
-	)
 	e.IAMUserCheck = fmt.Sprintf("%s %s %s",
-		iamUserCheck.Action,
-		iamUserCheck.Username,
-		iamUserCheck.Password,
-	)
-
-	rdsAccountCheck := firstDatabaseAccountConfig(
-		cfg.RDSAccountCheck,
-		cfg.LegacyDBAccountValidation,
-		cfg.LegacyDatabaseAccount,
+		cfg.IAMUserCheck.Action,
+		cfg.IAMUserCheck.Username,
+		cfg.IAMUserCheck.Password,
 	)
 	e.RDSAccount = fmt.Sprintf("%s:%s",
-		rdsAccountCheck.Username,
-		rdsAccountCheck.Password,
+		cfg.RDSAccountCheck.Username,
+		cfg.RDSAccountCheck.Password,
 	)
 	return e
 }

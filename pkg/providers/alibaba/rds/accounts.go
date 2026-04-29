@@ -7,45 +7,48 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/api"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
-	"github.com/404tk/cloudtoolkit/utils/logger"
+	"github.com/404tk/cloudtoolkit/pkg/schema"
 )
 
-func (d *Driver) CreateAccount(instanceID, dbName string) bool {
-	accountName, accountPassword, ok := parseRDSAccount()
-	if !ok {
-		return false
+func (d *Driver) CreateAccount(ctx context.Context, instanceID, dbName string) (schema.DatabaseActionResult, error) {
+	accountName, accountPassword, err := parseRDSAccount()
+	if err != nil {
+		return schema.DatabaseActionResult{}, err
 	}
 	client := d.newClient()
 	region := api.NormalizeRegion(d.Region)
 
-	if _, err := client.CreateRDSAccount(context.Background(), region, instanceID, accountName, accountPassword); err != nil {
-		logger.Error(err)
-		return false
+	if _, err := client.CreateRDSAccount(ctx, region, instanceID, accountName, accountPassword); err != nil {
+		return schema.DatabaseActionResult{}, err
 	}
-	if err := grantAccountPrivilege(context.Background(), client, region, instanceID, accountName, dbName); err != nil {
-		logger.Error(err)
-		return false
+	if err := grantAccountPrivilege(ctx, client, region, instanceID, accountName, dbName); err != nil {
+		return schema.DatabaseActionResult{}, err
 	}
-	fmt.Printf("\n%-10s\t%-10s\t%-60s\n", "Username", "Password", "Privilege")
-	fmt.Printf("%-10s\t%-10s\t%-60s\n", "--------", "--------", "---------")
-	fmt.Printf("%-10s\t%-10s\t%-60s\n\n",
-		accountName, accountPassword, "ReadOnly")
-	return true
+	return schema.DatabaseActionResult{
+		Action:    "useradd",
+		Username:  accountName,
+		Password:  accountPassword,
+		Privilege: "ReadOnly",
+		Message:   "database account created",
+	}, nil
 }
 
-func (d *Driver) DeleteAccount(instanceID string) {
-	accountName, _, ok := parseRDSAccount()
-	if !ok {
-		return
+func (d *Driver) DeleteAccount(ctx context.Context, instanceID string) (schema.DatabaseActionResult, error) {
+	accountName, _, err := parseRDSAccount()
+	if err != nil {
+		return schema.DatabaseActionResult{}, err
 	}
 	client := d.newClient()
 	region := api.NormalizeRegion(d.Region)
 
-	if _, err := client.DeleteRDSAccount(context.Background(), region, instanceID, accountName); err != nil {
-		logger.Error(err)
-		return
+	if _, err := client.DeleteRDSAccount(ctx, region, instanceID, accountName); err != nil {
+		return schema.DatabaseActionResult{}, err
 	}
-	logger.Warning(accountName + " user delete completed.")
+	return schema.DatabaseActionResult{
+		Action:   "userdel",
+		Username: accountName,
+		Message:  accountName + " user delete completed.",
+	}, nil
 }
 
 func grantAccountPrivilege(ctx context.Context, client *api.Client, region, instanceID, userName, dbName string) error {
@@ -53,11 +56,10 @@ func grantAccountPrivilege(ctx context.Context, client *api.Client, region, inst
 	return err
 }
 
-func parseRDSAccount() (string, string, bool) {
+func parseRDSAccount() (string, string, error) {
 	accountName, accountPassword, ok := strings.Cut(env.Active().RDSAccount, ":")
 	if !ok || strings.TrimSpace(accountName) == "" || strings.TrimSpace(accountPassword) == "" {
-		logger.Error("RDS account metadata is invalid. expected username:password")
-		return "", "", false
+		return "", "", fmt.Errorf("RDS account metadata is invalid: expected username:password")
 	}
-	return accountName, accountPassword, true
+	return accountName, accountPassword, nil
 }

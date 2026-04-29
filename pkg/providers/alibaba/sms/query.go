@@ -19,24 +19,3 @@ func (d *Driver) querySendStatistics(ctx context.Context, client *api.Client, re
 	}
 	return response.Data.TotalSize, nil
 }
-
-/*
-func querySendDetails(client *dysmsapi.Client, phone string) {
-	request := dysmsapi.CreateQuerySendDetailsRequest()
-	request.Scheme = "https"
-	request.SendDate = time.Now().UTC().Format("20060102")
-	request.PageSize = requests.NewInteger(10)
-	request.CurrentPage = requests.NewInteger(1)
-	request.PhoneNumber = phone
-	response, err := client.QuerySendDetails(request)
-	if err != nil {
-		logger.Error(err)
-		return
-	}
-	fmt.Printf("\n%-10s\t%-90s\n", "SendDate", "Content")
-	fmt.Printf("%-10s\t%-90s\n", "--------", "-------")
-	for _, detail := range response.SmsSendDetailDTOs.SmsSendDetailDTO {
-		fmt.Printf("%-10s\t%-90s\n\n", detail.SendDate, detail.Content)
-	}
-}
-*/

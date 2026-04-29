@@ -21,14 +21,16 @@ func (e *APIError) Error() string {
 	if e == nil {
 		return ""
 	}
-	parts := []string{fmt.Sprintf("status=%d", e.StatusCode)}
-	if strings.TrimSpace(e.Status) != "" {
-		parts = append(parts, "code="+strings.TrimSpace(e.Status))
-	}
-	if strings.TrimSpace(e.Reason) != "" {
-		parts = append(parts, "reason="+strings.TrimSpace(e.Reason))
-	}
+	status := strings.TrimSpace(e.Status)
+	reason := strings.TrimSpace(e.Reason)
 	message := strings.TrimSpace(e.Message)
+	parts := []string{fmt.Sprintf("status=%d", e.StatusCode)}
+	if status != "" {
+		parts = append(parts, "code="+status)
+	}
+	if reason != "" {
+		parts = append(parts, "reason="+reason)
+	}
 	if message == "" {
 		return "gcp api error: " + strings.Join(parts, " ")
 	}
@@ -60,10 +62,11 @@ func DecodeError(statusCode int, body []byte) error {
 			Message:    strings.TrimSpace(payload.Error.Message),
 		}
 		if len(payload.Error.Errors) > 0 {
-			apiErr.Reason = strings.TrimSpace(payload.Error.Errors[0].Reason)
-			apiErr.Domain = strings.TrimSpace(payload.Error.Errors[0].Domain)
+			first := payload.Error.Errors[0]
+			apiErr.Reason = strings.TrimSpace(first.Reason)
+			apiErr.Domain = strings.TrimSpace(first.Domain)
 			if apiErr.Message == "" {
-				apiErr.Message = strings.TrimSpace(payload.Error.Errors[0].Message)
+				apiErr.Message = strings.TrimSpace(first.Message)
 			}
 		}
 		if apiErr.Code != 0 || apiErr.Status != "" || apiErr.Message != "" || apiErr.Reason != "" || apiErr.Domain != "" {

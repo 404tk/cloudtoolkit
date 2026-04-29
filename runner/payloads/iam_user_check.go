@@ -8,6 +8,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/argparse"
 	"github.com/404tk/cloudtoolkit/utils/logger"
+	"github.com/404tk/table"
 )
 
 type IAMUserCheck struct{}
@@ -48,11 +49,17 @@ func (p IAMUserCheck) Run(ctx context.Context, config map[string]string) {
 		return
 	}
 
-	// Print table for text mode
 	if iamResult.LoginURL != "" {
-		fmt.Printf("\n%-10s\t%-20s\t%-60s\n", "Username", "Password", "Login URL")
-		fmt.Printf("%-10s\t%-20s\t%-60s\n", "--------", "--------", "---------")
-		fmt.Printf("%-10s\t%-20s\t%-60s\n\n", iamResult.Username, iamResult.Password, iamResult.LoginURL)
+		type loginRow struct {
+			Username string `table:"Username"`
+			Password string `table:"Password"`
+			LoginURL string `table:"Login URL"`
+		}
+		table.Output([]loginRow{{
+			Username: iamResult.Username,
+			Password: iamResult.Password,
+			LoginURL: iamResult.LoginURL,
+		}})
 	} else {
 		logger.Warning(iamResult.Message)
 	}
@@ -99,6 +106,27 @@ func (p IAMUserCheck) Result(ctx context.Context, config map[string]string) (any
 
 func (p IAMUserCheck) Desc() string {
 	return "Provision or remove a test IAM user in an authorized environment to validate identity telemetry, alerting, and persistence detection coverage."
+}
+
+func (p IAMUserCheck) Help() HelpDoc {
+	return HelpDoc{
+		MetadataSyntax: []string{
+			"set metadata <action> <username> <password>",
+			"`action` is typically `add` or `del`.",
+		},
+		MetadataExamples: []string{
+			"set metadata add demo-user 'TempPassw0rd!'",
+			"set metadata del demo-user cleanup-placeholder",
+		},
+		MetadataSuggestions: []Suggestion{
+			{Text: "add <username> <password>", Description: "create a validation IAM user"},
+			{Text: "del <username>", Description: "remove a validation IAM user"},
+		},
+		SafetyNotes: []string{
+			"Use dedicated test identities and remove them after validation.",
+			"Validate only in environments where creating or deleting IAM users is explicitly approved.",
+		},
+	}
 }
 
 func (p IAMUserCheck) Sensitivity(metadata string) Sensitivity {

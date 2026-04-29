@@ -19,18 +19,21 @@ func (e *APIError) Error() string {
 	if e == nil {
 		return ""
 	}
+	code := strings.TrimSpace(e.Code)
+	message := strings.TrimSpace(e.Message)
+	requestID := strings.TrimSpace(e.RequestID)
 	parts := make([]string, 0, 3)
-	if strings.TrimSpace(e.Code) != "" {
-		parts = append(parts, strings.TrimSpace(e.Code))
+	if code != "" {
+		parts = append(parts, code)
 	}
-	if strings.TrimSpace(e.Message) != "" {
-		parts = append(parts, strings.TrimSpace(e.Message))
+	if message != "" {
+		parts = append(parts, message)
 	}
 	if len(parts) == 0 {
 		parts = append(parts, http.StatusText(e.StatusCode))
 	}
-	if strings.TrimSpace(e.RequestID) != "" {
-		parts = append(parts, "request_id="+strings.TrimSpace(e.RequestID))
+	if requestID != "" {
+		parts = append(parts, "request_id="+requestID)
 	}
 	return "azure api error: " + strings.Join(parts, " ")
 }
@@ -73,7 +76,7 @@ func IsNotFound(err error) bool {
 	if apiErr.StatusCode == http.StatusNotFound {
 		return true
 	}
-	code := strings.TrimSpace(strings.ToLower(apiErr.Code))
+	code := strings.ToLower(strings.TrimSpace(apiErr.Code))
 	return code == "notfound" || code == "resourcenotfound"
 }
 
@@ -100,9 +103,10 @@ func withRequestID(err error, requestID string) error {
 	if err == nil {
 		return nil
 	}
+	requestID = strings.TrimSpace(requestID)
 	var apiErr *APIError
-	if errors.As(err, &apiErr) && strings.TrimSpace(apiErr.RequestID) == "" {
-		apiErr.RequestID = strings.TrimSpace(requestID)
+	if requestID != "" && errors.As(err, &apiErr) && strings.TrimSpace(apiErr.RequestID) == "" {
+		apiErr.RequestID = requestID
 	}
 	return err
 }

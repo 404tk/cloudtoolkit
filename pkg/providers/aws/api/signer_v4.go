@@ -45,7 +45,7 @@ func (s SigV4Signer) Sign(credential auth.Credential, input SignInput) (Signatur
 	if err := credential.Validate(); err != nil {
 		return Signature{}, err
 	}
-	service := strings.TrimSpace(strings.ToLower(input.Service))
+	service := strings.ToLower(strings.TrimSpace(input.Service))
 	if service == "" {
 		return Signature{}, fmt.Errorf("aws signer: empty service")
 	}

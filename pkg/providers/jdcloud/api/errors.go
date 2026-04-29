@@ -30,6 +30,7 @@ func (e *APIError) Error() string {
 	if e == nil {
 		return ""
 	}
+	status := strings.TrimSpace(e.Status)
 	parts := make([]string, 0, 4)
 	if e.Code != 0 {
 		parts = append(parts, fmt.Sprintf("code=%d", e.Code))
@@ -41,8 +42,8 @@ func (e *APIError) Error() string {
 		if e.HTTPStatus > 0 {
 			parts = append(parts, fmt.Sprintf("status=%d", e.HTTPStatus))
 		}
-		if strings.TrimSpace(e.Status) != "" {
-			parts = append(parts, "error_status="+strings.TrimSpace(e.Status))
+		if status != "" {
+			parts = append(parts, "error_status="+status)
 		}
 	}
 	if e.RequestID != "" {
@@ -68,7 +69,7 @@ func DecodeError(statusCode int, body []byte) error {
 	if len(body) != 0 {
 		if err := json.Unmarshal(body, &envelope); err == nil && envelope.Error != nil {
 			code := envelope.Error.Code
-			status := envelope.Error.Status
+			status := strings.TrimSpace(envelope.Error.Status)
 			message := strings.TrimSpace(envelope.Error.Message)
 			requestID := strings.TrimSpace(envelope.RequestID)
 			if code != 0 || status != "" || message != "" || requestID != "" {
@@ -116,8 +117,9 @@ func IsInvalidRegion(err error) bool {
 	if !errors.As(err, &apiErr) {
 		return false
 	}
+	message := strings.ToLower(strings.TrimSpace(apiErr.Message))
 	return apiErr.Code == http.StatusBadRequest &&
-		strings.Contains(strings.ToLower(apiErr.Message), "invalid regionid")
+		strings.Contains(message, "invalid regionid")
 }
 
 func annotateError(err error, service, action string) error {

@@ -1,11 +1,11 @@
 package sas
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -37,7 +37,7 @@ func TestDumpEvents(t *testing.T) {
 		},
 	}
 
-	events, err := driver.DumpEvents()
+	events, err := driver.DumpEvents(context.Background())
 	if err != nil {
 		t.Fatalf("DumpEvents() error = %v", err)
 	}
@@ -82,11 +82,12 @@ func TestHandleEvents(t *testing.T) {
 		},
 	}
 
-	output := captureStdout(t, func() {
-		driver.HandleEvents("123, 456")
-	})
-	if !strings.Contains(output, `"TaskId":99`) {
-		t.Fatalf("unexpected output: %s", output)
+	result, err := driver.HandleEvents(context.Background(), "123, 456")
+	if err != nil {
+		t.Fatalf("HandleEvents() error = %v", err)
+	}
+	if result.TaskID != 99 {
+		t.Fatalf("unexpected result: %+v", result)
 	}
 }
 

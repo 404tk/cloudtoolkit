@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	_api "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/api"
 	_auth "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/auth"
@@ -19,13 +18,12 @@ import (
 	_sas "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/sas"
 	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/sls"
 	_sms "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/sms"
+	"github.com/404tk/cloudtoolkit/pkg/providers/internal/credverify"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/vmexecspec"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
-	"github.com/404tk/cloudtoolkit/utils/cache"
 	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/404tk/table"
 )
 
 // Provider is a data provider for alibaba API
@@ -58,6 +56,10 @@ func NewWithConfig(options schema.Options, cfg ClientConfig) (*Provider, error) 
 		return nil, err
 	}
 	region, _ := options.GetMetadata(utils.Region)
+	region = strings.TrimSpace(region)
+	if strings.EqualFold(region, "all") {
+		region = "all"
+	}
 	provider := &Provider{
 		apiCred:          apiCred,
 		region:           region,
@@ -66,27 +68,24 @@ func NewWithConfig(options schema.Options, cfg ClientConfig) (*Provider, error) 
 		slsHTTPClient:    cfg.SLSHTTPClient,
 	}
 
-	payload, _ := options.GetMetadata(utils.Payload)
-	if payload == "cloudlist" {
-		// Get current username
-		response, err := _api.NewClient(apiCred, cfg.APIOptions...).GetCallerIdentity(context.Background(), region)
+	if err := credverify.ForCloudlist(options, provider, cfg.SkipCredentialCache, func(ctx context.Context) (credverify.Result, error) {
+		response, err := _api.NewClient(apiCred, cfg.APIOptions...).GetCallerIdentity(ctx, region)
 		if err != nil {
-			return nil, err
+			return credverify.Result{}, err
 		}
 		accountArn := response.Arn
 		var userName string
 		if len(accountArn) >= 4 && accountArn[len(accountArn)-4:] == "root" {
 			userName = "root"
-		} else {
-			if u := strings.Split(accountArn, "/"); len(u) > 1 {
-				userName = u[1]
-			}
+		} else if u := strings.Split(accountArn, "/"); len(u) > 1 {
+			userName = u[1]
 		}
-		msg := fmt.Sprintf("Current user: %s (%s)", userName, accountArn)
-		if !cfg.SkipCredentialCache {
-			cache.Cfg.CredInsert(userName, provider, options)
-		}
-		logger.Warning(msg)
+		return credverify.Result{
+			Summary:     fmt.Sprintf("Current user: %s (%s)", userName, accountArn),
+			SessionUser: userName,
+		}, nil
+	}); err != nil {
+		return nil, err
 	}
 
 	return provider, nil
@@ -99,56 +98,57 @@ func (p *Provider) Name() string {
 
 // Resources returns the provider for a resource deployment source.
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
-	list := schema.NewResources()
-	list.Provider = p.Name()
-	for _, product := range env.From(ctx).Cloudlist {
-		switch product {
-		case "balance":
-			d := p.newBSSDriver(p.region)
-			d.QueryAccountBalance(ctx)
-		case "host":
+	collector := schema.NewResourceCollector(p.Name()).
+		Register("balance", func(ctx context.Context, _ *schema.Resources) {
+			p.newBSSDriver(p.region).QueryAccountBalance(ctx)
+		}).
+		Register("host", func(ctx context.Context, list *schema.Resources) {
 			ecsprovider := p.newECSDriver(p.region)
 			hosts, err := ecsprovider.GetResource(ctx)
-			schema.AppendAssets(&list, hosts)
+			schema.AppendAssets(list, hosts)
 			list.AddError("host", err)
 			list.AddError("host", ecsprovider.PartialError())
-		case "domain":
+		}).
+		Register("domain", func(ctx context.Context, list *schema.Resources) {
 			dnsprovider := p.newDNSDriver(p.region)
 			domains, err := dnsprovider.GetDomains(ctx)
-			schema.AppendAssets(&list, domains)
+			schema.AppendAssets(list, domains)
 			list.AddError("domain", err)
-		case "account":
+		}).
+		Register("account", func(ctx context.Context, list *schema.Resources) {
 			ramprovider := p.newIAMDriver(p.region)
 			users, err := ramprovider.ListUsers(ctx)
-			schema.AppendAssets(&list, users)
+			schema.AppendAssets(list, users)
 			list.AddError("account", err)
-		case "database":
+		}).
+		Register("database", func(ctx context.Context, list *schema.Resources) {
 			rdsprovider := p.newRDSDriver(p.region)
 			databases, err := rdsprovider.GetDatabases(ctx)
-			schema.AppendAssets(&list, databases)
+			schema.AppendAssets(list, databases)
 			list.AddError("database", err)
 			list.AddError("database", rdsprovider.PartialError())
-		case "bucket":
+		}).
+		Register("bucket", func(ctx context.Context, list *schema.Resources) {
 			ossprovider := p.newOSSDriver(p.region)
 			storages, err := ossprovider.GetBuckets(ctx)
-			schema.AppendAssets(&list, storages)
+			schema.AppendAssets(list, storages)
 			list.AddError("bucket", err)
-		case "sms":
+		}).
+		Register("sms", func(ctx context.Context, list *schema.Resources) {
 			smsprovider := p.newSMSDriver(p.region)
 			sms, err := smsprovider.GetResource(ctx)
 			list.Sms = sms
 			list.AddError("sms", err)
-		case "log":
+		}).
+		Register("log", func(ctx context.Context, list *schema.Resources) {
 			slsprovider := p.newSLSDriver(p.region)
 			logs, err := slsprovider.ListProjects(ctx)
-			schema.AppendAssets(&list, logs)
+			schema.AppendAssets(list, logs)
 			list.AddError("log", err)
 			list.AddError("log", slsprovider.PartialError())
-		default:
-		}
-	}
+		})
 
-	return list, list.Err()
+	return collector.Collect(ctx, env.From(ctx).Cloudlist)
 }
 
 func (p *Provider) UserManagement(action, username, password string) (schema.IAMResult, error) {
@@ -193,80 +193,62 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([
 	}
 }
 
-func (p *Provider) EventDump(action, args string) {
+func (p *Provider) EventDump(ctx context.Context, action, args string) (schema.EventActionResult, error) {
 	d := p.newSASDriver()
 	switch action {
 	case "dump":
-		events, err := d.DumpEvents()
+		events, err := d.DumpEvents(ctx)
 		if err != nil {
-			logger.Error(err)
-			return
+			return schema.EventActionResult{}, err
 		}
-		if len(events) == 0 {
-			return
-		}
-		table.Output(events)
-		e := env.Active()
-		if e.LogEnable {
-			filename := time.Now().Format("20060102150405.log")
-			path := fmt.Sprintf("%s/%s_eventdump_%s", e.LogDir, p.Name(), filename)
-			table.FileOutput(path, events)
-			msg := fmt.Sprintf("Output written to [%s]", path)
-			logger.Info(msg)
-		}
+		return schema.EventActionResult{
+			Action: "dump",
+			Scope:  args,
+			Events: events,
+		}, nil
 	case "whitelist":
-		d.HandleEvents(args) // args means SecurityEventIds
+		return d.HandleEvents(ctx, args)
 	default:
-		logger.Error("Please set metadata like \"dump all\"")
+		return schema.EventActionResult{}, fmt.Errorf("invalid action: %s (expected: dump, whitelist)", action)
 	}
 }
 
-func (p *Provider) ExecuteCloudVMCommand(instanceID, cmd string) {
+func (p *Provider) ExecuteCloudVMCommand(ctx context.Context, instanceID, cmd string) (schema.CommandResult, error) {
 	if osType, command, ok := vmexecspec.Parse(cmd); ok {
-		region := strings.TrimSpace(p.region)
-		if region == "" || strings.EqualFold(region, "all") {
-			logger.Error("headless shell requires explicit region")
-			return
+		if p.region == "" || p.region == "all" {
+			return schema.CommandResult{}, fmt.Errorf("headless shell requires explicit region")
 		}
-		output := p.newECSDriver(region).RunCommand(instanceID, osType, command)
-		if output != "" {
-			fmt.Println(output)
-		}
-		return
+		output := p.newECSDriver(p.region).RunCommand(instanceID, osType, command)
+		return schema.CommandResult{Output: output}, nil
 	}
 
 	host, ok := p.lookupHost(instanceID)
 	if !ok {
-		logger.Error("Unable to resolve instance metadata.")
-		return
+		return schema.CommandResult{}, fmt.Errorf("unable to resolve instance metadata")
 	}
 	d := p.newECSDriver(host.Region)
 	command, err := base64.StdEncoding.DecodeString(cmd)
 	if err != nil {
-		logger.Error(err.Error())
-		return
+		return schema.CommandResult{}, err
 	}
 	output := d.RunCommand(instanceID, host.OSType, string(command))
-	if output != "" {
-		fmt.Println(output)
-	}
+	return schema.CommandResult{Output: output}, nil
 }
 
-func (p *Provider) DBManagement(action, instanceID string) {
+func (p *Provider) DBManagement(ctx context.Context, action, instanceID string) (schema.DatabaseActionResult, error) {
 	r := p.newRDSDriver(p.region)
 	switch action {
 	case "useradd":
 		db, ok := p.lookupDatabase(instanceID)
 		if !ok {
-			logger.Error("Unable to resolve database metadata, retry: shell <instance-id>")
-			return
+			return schema.DatabaseActionResult{}, fmt.Errorf("unable to resolve database metadata, retry: shell <instance-id>")
 		}
 		r.Region = db.Region
-		r.CreateAccount(instanceID, db.DBNames)
+		return r.CreateAccount(ctx, instanceID, db.DBNames)
 	case "userdel":
-		r.DeleteAccount(instanceID)
+		return r.DeleteAccount(ctx, instanceID)
 	default:
-		logger.Error("`instanceId` is missing")
+		return schema.DatabaseActionResult{}, fmt.Errorf("`instanceId` is missing")
 	}
 }
 
@@ -303,7 +285,6 @@ func (p *Provider) lookupDatabase(instanceID string) (schema.Database, bool) {
 func (p *Provider) bucketInfos(ctx context.Context, driver *_oss.Driver, bucketName string) (map[string]string, error) {
 	infos := make(map[string]string)
 	bucketName = strings.TrimSpace(bucketName)
-	region := strings.TrimSpace(p.region)
 	switch {
 	case bucketName == "":
 		return nil, fmt.Errorf("empty bucket name")
@@ -319,8 +300,8 @@ func (p *Provider) bucketInfos(ctx context.Context, driver *_oss.Driver, bucketN
 			return nil, fmt.Errorf("no buckets found")
 		}
 		return infos, nil
-	case region != "" && region != "all":
-		infos[bucketName] = region
+	case p.region != "" && p.region != "all":
+		infos[bucketName] = p.region
 		return infos, nil
 	default:
 		buckets, err := driver.GetBuckets(ctx)

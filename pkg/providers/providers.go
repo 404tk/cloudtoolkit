@@ -113,12 +113,14 @@ func Supported() []Info {
 }
 
 func Supports(name string) bool {
-	_, ok := catalogByName[strings.TrimSpace(name)]
+	name = strings.TrimSpace(name)
+	_, ok := catalogByName[name]
 	return ok
 }
 
 func New(name string, block schema.Options) (schema.Provider, error) {
-	item, ok := catalogByName[strings.TrimSpace(name)]
+	name = strings.TrimSpace(name)
+	item, ok := catalogByName[name]
 	if !ok {
 		return nil, fmt.Errorf("invalid provider name found: %s", name)
 	}

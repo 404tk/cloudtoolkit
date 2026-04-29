@@ -9,6 +9,7 @@ import (
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/argparse"
 	"github.com/404tk/cloudtoolkit/utils/logger"
+	"github.com/404tk/table"
 )
 
 type BucketCheck struct{}
@@ -57,16 +58,22 @@ func (p BucketCheck) Run(ctx context.Context, config map[string]string) {
 				logger.Warning(result.Message)
 			}
 			if len(result.Objects) > 0 {
-				fmt.Printf("\n%-70s\t%-10s\n", "Key", "Size")
-				fmt.Printf("%-70s\t%-10s\n", "---", "----")
+				type objectRow struct {
+					Key  string `table:"Key"`
+					Size string `table:"Size"`
+				}
+				rows := make([]objectRow, 0, len(result.Objects))
 				for _, obj := range result.Objects {
 					label := obj.Key
 					if result.BucketName == "" && obj.BucketName != "" {
 						label = obj.BucketName + "/" + obj.Key
 					}
-					fmt.Printf("%-70s\t%-10s\n", label, utils.ParseBytes(obj.Size))
+					rows = append(rows, objectRow{
+						Key:  label,
+						Size: utils.ParseBytes(obj.Size),
+					})
 				}
-				fmt.Println()
+				table.Output(rows)
 			}
 		case "total":
 			if result.BucketName != "" {
@@ -134,6 +141,27 @@ func (p BucketCheck) Result(ctx context.Context, config map[string]string) (any,
 
 func (p BucketCheck) Desc() string {
 	return "Review bucket contents in an authorized test environment to validate storage visibility and investigation workflows."
+}
+
+func (p BucketCheck) Help() HelpDoc {
+	return HelpDoc{
+		MetadataSyntax: []string{
+			"set metadata <action> <bucket-name>",
+			"`action` is typically `list` or `total`.",
+		},
+		MetadataExamples: []string{
+			"set metadata list ctk-validation-bucket",
+			"set metadata total ctk-validation-bucket",
+		},
+		MetadataSuggestions: []Suggestion{
+			{Text: "list <bucket-name>", Description: "review object listings inside one authorized bucket"},
+			{Text: "total <bucket-name>", Description: "count objects in one bucket"},
+		},
+		SafetyNotes: []string{
+			"Use buckets created for validation or otherwise explicitly approved for review.",
+			"Reviewing bucket contents can expose sensitive data; align the test scope with the data owner first.",
+		},
+	}
 }
 
 func parseBucketAction(metadata string) (bucketAction, error) {

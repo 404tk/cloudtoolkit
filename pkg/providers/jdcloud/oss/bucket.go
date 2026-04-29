@@ -123,8 +123,8 @@ func (d *Driver) headBucket(ctx context.Context, region, bucket string) error {
 }
 
 func (d *Driver) probeRegions() []string {
-	explicit := strings.TrimSpace(d.Region)
-	if explicit == "" || strings.EqualFold(explicit, "all") {
+	explicit := d.normalizedRegion()
+	if explicit == "" || explicit == "all" {
 		return append([]string(nil), knownJDCloudOSSRegions...)
 	}
 
@@ -136,4 +136,12 @@ func (d *Driver) probeRegions() []string {
 		regions = append(regions, region)
 	}
 	return regions
+}
+
+func (d *Driver) normalizedRegion() string {
+	region := strings.TrimSpace(d.Region)
+	if strings.EqualFold(region, "all") {
+		return "all"
+	}
+	return region
 }

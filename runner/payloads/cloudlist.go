@@ -48,7 +48,7 @@ func (p CloudList) Run(ctx context.Context, config map[string]string) {
 	default:
 		e := env.From(ctx)
 		printGroup := func(tag string, items interface{}) {
-			fmt.Println(tag, "results:")
+			logger.Warning(tag + " results:")
 			table.Output(items)
 			if e.LogEnable {
 				utils.WriteLog(exec.path, tag+" results:")
@@ -162,6 +162,22 @@ func buildCloudListResult(exec cloudListExecution) CloudListResult {
 
 func (p CloudList) Desc() string {
 	return "Enumerate cloud assets in authorized environments to verify CSPM and CNAPP inventory coverage, telemetry quality, and investigation readiness."
+}
+
+func (p CloudList) Help() HelpDoc {
+	return HelpDoc{
+		MetadataSyntax: []string{
+			"This payload does not require metadata.",
+		},
+		MetadataExamples: []string{
+			"set payload cloudlist",
+			"run",
+		},
+		SafetyNotes: []string{
+			"Cloud asset inventory is read-oriented, but still use it only in owned, lab, or explicitly authorized environments.",
+			"Provider credentials still need enough access to enumerate the resources you want to validate.",
+		},
+	}
 }
 
 func init() {

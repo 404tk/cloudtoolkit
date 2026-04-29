@@ -74,7 +74,7 @@ func (t *transport) handleOpenAPI(req *http.Request, body []byte) (*http.Respons
 	}
 
 	service := requestService(req)
-	action := strings.TrimSpace(req.Header.Get("X-TC-Action"))
+	action := tcAction(req)
 	switch service {
 	case "sts":
 		return t.handleSTS(req, action)
@@ -262,7 +262,7 @@ func (t *transport) handleCVM(req *http.Request, action string, body []byte) (*h
 	case "DescribeInstances":
 		var payload api.DescribeCVMInstancesRequest
 		_ = json.Unmarshal(body, &payload)
-		region := strings.TrimSpace(req.Header.Get("X-TC-Region"))
+		region := tcRegion(req)
 		items := cvmForRegion(region)
 		start, end := offsetWindow(len(items), derefInt64(payload.Offset), derefInt64(payload.Limit, 100))
 		resp := api.DescribeCVMInstancesResponse{}
@@ -304,7 +304,7 @@ func (t *transport) handleLighthouse(req *http.Request, action string, body []by
 	case "DescribeInstances":
 		var payload api.DescribeLighthouseInstancesRequest
 		_ = json.Unmarshal(body, &payload)
-		region := strings.TrimSpace(req.Header.Get("X-TC-Region"))
+		region := tcRegion(req)
 		items := lighthouseForRegion(region)
 		start, end := offsetWindow(len(items), derefInt64(payload.Offset), derefInt64(payload.Limit, 100))
 		resp := api.DescribeLighthouseInstancesResponse{}
@@ -399,7 +399,7 @@ func (t *transport) handleCDB(req *http.Request, action string) (*http.Response,
 		}
 		return jsonResponse(req, http.StatusOK, resp), nil
 	case "DescribeDBInstances":
-		region := strings.TrimSpace(req.Header.Get("X-TC-Region"))
+		region := tcRegion(req)
 		items := mysqlForRegion(region)
 		resp := api.DescribeCDBInstancesResponse{}
 		resp.Response.Items = make([]api.CDBInstanceInfo, 0, len(items))
@@ -442,7 +442,7 @@ func (t *transport) handleMariaDB(req *http.Request, action string) (*http.Respo
 		}
 		return jsonResponse(req, http.StatusOK, resp), nil
 	case "DescribeDBInstances":
-		region := strings.TrimSpace(req.Header.Get("X-TC-Region"))
+		region := tcRegion(req)
 		items := mariadbForRegion(region)
 		resp := api.DescribeMariaDBInstancesResponse{}
 		resp.Response.Instances = make([]api.MariaDBInstanceInfo, 0, len(items))
@@ -489,7 +489,7 @@ func (t *transport) handlePostgres(req *http.Request, action string) (*http.Resp
 		}
 		return jsonResponse(req, http.StatusOK, resp), nil
 	case "DescribeDBInstances":
-		region := strings.TrimSpace(req.Header.Get("X-TC-Region"))
+		region := tcRegion(req)
 		items := postgresForRegion(region)
 		resp := api.DescribePostgresInstancesResponse{}
 		resp.Response.DBInstanceSet = make([]api.PostgresInstanceInfo, 0, len(items))
@@ -547,7 +547,7 @@ func (t *transport) handleSQLServer(req *http.Request, action string) (*http.Res
 		}
 		return jsonResponse(req, http.StatusOK, resp), nil
 	case "DescribeDBInstances":
-		region := strings.TrimSpace(req.Header.Get("X-TC-Region"))
+		region := tcRegion(req)
 		items := sqlServerForRegion(region)
 		resp := api.DescribeSQLServerInstancesResponse{}
 		resp.Response.DBInstances = make([]api.SQLServerInstanceInfo, 0, len(items))
@@ -708,7 +708,8 @@ func (t *transport) handleCOS(req *http.Request) (*http.Response, error) {
 }
 
 func verifyOpenAPIAuth(req *http.Request, body []byte) authFailureKind {
-	secretID, service, ok := parseTC3Credential(strings.TrimSpace(req.Header.Get("Authorization")))
+	authHeader := strings.TrimSpace(req.Header.Get("Authorization"))
+	secretID, service, ok := parseTC3Credential(authHeader)
 	if !ok {
 		return authInvalidSignature
 	}
@@ -736,7 +737,7 @@ func verifyOpenAPIAuth(req *http.Request, body []byte) authFailureKind {
 	if err != nil {
 		return authInvalidSignature
 	}
-	if subtle.ConstantTimeCompare([]byte(signature.Authorization), []byte(strings.TrimSpace(req.Header.Get("Authorization")))) != 1 {
+	if subtle.ConstantTimeCompare([]byte(signature.Authorization), []byte(authHeader)) != 1 {
 		return authInvalidSignature
 	}
 	return authOK
@@ -778,8 +779,9 @@ func verifyCOSAuth(req *http.Request) authFailureKind {
 }
 
 func parseCOSAuthorization(authHeader string) (map[string]string, error) {
+	authHeader = strings.TrimSpace(authHeader)
 	items := make(map[string]string)
-	for _, part := range strings.Split(strings.TrimSpace(authHeader), "&") {
+	for _, part := range strings.Split(authHeader, "&") {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue
@@ -808,7 +810,8 @@ func requestService(req *http.Request) string {
 			return prefix
 		}
 	}
-	_, service, ok := parseTC3Credential(strings.TrimSpace(req.Header.Get("Authorization")))
+	authHeader := strings.TrimSpace(req.Header.Get("Authorization"))
+	_, service, ok := parseTC3Credential(authHeader)
 	if !ok {
 		return ""
 	}
@@ -915,7 +918,7 @@ func requestIDForAction(req *http.Request) string {
 	if req == nil {
 		return "req-replay"
 	}
-	action := strings.TrimSpace(req.Header.Get("X-TC-Action"))
+	action := tcAction(req)
 	if action == "" {
 		return "req-replay"
 	}
@@ -923,8 +926,9 @@ func requestIDForAction(req *http.Request) string {
 }
 
 func sanitizeAction(action string) string {
+	action = strings.ToLower(strings.TrimSpace(action))
 	var b strings.Builder
-	for _, r := range strings.ToLower(strings.TrimSpace(action)) {
+	for _, r := range action {
 		switch {
 		case r >= 'a' && r <= 'z':
 			b.WriteRune(r)
@@ -972,6 +976,7 @@ func (t *transport) snapshotUsers() map[string]camUserFixture {
 
 func (t *transport) ensureUser(name, password string) camUserFixture {
 	name = strings.TrimSpace(name)
+	password = strings.TrimSpace(password)
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if user, ok := t.createdUsers[name]; ok {
@@ -981,7 +986,7 @@ func (t *transport) ensureUser(name, password string) camUserFixture {
 	user := camUserFixture{
 		UIN:          uint64(200000000 + t.sequence),
 		Name:         name,
-		ConsoleLogin: strings.TrimSpace(password) != "",
+		ConsoleLogin: password != "",
 		CreateTime:   "2026-04-23 23:00:00",
 		Policies: []camPolicyFixture{
 			demoPolicies[0],
@@ -1030,6 +1035,7 @@ func (t *transport) findUserByUIN(uin uint64) (camUserFixture, bool) {
 }
 
 func (t *transport) newInvocation(instanceID, output string) invocationResult {
+	instanceID = strings.TrimSpace(instanceID)
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.sequence++
@@ -1040,7 +1046,7 @@ func (t *transport) newInvocation(instanceID, output string) invocationResult {
 		CommandID:    commandID,
 		InvocationID: invocationID,
 		TaskID:       taskID,
-		InstanceID:   strings.TrimSpace(instanceID),
+		InstanceID:   instanceID,
 		Output:       output,
 	}
 	t.invocations[invocationID] = result
@@ -1049,16 +1055,18 @@ func (t *transport) newInvocation(instanceID, output string) invocationResult {
 }
 
 func (t *transport) findInvocation(invocationID string) (invocationResult, bool) {
+	invocationID = strings.TrimSpace(invocationID)
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	result, ok := t.invocations[strings.TrimSpace(invocationID)]
+	result, ok := t.invocations[invocationID]
 	return result, ok
 }
 
 func (t *transport) findTask(taskID string) (invocationResult, bool) {
+	taskID = strings.TrimSpace(taskID)
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	result, ok := t.tasks[strings.TrimSpace(taskID)]
+	result, ok := t.tasks[taskID]
 	return result, ok
 }
 
@@ -1127,11 +1135,25 @@ func parseInt(value string, fallback int) int {
 
 func firstNonEmpty(values ...string) string {
 	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return strings.TrimSpace(value)
+		if v := strings.TrimSpace(value); v != "" {
+			return v
 		}
 	}
 	return ""
+}
+
+func tcAction(req *http.Request) string {
+	if req == nil {
+		return ""
+	}
+	return strings.TrimSpace(req.Header.Get("X-TC-Action"))
+}
+
+func tcRegion(req *http.Request) string {
+	if req == nil {
+		return ""
+	}
+	return strings.TrimSpace(req.Header.Get("X-TC-Region"))
 }
 
 func derefString(v *string) string {

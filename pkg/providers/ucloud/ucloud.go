@@ -50,7 +50,8 @@ func New(options schema.Options) (*Provider, error) {
 		return nil, err
 	}
 
-	projectID, projectName, err := resolveProject(projects, strings.TrimSpace(options[utils.ProjectID]))
+	projectOption := strings.TrimSpace(options[utils.ProjectID])
+	projectID, projectName, err := resolveProject(projects, projectOption)
 	if err != nil {
 		return nil, err
 	}
@@ -61,7 +62,7 @@ func New(options schema.Options) (*Provider, error) {
 		return nil, err
 	}
 
-	if options != nil && strings.TrimSpace(options[utils.ProjectID]) == "" && projectID != "" {
+	if options != nil && projectOption == "" && projectID != "" {
 		options[utils.ProjectID] = projectID
 	}
 	provider := &Provider{
@@ -71,7 +72,8 @@ func New(options schema.Options) (*Provider, error) {
 		regions:    regions,
 	}
 
-	if strings.TrimSpace(options[utils.Payload]) == "cloudlist" {
+	payload := strings.TrimSpace(options[utils.Payload])
+	if payload == "cloudlist" {
 		display := displayCurrentUser(user)
 		logger.Warning("Current user:", display)
 		if pj := displayCurrentProject(projectID, projectName); pj != "" {
@@ -90,63 +92,61 @@ func (p *Provider) Name() string {
 
 // Resources returns cloud assets for the asset inventory payload.
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
-	list := schema.NewResources()
-	list.Provider = p.Name()
-
-	for _, product := range env.From(ctx).Cloudlist {
-		switch product {
-		case "balance":
+	collector := schema.NewResourceCollector(p.Name()).
+		Register("balance", func(ctx context.Context, _ *schema.Resources) {
 			(&billing.Driver{
 				Credential: p.credential,
 				ProjectID:  p.projectID,
 			}).QueryAccountBalance(ctx)
-		case "host":
+		}).
+		Register("host", func(ctx context.Context, list *schema.Resources) {
 			d := &uhost.Driver{
 				Credential: p.credential,
 				ProjectID:  p.projectID,
 				Regions:    p.regions,
 			}
 			hosts, err := d.GetResource(ctx)
-			schema.AppendAssets(&list, hosts)
+			schema.AppendAssets(list, hosts)
 			list.AddError("host", err)
-		case "domain":
+		}).
+		Register("domain", func(ctx context.Context, list *schema.Resources) {
 			d := &udns.Driver{
 				Credential: p.credential,
 				ProjectID:  p.projectID,
 				Regions:    p.regions,
 			}
 			domains, err := d.GetDomains(ctx)
-			schema.AppendAssets(&list, domains)
+			schema.AppendAssets(list, domains)
 			list.AddError("domain", err)
-		case "database":
+		}).
+		Register("database", func(ctx context.Context, list *schema.Resources) {
 			d := &udb.Driver{
 				Credential: p.credential,
 				ProjectID:  p.projectID,
 				Regions:    p.regions,
 			}
 			databases, err := d.GetDatabases(ctx)
-			schema.AppendAssets(&list, databases)
+			schema.AppendAssets(list, databases)
 			list.AddError("database", err)
-		case "bucket":
+		}).
+		Register("bucket", func(ctx context.Context, list *schema.Resources) {
 			d := &ufile.Driver{
 				Credential: p.credential,
 				ProjectID:  p.projectID,
 				Region:     p.region,
 			}
 			buckets, err := d.GetBuckets(ctx)
-			schema.AppendAssets(&list, buckets)
+			schema.AppendAssets(list, buckets)
 			list.AddError("bucket", err)
-		case "account":
+		}).
+		Register("account", func(ctx context.Context, list *schema.Resources) {
 			d := &_iam.Driver{Credential: p.credential}
 			users, err := d.ListUsers(ctx)
-			schema.AppendAssets(&list, users)
+			schema.AppendAssets(list, users)
 			list.AddError("account", err)
-		case "sms", "log":
-		default:
-		}
-	}
+		})
 
-	return list, list.Err()
+	return collector.Collect(ctx, env.From(ctx).Cloudlist)
 }
 
 func (p *Provider) UserManagement(action, username, password string) (schema.IAMResult, error) {
@@ -200,8 +200,9 @@ func resolveProject(projects []api.ProjectListInfo, configured string) (string, 
 	configured = strings.TrimSpace(configured)
 	if configured != "" {
 		for _, project := range projects {
-			if strings.TrimSpace(project.ProjectID) == configured {
-				return strings.TrimSpace(project.ProjectID), strings.TrimSpace(project.ProjectName), nil
+			projectID, projectName := trimProject(project)
+			if projectID == configured {
+				return projectID, projectName, nil
 			}
 		}
 		return "", "", fmt.Errorf("ucloud projectId not found or inaccessible: %s", configured)
@@ -209,7 +210,8 @@ func resolveProject(projects []api.ProjectListInfo, configured string) (string, 
 
 	for _, project := range projects {
 		if project.IsDefault {
-			return strings.TrimSpace(project.ProjectID), strings.TrimSpace(project.ProjectName), nil
+			projectID, projectName := trimProject(project)
+			return projectID, projectName, nil
 		}
 	}
 
@@ -217,15 +219,17 @@ func resolveProject(projects []api.ProjectListInfo, configured string) (string, 
 	case 0:
 		return "", "", errors.New("no accessible UCloud project found")
 	case 1:
-		return strings.TrimSpace(projects[0].ProjectID), strings.TrimSpace(projects[0].ProjectName), nil
+		projectID, projectName := trimProject(projects[0])
+		return projectID, projectName, nil
 	default:
 		return "", "", errors.New("multiple accessible UCloud projects found; set projectId explicitly")
 	}
 }
 
 func resolveRegions(client *api.Client, requested string) ([]string, error) {
-	if !strings.EqualFold(strings.TrimSpace(requested), "all") {
-		return []string{strings.TrimSpace(requested)}, nil
+	requested = strings.TrimSpace(requested)
+	if !strings.EqualFold(requested, "all") {
+		return []string{requested}, nil
 	}
 
 	var resp api.GetRegionResponse
@@ -278,4 +282,8 @@ func displayCurrentProject(projectID, projectName string) string {
 	default:
 		return projectID
 	}
+}
+
+func trimProject(project api.ProjectListInfo) (string, string) {
+	return strings.TrimSpace(project.ProjectID), strings.TrimSpace(project.ProjectName)
 }

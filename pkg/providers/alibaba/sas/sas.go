@@ -2,14 +2,11 @@ package sas
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/api"
 	aliauth "github.com/404tk/cloudtoolkit/pkg/providers/alibaba/auth"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
-	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
 var eventStatus = map[int]string{
@@ -35,7 +32,7 @@ func (d *Driver) SetClientOptions(opts ...api.Option) {
 	d.clientOptions = append([]api.Option(nil), opts...)
 }
 
-func (d *Driver) DumpEvents() ([]schema.Event, error) {
+func (d *Driver) DumpEvents(ctx context.Context) ([]schema.Event, error) {
 	var events []schema.Event
 	client := d.newClient()
 	/*
@@ -55,7 +52,7 @@ func (d *Driver) DumpEvents() ([]schema.Event, error) {
 		}
 	*/
 
-	response, err := client.DescribeSASSuspEvents(context.Background(), api.DefaultRegion)
+	response, err := client.DescribeSASSuspEvents(ctx, api.DefaultRegion)
 	if err != nil {
 		return events, err
 	}
@@ -84,7 +81,7 @@ func (d *Driver) DumpEvents() ([]schema.Event, error) {
 
 }
 
-func (d *Driver) HandleEvents(eid string) {
+func (d *Driver) HandleEvents(ctx context.Context, eid string) (schema.EventActionResult, error) {
 	client := d.newClient()
 	ids := strings.Split(eid, ",")
 	cleaned := make([]string, 0, len(ids))
@@ -93,15 +90,14 @@ func (d *Driver) HandleEvents(eid string) {
 			cleaned = append(cleaned, v)
 		}
 	}
-	response, err := client.HandleSASSecurityEvents(context.Background(), api.DefaultRegion, "advance_mark_mis_info", cleaned)
+	response, err := client.HandleSASSecurityEvents(ctx, api.DefaultRegion, "advance_mark_mis_info", cleaned)
 	if err != nil {
-		logger.Error(err)
-		return
+		return schema.EventActionResult{}, err
 	}
-	content, err := json.Marshal(response)
-	if err != nil {
-		logger.Error(err)
-		return
-	}
-	fmt.Println(string(content))
+	return schema.EventActionResult{
+		Action:  "whitelist",
+		Scope:   eid,
+		TaskID:  response.HandleSecurityEventsResponse.TaskID,
+		Message: "event handling task submitted",
+	}, nil
 }

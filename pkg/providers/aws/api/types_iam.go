@@ -134,17 +134,22 @@ func (c *Client) ListUsers(ctx context.Context, region, marker string) (ListUser
 	if err != nil {
 		return ListUsersOutput{}, err
 	}
+	responseMarker := strings.TrimSpace(wire.ListUsersResult.Marker)
+	requestID := strings.TrimSpace(wire.Metadata.RequestID)
 	out := ListUsersOutput{
 		Users:       make([]IAMUser, 0, len(wire.ListUsersResult.Users)),
-		Marker:      strings.TrimSpace(wire.ListUsersResult.Marker),
+		Marker:      responseMarker,
 		IsTruncated: wire.ListUsersResult.IsTruncated,
-		RequestID:   strings.TrimSpace(wire.Metadata.RequestID),
+		RequestID:   requestID,
 	}
 	for _, user := range wire.ListUsersResult.Users {
+		userName := strings.TrimSpace(user.UserName)
+		userID := strings.TrimSpace(user.UserID)
+		arn := strings.TrimSpace(user.Arn)
 		out.Users = append(out.Users, IAMUser{
-			UserName:         strings.TrimSpace(user.UserName),
-			UserID:           strings.TrimSpace(user.UserID),
-			Arn:              strings.TrimSpace(user.Arn),
+			UserName:         userName,
+			UserID:           userID,
+			Arn:              arn,
 			CreateDate:       parseAWSTime(user.CreateDate),
 			PasswordLastUsed: parseAWSTime(user.PasswordLastUsed),
 		})
@@ -154,7 +159,7 @@ func (c *Client) ListUsers(ctx context.Context, region, marker string) (ListUser
 
 func (c *Client) GetLoginProfile(ctx context.Context, region, userName string) (GetLoginProfileOutput, error) {
 	query := url.Values{}
-	query.Set("UserName", strings.TrimSpace(userName))
+	setTrimmedQueryValue(query, "UserName", userName)
 	var wire getLoginProfileResponse
 	err := c.DoXML(ctx, Request{
 		Service:    "iam",
@@ -169,16 +174,17 @@ func (c *Client) GetLoginProfile(ctx context.Context, region, userName string) (
 	if err != nil {
 		return GetLoginProfileOutput{}, err
 	}
+	requestID := strings.TrimSpace(wire.Metadata.RequestID)
 	return GetLoginProfileOutput{
 		CreateDate:            parseAWSTime(wire.GetLoginProfileResult.LoginProfile.CreateDate),
 		PasswordResetRequired: wire.GetLoginProfileResult.LoginProfile.PasswordResetRequired,
-		RequestID:             strings.TrimSpace(wire.Metadata.RequestID),
+		RequestID:             requestID,
 	}, nil
 }
 
 func (c *Client) ListAttachedUserPolicies(ctx context.Context, region, userName, marker string) (ListAttachedUserPoliciesOutput, error) {
 	query := url.Values{}
-	query.Set("UserName", strings.TrimSpace(userName))
+	setTrimmedQueryValue(query, "UserName", userName)
 	if marker = strings.TrimSpace(marker); marker != "" {
 		query.Set("Marker", marker)
 	}
@@ -196,16 +202,20 @@ func (c *Client) ListAttachedUserPolicies(ctx context.Context, region, userName,
 	if err != nil {
 		return ListAttachedUserPoliciesOutput{}, err
 	}
+	responseMarker := strings.TrimSpace(wire.ListAttachedUserPoliciesResult.Marker)
+	requestID := strings.TrimSpace(wire.Metadata.RequestID)
 	out := ListAttachedUserPoliciesOutput{
 		Policies:    make([]AttachedUserPolicy, 0, len(wire.ListAttachedUserPoliciesResult.Policies)),
-		Marker:      strings.TrimSpace(wire.ListAttachedUserPoliciesResult.Marker),
+		Marker:      responseMarker,
 		IsTruncated: wire.ListAttachedUserPoliciesResult.IsTruncated,
-		RequestID:   strings.TrimSpace(wire.Metadata.RequestID),
+		RequestID:   requestID,
 	}
 	for _, policy := range wire.ListAttachedUserPoliciesResult.Policies {
+		policyName := strings.TrimSpace(policy.PolicyName)
+		policyArn := strings.TrimSpace(policy.PolicyArn)
 		out.Policies = append(out.Policies, AttachedUserPolicy{
-			PolicyName: strings.TrimSpace(policy.PolicyName),
-			PolicyArn:  strings.TrimSpace(policy.PolicyArn),
+			PolicyName: policyName,
+			PolicyArn:  policyArn,
 		})
 	}
 	return out, nil
@@ -213,7 +223,7 @@ func (c *Client) ListAttachedUserPolicies(ctx context.Context, region, userName,
 
 func (c *Client) CreateUser(ctx context.Context, region, userName string) (CreateUserOutput, error) {
 	query := url.Values{}
-	query.Set("UserName", strings.TrimSpace(userName))
+	setTrimmedQueryValue(query, "UserName", userName)
 	var wire createUserResponse
 	err := c.DoXML(ctx, Request{
 		Service: "iam",
@@ -227,15 +237,17 @@ func (c *Client) CreateUser(ctx context.Context, region, userName string) (Creat
 	if err != nil {
 		return CreateUserOutput{}, err
 	}
+	arn := strings.TrimSpace(wire.CreateUserResult.User.Arn)
+	requestID := strings.TrimSpace(wire.Metadata.RequestID)
 	return CreateUserOutput{
-		Arn:       strings.TrimSpace(wire.CreateUserResult.User.Arn),
-		RequestID: strings.TrimSpace(wire.Metadata.RequestID),
+		Arn:       arn,
+		RequestID: requestID,
 	}, nil
 }
 
 func (c *Client) CreateLoginProfile(ctx context.Context, region, userName, password string) error {
 	query := url.Values{}
-	query.Set("UserName", strings.TrimSpace(userName))
+	setTrimmedQueryValue(query, "UserName", userName)
 	query.Set("Password", password)
 	return c.DoXML(ctx, Request{
 		Service: "iam",
@@ -250,8 +262,8 @@ func (c *Client) CreateLoginProfile(ctx context.Context, region, userName, passw
 
 func (c *Client) AttachUserPolicy(ctx context.Context, region, userName, policyArn string) error {
 	query := url.Values{}
-	query.Set("UserName", strings.TrimSpace(userName))
-	query.Set("PolicyArn", strings.TrimSpace(policyArn))
+	setTrimmedQueryValue(query, "UserName", userName)
+	setTrimmedQueryValue(query, "PolicyArn", policyArn)
 	return c.DoXML(ctx, Request{
 		Service: "iam",
 		Region:  region,
@@ -265,8 +277,8 @@ func (c *Client) AttachUserPolicy(ctx context.Context, region, userName, policyA
 
 func (c *Client) DetachUserPolicy(ctx context.Context, region, userName, policyArn string) error {
 	query := url.Values{}
-	query.Set("UserName", strings.TrimSpace(userName))
-	query.Set("PolicyArn", strings.TrimSpace(policyArn))
+	setTrimmedQueryValue(query, "UserName", userName)
+	setTrimmedQueryValue(query, "PolicyArn", policyArn)
 	return c.DoXML(ctx, Request{
 		Service: "iam",
 		Region:  region,
@@ -280,7 +292,7 @@ func (c *Client) DetachUserPolicy(ctx context.Context, region, userName, policyA
 
 func (c *Client) DeleteLoginProfile(ctx context.Context, region, userName string) error {
 	query := url.Values{}
-	query.Set("UserName", strings.TrimSpace(userName))
+	setTrimmedQueryValue(query, "UserName", userName)
 	return c.DoXML(ctx, Request{
 		Service: "iam",
 		Region:  region,
@@ -294,7 +306,7 @@ func (c *Client) DeleteLoginProfile(ctx context.Context, region, userName string
 
 func (c *Client) DeleteUser(ctx context.Context, region, userName string) error {
 	query := url.Values{}
-	query.Set("UserName", strings.TrimSpace(userName))
+	setTrimmedQueryValue(query, "UserName", userName)
 	return c.DoXML(ctx, Request{
 		Service: "iam",
 		Region:  region,
@@ -324,4 +336,8 @@ func parseAWSTime(value string) *time.Time {
 		return nil
 	}
 	return &parsed
+}
+
+func setTrimmedQueryValue(query url.Values, key, value string) {
+	query.Set(key, strings.TrimSpace(value))
 }

@@ -61,24 +61,32 @@ func DecodeError(statusCode int, body []byte) error {
 	}
 
 	var resp errorResponse
-	if err := xml.NewDecoder(bytes.NewReader(body)).Decode(&resp); err == nil &&
-		(strings.TrimSpace(resp.Error.Code) != "" || strings.TrimSpace(resp.Error.Message) != "" || strings.TrimSpace(resp.RequestID) != "") {
-		return &APIError{
-			StatusCode: statusCode,
-			Code:       strings.TrimSpace(resp.Error.Code),
-			Message:    strings.TrimSpace(resp.Error.Message),
-			RequestID:  strings.TrimSpace(resp.RequestID),
+	if err := xml.NewDecoder(bytes.NewReader(body)).Decode(&resp); err == nil {
+		code := strings.TrimSpace(resp.Error.Code)
+		message := strings.TrimSpace(resp.Error.Message)
+		requestID := strings.TrimSpace(resp.RequestID)
+		if code != "" || message != "" || requestID != "" {
+			return &APIError{
+				StatusCode: statusCode,
+				Code:       code,
+				Message:    message,
+				RequestID:  requestID,
+			}
 		}
 	}
 
 	var s3Resp s3ErrorResponse
-	if err := xml.NewDecoder(bytes.NewReader(body)).Decode(&s3Resp); err == nil &&
-		(strings.TrimSpace(s3Resp.Code) != "" || strings.TrimSpace(s3Resp.Message) != "" || strings.TrimSpace(s3Resp.RequestID) != "") {
-		return &APIError{
-			StatusCode: statusCode,
-			Code:       strings.TrimSpace(s3Resp.Code),
-			Message:    strings.TrimSpace(s3Resp.Message),
-			RequestID:  strings.TrimSpace(s3Resp.RequestID),
+	if err := xml.NewDecoder(bytes.NewReader(body)).Decode(&s3Resp); err == nil {
+		code := strings.TrimSpace(s3Resp.Code)
+		message := strings.TrimSpace(s3Resp.Message)
+		requestID := strings.TrimSpace(s3Resp.RequestID)
+		if code != "" || message != "" || requestID != "" {
+			return &APIError{
+				StatusCode: statusCode,
+				Code:       code,
+				Message:    message,
+				RequestID:  requestID,
+			}
 		}
 	}
 

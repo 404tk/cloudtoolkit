@@ -76,7 +76,7 @@ func New(options schema.Options) (*Provider, error) {
 	}
 
 	if len(subscriptionIDs) == 0 || subscriptionIDs[0] == "" {
-		return nil, errors.New("No Subscription found.")
+		return nil, errors.New("no subscription found")
 	}
 
 	provider.subscriptionIDs = subscriptionIDs
@@ -94,30 +94,25 @@ func (p *Provider) CredentialKey(opts map[string]string) string {
 
 // Resources returns the provider for a resource deployment source.
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
-	list := schema.NewResources()
-	list.Provider = p.Name()
-
-	for _, product := range env.From(ctx).Cloudlist {
-		switch product {
-		case "host":
+	collector := schema.NewResourceCollector(p.Name()).
+		Register("host", func(ctx context.Context, list *schema.Resources) {
 			vmProvider := &compute.Driver{
 				Client:          p.apiClient,
 				SubscriptionIDs: p.subscriptionIDs,
 			}
 			hosts, err := vmProvider.GetResource(ctx)
-			schema.AppendAssets(&list, hosts)
+			schema.AppendAssets(list, hosts)
 			list.AddError("host", err)
-		case "bucket":
+		}).
+		Register("bucket", func(ctx context.Context, list *schema.Resources) {
 			storageProvider := &storage.Driver{
 				Client:          p.apiClient,
 				SubscriptionIDs: p.subscriptionIDs,
 			}
 			storages, err := storageProvider.GetStorages(ctx)
-			schema.AppendAssets(&list, storages)
+			schema.AppendAssets(list, storages)
 			list.AddError("bucket", err)
-		default:
-		}
-	}
+		})
 
-	return list, list.Err()
+	return collector.Collect(ctx, env.From(ctx).Cloudlist)
 }

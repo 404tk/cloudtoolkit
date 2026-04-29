@@ -6,6 +6,7 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/api"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
+	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
 func (d *Driver) AddUser() (schema.IAMResult, error) {
@@ -15,7 +16,11 @@ func (d *Driver) AddUser() (schema.IAMResult, error) {
 	if err != nil {
 		return schema.IAMResult{}, fmt.Errorf("create user failed: %w", err)
 	}
-	_ = attachPolicyToUser(ctx, client, d.UserName)
+	message := "User created successfully with AdministratorAccess policy"
+	if err := attachPolicyToUser(ctx, client, d.UserName); err != nil {
+		logger.Warning("attach AdministratorAccess policy to user failed:", err)
+		message = "User created, but failed to attach AdministratorAccess policy: " + err.Error()
+	}
 	OwnerID := getOwnerUin(ctx, client)
 	loginURL := "https://cloud.tencent.com/login/subAccount/" + OwnerID
 
@@ -24,7 +29,7 @@ func (d *Driver) AddUser() (schema.IAMResult, error) {
 		Password:  d.Password,
 		LoginURL:  loginURL,
 		AccountID: OwnerID,
-		Message:   "User created successfully with AdministratorAccess policy",
+		Message:   message,
 	}, nil
 }
 

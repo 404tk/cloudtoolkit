@@ -452,7 +452,17 @@ func renderPayloadHelp(ctx HelpContext, name string, metadataOnly bool) {
 		return
 	}
 
-	doc, _ := catalog.PayloadHelpFor(resolved)
+	doc, ok := payloads.HelpFor(resolved)
+	if !ok {
+		doc = payloads.HelpDoc{
+			MetadataSyntax: []string{
+				"No payload-specific metadata syntax is documented.",
+			},
+			MetadataExamples: []string{
+				"No payload-specific examples are documented.",
+			},
+		}
+	}
 	var b strings.Builder
 	if metadataOnly {
 		writeHeader(&b, "Metadata Help: "+resolved)
@@ -465,9 +475,10 @@ func renderPayloadHelp(ctx HelpContext, name string, metadataOnly bool) {
 	}
 	writeLines(&b, "Metadata syntax:", doc.MetadataSyntax)
 	writeLines(&b, "Metadata examples:", doc.MetadataExamples)
-	writeLines(&b, "Safety notes:", append([]string{
+	safetyNotes := append([]string{
 		"Use CloudToolKit only in owned, lab, or explicitly authorized environments.",
-	}, doc.SafetyNotes...))
+	}, doc.SafetyNotes...)
+	writeLines(&b, "Safety notes:", safetyNotes)
 	fmt.Print(b.String())
 }
 
@@ -508,8 +519,9 @@ func providerRequiredOptionLines() []string {
 		if isOptionalHelpOption(key) {
 			continue
 		}
+		value := strings.TrimSpace(config[key])
 		status := "missing"
-		if strings.TrimSpace(config[key]) != "" {
+		if value != "" {
 			status = "set"
 		}
 		desc := catalog.OptionDescription(key)
@@ -537,7 +549,8 @@ func providerRecommendedCommands(ctx HelpContext) []string {
 		if isOptionalHelpOption(key) {
 			continue
 		}
-		if strings.TrimSpace(config[key]) == "" {
+		value := strings.TrimSpace(config[key])
+		if value == "" {
 			missing = append(missing, key)
 		}
 	}
@@ -629,7 +642,8 @@ func summarizeConfigValue(key, value string) string {
 }
 
 func helpValueOrDefault(value, fallback string) string {
-	if strings.TrimSpace(value) == "" {
+	value = strings.TrimSpace(value)
+	if value == "" {
 		return fallback
 	}
 	return value

@@ -2,6 +2,7 @@ package sms
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/alibaba/api"
@@ -35,16 +36,28 @@ func (d *Driver) GetResource(ctx context.Context) (schema.Sms, error) {
 	}
 	client := api.NewClient(d.Cred, d.clientOptions...)
 	region = api.NormalizeRegion(region)
-	var err error
-	res.Signs, err = listSmsSign(ctx, client, region)
+	signs, err := listSmsSign(ctx, client, region)
 	if err != nil {
 		logger.Error("List SMS failed.")
 		return res, err
 	}
-	res.Templates, _ = listSmsTemplate(ctx, client, region)
-	res.DailySize, _ = d.querySendStatistics(ctx, client, region)
+	res.Signs = signs
 
-	return res, err
+	templates, err := listSmsTemplate(ctx, client, region)
+	if err != nil {
+		logger.Error("List SMS failed.")
+		return res, fmt.Errorf("list sms templates: %w", err)
+	}
+	res.Templates = templates
+
+	dailySize, err := d.querySendStatistics(ctx, client, region)
+	if err != nil {
+		logger.Error("List SMS failed.")
+		return res, fmt.Errorf("query sms send statistics: %w", err)
+	}
+	res.DailySize = dailySize
+
+	return res, nil
 }
 
 var status = map[string]string{

@@ -91,19 +91,39 @@ func AggregateBucketResults(action, bucketName string, results []BucketResult) B
 // EventReader powers the event-check payload.
 type EventReader interface {
 	Provider
-	EventDump(action, args string)
+	EventDump(context.Context, string, string) (EventActionResult, error)
 }
 
 // VMExecutor powers the instance-cmd-check / shell payloads.
 type VMExecutor interface {
 	Provider
-	ExecuteCloudVMCommand(instanceID, cmd string)
+	ExecuteCloudVMCommand(context.Context, string, string) (CommandResult, error)
 }
 
 // DBManager powers the rds-account-check payload.
 type DBManager interface {
 	Provider
-	DBManagement(action, instanceID string)
+	DBManagement(context.Context, string, string) (DatabaseActionResult, error)
+}
+
+type EventActionResult struct {
+	Action  string
+	Scope   string
+	Events  []Event
+	TaskID  int64
+	Message string
+}
+
+type CommandResult struct {
+	Output string
+}
+
+type DatabaseActionResult struct {
+	Action    string
+	Username  string
+	Password  string
+	Privilege string
+	Message   string
 }
 
 // Asset is any cloud resource that can be enumerated and rendered. New asset
@@ -134,6 +154,41 @@ type Resources struct {
 	Assets   []Asset
 	Sms      Sms
 	Errors   []ResourceError
+}
+
+type ResourceHandler func(context.Context, *Resources)
+
+type ResourceCollector struct {
+	provider string
+	handlers map[string]ResourceHandler
+}
+
+func NewResourceCollector(provider string) *ResourceCollector {
+	return &ResourceCollector{
+		provider: provider,
+		handlers: make(map[string]ResourceHandler),
+	}
+}
+
+func (c *ResourceCollector) Register(name string, handler ResourceHandler) *ResourceCollector {
+	if name == "" || handler == nil {
+		return c
+	}
+	c.handlers[name] = handler
+	return c
+}
+
+func (c *ResourceCollector) Collect(ctx context.Context, names []string) (Resources, error) {
+	list := NewResources()
+	list.Provider = c.provider
+	for _, name := range names {
+		handler, ok := c.handlers[name]
+		if !ok {
+			continue
+		}
+		handler(ctx, &list)
+	}
+	return list, list.Err()
 }
 
 type ResourceError struct {

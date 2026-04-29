@@ -25,7 +25,8 @@ func Ask(op, provider, resource string) bool {
 	if err != nil {
 		return false
 	}
-	switch strings.TrimSpace(strings.ToLower(line)) {
+	answer := strings.ToLower(strings.TrimSpace(line))
+	switch answer {
 	case "y", "yes":
 		return true
 	default:

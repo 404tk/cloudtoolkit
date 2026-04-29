@@ -9,6 +9,7 @@ import (
 
 	demoreplay "github.com/404tk/cloudtoolkit/pkg/providers/replay"
 	"github.com/404tk/cloudtoolkit/runner/catalog"
+	"github.com/404tk/cloudtoolkit/runner/payloads"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/argparse"
 	"github.com/404tk/cloudtoolkit/utils/cache"
@@ -206,8 +207,9 @@ func sessionIDSuggestions() []prompt.Suggest {
 	suggestions := make([]prompt.Suggest, 0, len(creds))
 	for _, cred := range creds {
 		desc := fmt.Sprintf("%s / %s", cred.Provider, cred.User)
-		if strings.TrimSpace(cred.Note) != "" {
-			desc = fmt.Sprintf("%s / %s", desc, cred.Note)
+		note := strings.TrimSpace(cred.Note)
+		if note != "" {
+			desc = fmt.Sprintf("%s / %s", desc, note)
 		}
 		suggestions = append(suggestions, prompt.Suggest{
 			Text:        strconv.Itoa(cred.Id),
@@ -222,10 +224,21 @@ func getProviderRegionSuggestions(provider string) []prompt.Suggest {
 }
 
 func getPayloadMetadataSuggestions(payload string) []prompt.Suggest {
-	return promptSuggestions(catalog.PayloadMetadataSuggestions(payload))
+	return payloadPromptSuggestions(payloads.MetadataSuggestions(payload))
 }
 
 func promptSuggestions(items []catalog.Suggestion) []prompt.Suggest {
+	suggestions := make([]prompt.Suggest, 0, len(items))
+	for _, item := range items {
+		suggestions = append(suggestions, prompt.Suggest{
+			Text:        item.Text,
+			Description: item.Description,
+		})
+	}
+	return suggestions
+}
+
+func payloadPromptSuggestions(items []payloads.Suggestion) []prompt.Suggest {
 	suggestions := make([]prompt.Suggest, 0, len(items))
 	for _, item := range items {
 		suggestions = append(suggestions, prompt.Suggest{
@@ -240,15 +253,17 @@ func getShellTargetSuggestions(ctx CompletionContext) []prompt.Suggest {
 	candidates := make(map[string]shellTargetHint)
 	add := func(target, provider, source string) {
 		target = strings.TrimSpace(target)
+		provider = strings.TrimSpace(provider)
+		source = strings.TrimSpace(source)
 		if target == "" {
 			return
 		}
 		hint := candidates[target]
 		if hint.Provider == "" {
-			hint.Provider = strings.TrimSpace(provider)
+			hint.Provider = provider
 		}
 		if hint.Source == "" {
-			hint.Source = strings.TrimSpace(source)
+			hint.Source = source
 		}
 		candidates[target] = hint
 	}
@@ -317,15 +332,17 @@ func shellTargetFromMetadata(metadata string) string {
 
 func rememberShellTarget(target, provider, source string) {
 	target = strings.TrimSpace(target)
+	provider = strings.TrimSpace(provider)
+	source = strings.TrimSpace(source)
 	if target == "" {
 		return
 	}
 	hint := knownShellTargets[target]
 	if hint.Provider == "" {
-		hint.Provider = strings.TrimSpace(provider)
+		hint.Provider = provider
 	}
 	if hint.Source == "" {
-		hint.Source = strings.TrimSpace(source)
+		hint.Source = source
 	}
 	knownShellTargets[target] = hint
 }
