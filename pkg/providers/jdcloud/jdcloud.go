@@ -26,10 +26,25 @@ type Provider struct {
 	region     string
 	accessKey  string
 	apiClient  *_api.Client
+	apiOptions []_api.Option
+}
+
+// ClientConfig allows callers (e.g. demo replay) to inject custom api.Option
+// values and skip credential cache writes for ephemeral credentials.
+type ClientConfig struct {
+	APIOptions          []_api.Option
+	SkipCredentialCache bool
 }
 
 // New creates a new provider client for JDCloud API.
 func New(options schema.Options) (*Provider, error) {
+	return NewWithConfig(options, ClientConfig{})
+}
+
+// NewWithConfig creates a new provider client for JDCloud API with injected
+// transport options. Real callers use New; replay/test callers feed in a
+// mock HTTP client through cfg.APIOptions.
+func NewWithConfig(options schema.Options, cfg ClientConfig) (*Provider, error) {
 	credential, err := _auth.FromOptions(options)
 	if err != nil {
 		return nil, err
@@ -39,14 +54,15 @@ func New(options schema.Options) (*Provider, error) {
 	if strings.EqualFold(region, "all") {
 		region = "all"
 	}
-	apiClient := _api.NewClient(credential)
+	apiClient := _api.NewClient(credential, cfg.APIOptions...)
 	provider := &Provider{
 		credential: credential,
 		region:     region,
 		accessKey:  credential.AccessKey,
 		apiClient:  apiClient,
+		apiOptions: append([]_api.Option(nil), cfg.APIOptions...),
 	}
-	if err := credverify.ForCloudlist(options, provider, false, func(context.Context) (credverify.Result, error) {
+	if err := credverify.ForCloudlist(options, provider, cfg.SkipCredentialCache, func(context.Context) (credverify.Result, error) {
 		d := &iam.Driver{Client: apiClient, AccessKey: credential.AccessKey}
 		pin, ok := d.Validator()
 		if !ok {

@@ -3,6 +3,7 @@ package gcp
 import (
 	"context"
 	"encoding/base64"
+	"net/http"
 	"time"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/gcp/api"
@@ -24,8 +25,23 @@ type Provider struct {
 	projects    []string
 }
 
+// ClientConfig allows callers (e.g. demo replay) to inject a custom HTTP
+// client used by both the OAuth2 token source and the API client, and skip
+// credential cache writes for ephemeral credentials.
+type ClientConfig struct {
+	HTTPClient          *http.Client
+	SkipCredentialCache bool
+}
+
 // New creates a new provider client for gcp API
 func New(options schema.Options) (*Provider, error) {
+	return NewWithConfig(options, ClientConfig{})
+}
+
+// NewWithConfig creates a new provider client for gcp API with an injected
+// HTTP transport. Real callers use New; replay/test callers feed in a mock
+// HTTP client through cfg.HTTPClient.
+func NewWithConfig(options schema.Options, cfg ClientConfig) (*Provider, error) {
 	cred, err := auth.FromOptions(options)
 	if err != nil {
 		return nil, err
@@ -34,7 +50,10 @@ func New(options schema.Options) (*Provider, error) {
 		return nil, err
 	}
 
-	httpClient := api.NewHTTPClient()
+	httpClient := cfg.HTTPClient
+	if httpClient == nil {
+		httpClient = api.NewHTTPClient()
+	}
 	ts := auth.NewTokenSource(cred, httpClient)
 	client := api.NewClient(ts, api.WithHTTPClient(httpClient))
 	provider := &Provider{
@@ -50,7 +69,7 @@ func New(options schema.Options) (*Provider, error) {
 		return nil, err
 	}
 
-	if err := credverify.ForCloudlist(options, provider, false, func(context.Context) (credverify.Result, error) {
+	if err := credverify.ForCloudlist(options, provider, cfg.SkipCredentialCache, func(context.Context) (credverify.Result, error) {
 		return credverify.Result{
 			Summary:     "Current project: " + cred.ProjectID,
 			SessionUser: cred.ProjectID,

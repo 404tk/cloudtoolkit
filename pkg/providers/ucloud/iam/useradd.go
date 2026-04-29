@@ -13,7 +13,7 @@ const ucloudConsoleURL = "https://passport.ucloud.cn/login/subAccount/%d"
 func (d *Driver) AddUser() (schema.IAMResult, error) {
 	ctx := context.Background()
 
-	client := api.NewClient(d.Credential)
+	client := d.client()
 	var resp api.IAMCreateUserResponse
 	err := client.Do(ctx, api.Request{
 		Action: "CreateUser",

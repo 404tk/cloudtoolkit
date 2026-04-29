@@ -18,6 +18,27 @@ func resetDemoReplay() {
 
 func enableDemoReplay(provider string) {
 	replay.Enable(provider)
+	preloadDemoOptions(provider)
+}
+
+// preloadDemoOptions writes any provider-specific demo replay options
+// (e.g. azure tenantId / subscriptionId, gcp base64Json) into the active
+// config map so users only need `run` to exercise the mock. AccessKey /
+// SecretKey are intentionally left for manual entry on AK/SK providers.
+func preloadDemoOptions(provider string) {
+	if config == nil {
+		return
+	}
+	creds, ok := replay.CredentialsFor(provider)
+	if !ok {
+		return
+	}
+	for _, extra := range creds.Extras {
+		if extra.Name == "" {
+			continue
+		}
+		config[extra.Name] = extra.Value
+	}
 }
 
 func isDemoReplayActive() bool {
@@ -128,12 +149,23 @@ func closeDemoPrompt() {
 
 func printDemoBanner(provider string) {
 	credentials, _ := replay.CredentialsFor(provider)
-	printDemoSection("MOCK REPLAY MODE",
+	lines := []string{
 		"!!! USE THESE DEMO CREDENTIALS !!!",
 		"----------------------------------",
 		fmt.Sprintf("AccessKey: %s", credentials.AccessKey),
 		fmt.Sprintf("SecretKey: %s", credentials.SecretKey),
-	)
+	}
+	for _, extra := range credentials.Extras {
+		if extra.Name == "" {
+			continue
+		}
+		value := extra.Value
+		if len(value) > 96 {
+			value = value[:96] + "...(truncated)"
+		}
+		lines = append(lines, fmt.Sprintf("%s: %s", extra.Name, value))
+	}
+	printDemoSection("MOCK REPLAY MODE", lines...)
 }
 
 func printDemoSection(title string, lines ...string) {

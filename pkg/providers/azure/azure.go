@@ -28,8 +28,23 @@ type Provider struct {
 	subscriptionIDs []string
 }
 
+// ClientConfig allows callers (e.g. demo replay) to inject a custom HTTP
+// client used by both the OAuth2 token source and the ARM API client, and
+// skip credential cache writes for ephemeral credentials.
+type ClientConfig struct {
+	HTTPClient          *http.Client
+	SkipCredentialCache bool
+}
+
 // New creates a new provider client for Azure API.
 func New(options schema.Options) (*Provider, error) {
+	return NewWithConfig(options, ClientConfig{})
+}
+
+// NewWithConfig creates a new provider client for Azure API with an injected
+// HTTP transport. Real callers use New; replay/test callers feed in a mock
+// HTTP client through cfg.HTTPClient.
+func NewWithConfig(options schema.Options, cfg ClientConfig) (*Provider, error) {
 	cred, err := azauth.FromOptions(options)
 	if err != nil {
 		return nil, err
@@ -39,7 +54,10 @@ func New(options schema.Options) (*Provider, error) {
 	}
 
 	endpoints := azcloud.For(cred.Cloud)
-	httpClient := azapi.NewHTTPClient()
+	httpClient := cfg.HTTPClient
+	if httpClient == nil {
+		httpClient = azapi.NewHTTPClient()
+	}
 	tokenSource := azauth.NewTokenSource(cred, httpClient)
 	client := azapi.NewClient(tokenSource, endpoints, azapi.WithHTTPClient(httpClient))
 	provider := &Provider{
@@ -67,7 +85,9 @@ func New(options schema.Options) (*Provider, error) {
 		for _, sub := range allSubscriptions {
 			if payload == "cloudlist" {
 				logger.Warning(fmt.Sprintf("Found Subscription: %s(%s)", sub.DisplayName, sub.SubscriptionID))
-				cache.Cfg.CredInsert(sub.DisplayName, provider, options)
+				if !cfg.SkipCredentialCache {
+					cache.Cfg.CredInsert(sub.DisplayName, provider, options)
+				}
 			}
 			if sub.SubscriptionID != "" {
 				subscriptionIDs = append(subscriptionIDs, sub.SubscriptionID)

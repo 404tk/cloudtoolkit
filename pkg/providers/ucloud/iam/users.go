@@ -16,9 +16,17 @@ const listUsersPageSize = 100
 
 type Driver struct {
 	Credential ucloudauth.Credential
+	Client     *api.Client
 	ProjectID  string
 	UserName   string
 	Password   string
+}
+
+func (d *Driver) client() *api.Client {
+	if d.Client != nil {
+		return d.Client
+	}
+	return api.NewClient(d.Credential)
 }
 
 func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
@@ -30,7 +38,7 @@ func (d *Driver) ListUsers(ctx context.Context) ([]schema.User, error) {
 		logger.Info("List UCloud IAM users ...")
 	}
 
-	client := api.NewClient(d.Credential)
+	client := d.client()
 	for offset := 0; ; offset += listUsersPageSize {
 		var resp api.IAMListUsersResponse
 		err := client.Do(ctx, api.Request{

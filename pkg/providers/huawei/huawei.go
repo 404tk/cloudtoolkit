@@ -21,30 +21,54 @@ import (
 
 // Provider is a data provider for huawei API
 type Provider struct {
-	cred     huaweiauth.Credential
-	regions  []string
-	domainID string
+	cred       huaweiauth.Credential
+	regions    []string
+	domainID   string
+	apiOptions []api.Option
+	obsOptions []_obs.Option
+	skipCache  bool
 }
 
 var defaultRegion = "cn-north-4"
 
+// ClientConfig allows callers (e.g. demo replay) to inject custom api.Option
+// and obs.Option values and skip credential cache writes for ephemeral
+// credentials.
+type ClientConfig struct {
+	APIOptions          []api.Option
+	OBSOptions          []_obs.Option
+	SkipCredentialCache bool
+}
+
 // New creates a new provider client for huawei API
 func New(options schema.Options) (*Provider, error) {
+	return NewWithConfig(options, ClientConfig{})
+}
+
+// NewWithConfig creates a new provider client for huawei API with injected
+// transport options. Real callers use New; replay/test callers feed in a
+// mock HTTP client through cfg.APIOptions / cfg.OBSOptions.
+func NewWithConfig(options schema.Options, cfg ClientConfig) (*Provider, error) {
 	cred, err := huaweiauth.FromOptions(options)
 	if err != nil {
 		return nil, err
 	}
 	controlPlaneCred := cred
 	domainID := ""
-	provider := &Provider{cred: cred}
+	provider := &Provider{
+		cred:       cred,
+		apiOptions: append([]api.Option(nil), cfg.APIOptions...),
+		obsOptions: append([]_obs.Option(nil), cfg.OBSOptions...),
+		skipCache:  cfg.SkipCredentialCache,
+	}
 	if controlPlaneCred.Region == "all" {
 		controlPlaneCred.Region = defaultRegion
 	}
 
 	payload, _ := options.GetMetadata(utils.Payload)
 	if payload == "cloudlist" {
-		probe := &_iam.Driver{Cred: controlPlaneCred}
-		if err := credverify.ForCloudlist(options, provider, false, func(ctx context.Context) (credverify.Result, error) {
+		probe := &_iam.Driver{Cred: controlPlaneCred, Client: provider.newAPIClient(controlPlaneCred)}
+		if err := credverify.ForCloudlist(options, provider, cfg.SkipCredentialCache, func(ctx context.Context) (credverify.Result, error) {
 			userName, err := probe.GetUserName(ctx)
 			if err != nil {
 				return credverify.Result{}, err
@@ -61,7 +85,7 @@ func New(options schema.Options) (*Provider, error) {
 
 	var regions []string
 	if cred.Region == "all" && payload == "cloudlist" {
-		client := api.NewClient(controlPlaneCred)
+		client := provider.newAPIClient(controlPlaneCred)
 		var resp api.ListRegionsResponse
 		err := client.DoJSON(context.Background(), api.Request{
 			Service:    "iam",
@@ -94,33 +118,45 @@ func (p *Provider) Name() string {
 	return "huawei"
 }
 
+func (p *Provider) newAPIClient(cred huaweiauth.Credential) *api.Client {
+	return api.NewClient(cred, p.apiOptions...)
+}
+
+func (p *Provider) newOBSClient(cred huaweiauth.Credential) *_obs.Client {
+	return _obs.NewClient(cred, p.obsOptions...)
+}
+
 // Resources returns the provider for a resource deployment source.
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	collector := schema.NewResourceCollector(p.Name()).
 		Register("balance", func(ctx context.Context, _ *schema.Resources) {
-			d := &_bss.Driver{Cred: p.cred}
+			d := &_bss.Driver{Cred: p.cred, Client: p.newAPIClient(p.cred)}
 			d.QueryAccountBalance(ctx)
 		}).
 		Register("host", func(ctx context.Context, list *schema.Resources) {
-			ecsprovider := &ecs.Driver{Cred: p.iamCredential(), Regions: p.serviceRegions("ecs"), DomainID: p.domainID}
+			cred := p.iamCredential()
+			ecsprovider := &ecs.Driver{Cred: cred, Regions: p.serviceRegions("ecs"), DomainID: p.domainID, Client: p.newAPIClient(cred)}
 			hosts, err := ecsprovider.GetResource(ctx)
 			schema.AppendAssets(list, hosts)
 			list.AddError("host", err)
 		}).
 		Register("account", func(ctx context.Context, list *schema.Resources) {
-			iamprovider := &_iam.Driver{Cred: p.iamCredential(), DomainID: p.domainID}
+			cred := p.iamCredential()
+			iamprovider := &_iam.Driver{Cred: cred, DomainID: p.domainID, Client: p.newAPIClient(cred)}
 			users, err := iamprovider.ListUsers(ctx)
 			schema.AppendAssets(list, users)
 			list.AddError("account", err)
 		}).
 		Register("database", func(ctx context.Context, list *schema.Resources) {
-			rdsprovider := &_rds.Driver{Cred: p.iamCredential(), Regions: p.serviceRegions("rds"), DomainID: p.domainID}
+			cred := p.iamCredential()
+			rdsprovider := &_rds.Driver{Cred: cred, Regions: p.serviceRegions("rds"), DomainID: p.domainID, Client: p.newAPIClient(cred)}
 			databases, err := rdsprovider.GetDatabases(ctx)
 			schema.AppendAssets(list, databases)
 			list.AddError("database", err)
 		}).
 		Register("bucket", func(ctx context.Context, list *schema.Resources) {
-			obsprovider := &_obs.Driver{Cred: p.iamCredential(), Regions: p.regions}
+			cred := p.iamCredential()
+			obsprovider := &_obs.Driver{Cred: cred, Regions: p.regions, Client: p.newOBSClient(cred)}
 			storages, err := obsprovider.GetBuckets(ctx)
 			schema.AppendAssets(list, storages)
 			list.AddError("bucket", err)
@@ -130,8 +166,9 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 }
 
 func (p *Provider) UserManagement(action, username, password string) (schema.IAMResult, error) {
+	cred := p.iamCredential()
 	r := &_iam.Driver{
-		Cred: p.iamCredential(), Username: username, Password: password, DomainID: p.domainID}
+		Cred: cred, Username: username, Password: password, DomainID: p.domainID, Client: p.newAPIClient(cred)}
 	switch action {
 	case "add":
 		return r.AddUser()
@@ -143,7 +180,8 @@ func (p *Provider) UserManagement(action, username, password string) (schema.IAM
 }
 
 func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([]schema.BucketResult, error) {
-	obsprovider := &_obs.Driver{Cred: p.iamCredential(), Regions: p.regions}
+	cred := p.iamCredential()
+	obsprovider := &_obs.Driver{Cred: cred, Regions: p.regions, Client: p.newOBSClient(cred)}
 
 	infos := make(map[string]string)
 	if bucketName == "all" {

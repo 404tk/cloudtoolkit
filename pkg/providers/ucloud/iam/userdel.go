@@ -11,7 +11,7 @@ import (
 
 func (d *Driver) DelUser() (schema.IAMResult, error) {
 	ctx := context.Background()
-	client := api.NewClient(d.Credential)
+	client := d.client()
 	msg, err := d.deleteUser(ctx, client, d.UserName)
 	if err != nil {
 		return schema.IAMResult{}, fmt.Errorf("delete user %s failed: %w", d.UserName, err)

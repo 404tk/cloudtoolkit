@@ -13,6 +13,18 @@ type State struct {
 type Credentials struct {
 	AccessKey string
 	SecretKey string
+	// Extras carry additional option-key / value pairs needed to fully
+	// configure providers that do not fit the AccessKey + SecretKey shape
+	// (e.g. azure tenantId / subscriptionId, gcp base64Json). They are
+	// surfaced in the demo replay banner alongside AccessKey / SecretKey.
+	Extras []NamedValue
+}
+
+// NamedValue is a key/value pair used by demo replay banners and
+// option-fill helpers to advertise extra credential fields.
+type NamedValue struct {
+	Name  string
+	Value string
 }
 
 type providerMeta struct {
@@ -73,6 +85,65 @@ var providers = map[string]providerMeta{
 			"cloudlist",
 			"iam-user-check",
 			"bucket-check",
+		},
+	},
+	"huawei": {
+		Credentials: Credentials{
+			AccessKey: "HWEXAMPLEAKIDz8krbsJ5y",
+			SecretKey: "HwSkExampleGu5t9xGARNpq86cd98joQYCN3EXAMPLE",
+		},
+		Payloads: []string{
+			"cloudlist",
+			"iam-user-check",
+			"bucket-check",
+		},
+	},
+	"azure": {
+		Credentials: Credentials{
+			AccessKey: "11111111-2222-3333-4444-555555555555",
+			SecretKey: "AzExampleClientSecretEXAMPLEvalueDEMO0000",
+			Extras: []NamedValue{
+				{Name: "clientId", Value: "11111111-2222-3333-4444-555555555555"},
+				{Name: "clientSecret", Value: "AzExampleClientSecretEXAMPLEvalueDEMO0000"},
+				{Name: "tenantId", Value: "11111111-2222-3333-4444-555555555555"},
+				{Name: "subscriptionId", Value: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"},
+			},
+		},
+		Payloads: []string{
+			"cloudlist",
+		},
+	},
+	"gcp": {
+		Credentials: Credentials{
+			AccessKey: "ctk-demo-project",
+			SecretKey: "(see base64Json below)",
+			Extras: []NamedValue{
+				{Name: "base64Json", Value: gcpDemoServiceAccountJSON},
+			},
+		},
+		Payloads: []string{
+			"cloudlist",
+		},
+	},
+	"jdcloud": {
+		Credentials: Credentials{
+			AccessKey: "JDC_AKLTEXAMPLE000000000001",
+			SecretKey: "JDCExampleSecretKeyValueDEMOreplay00000",
+		},
+		Payloads: []string{
+			"cloudlist",
+			"iam-user-check",
+			"bucket-check",
+		},
+	},
+	"ucloud": {
+		Credentials: Credentials{
+			AccessKey: "ucloudpubkey-EXAMPLE-ctkdemo-replay-public",
+			SecretKey: "ucloudprivkey-EXAMPLE-ctkdemo-replay-secret",
+		},
+		Payloads: []string{
+			"cloudlist",
+			"iam-user-check",
 		},
 	},
 }

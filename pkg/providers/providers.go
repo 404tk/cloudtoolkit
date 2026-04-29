@@ -9,13 +9,18 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/aws"
 	awsreplay "github.com/404tk/cloudtoolkit/pkg/providers/aws/replay"
 	"github.com/404tk/cloudtoolkit/pkg/providers/azure"
+	azreplay "github.com/404tk/cloudtoolkit/pkg/providers/azure/replay"
 	"github.com/404tk/cloudtoolkit/pkg/providers/gcp"
+	gcpreplay "github.com/404tk/cloudtoolkit/pkg/providers/gcp/replay"
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei"
+	hwreplay "github.com/404tk/cloudtoolkit/pkg/providers/huawei/replay"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud"
+	jdreplay "github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/replay"
 	"github.com/404tk/cloudtoolkit/pkg/providers/replay"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent"
 	txreplay "github.com/404tk/cloudtoolkit/pkg/providers/tencent/replay"
 	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud"
+	ucreplay "github.com/404tk/cloudtoolkit/pkg/providers/ucloud/replay"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine"
 	volcreplay "github.com/404tk/cloudtoolkit/pkg/providers/volcengine/replay"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
@@ -62,12 +67,18 @@ var catalog = []entry{
 	{
 		info: Info{Name: "huawei", Desc: "Huawei Cloud"},
 		new: func(block schema.Options) (schema.Provider, error) {
+			if replay.IsActiveForProvider("huawei") {
+				return huawei.NewWithConfig(block, hwreplay.ClientConfig())
+			}
 			return huawei.New(block)
 		},
 	},
 	{
 		info: Info{Name: "azure", Desc: "Microsoft Azure"},
 		new: func(block schema.Options) (schema.Provider, error) {
+			if replay.IsActiveForProvider("azure") {
+				return azure.NewWithConfig(block, azreplay.ClientConfig())
+			}
 			return azure.New(block)
 		},
 	},
@@ -83,18 +94,27 @@ var catalog = []entry{
 	{
 		info: Info{Name: "jdcloud", Desc: "JDCloud"},
 		new: func(block schema.Options) (schema.Provider, error) {
+			if replay.IsActiveForProvider("jdcloud") {
+				return jdcloud.NewWithConfig(block, jdreplay.ClientConfig())
+			}
 			return jdcloud.New(block)
 		},
 	},
 	{
 		info: Info{Name: "gcp", Desc: "Google Cloud Platform"},
 		new: func(block schema.Options) (schema.Provider, error) {
+			if replay.IsActiveForProvider("gcp") {
+				return gcp.NewWithConfig(block, gcpreplay.ClientConfig())
+			}
 			return gcp.New(block)
 		},
 	},
 	{
 		info: Info{Name: "ucloud", Desc: "UCloud"},
 		new: func(block schema.Options) (schema.Provider, error) {
+			if replay.IsActiveForProvider("ucloud") {
+				return ucloud.NewWithConfig(block, ucreplay.ClientConfig())
+			}
 			return ucloud.New(block)
 		},
 	},

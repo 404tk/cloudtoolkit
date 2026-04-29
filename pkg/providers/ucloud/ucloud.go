@@ -27,10 +27,26 @@ type Provider struct {
 	region     string
 	projectID  string
 	regions    []string
+	apiOptions []api.Option
+	apiClient  *api.Client
+}
+
+// ClientConfig allows callers (e.g. demo replay) to inject custom api.Option
+// values and skip credential cache writes for ephemeral credentials.
+type ClientConfig struct {
+	APIOptions          []api.Option
+	SkipCredentialCache bool
 }
 
 // New creates a new provider client for UCloud APIs.
 func New(options schema.Options) (*Provider, error) {
+	return NewWithConfig(options, ClientConfig{})
+}
+
+// NewWithConfig creates a new provider client for UCloud APIs with injected
+// transport options. Real callers use New; replay/test callers feed in a
+// mock HTTP client through cfg.APIOptions.
+func NewWithConfig(options schema.Options, cfg ClientConfig) (*Provider, error) {
 	credential, err := ucloudauth.FromOptions(options)
 	if err != nil {
 		return nil, err
@@ -39,7 +55,8 @@ func New(options schema.Options) (*Provider, error) {
 		return nil, err
 	}
 
-	accountClient := api.NewClient(credential)
+	apiOptions := append([]api.Option(nil), cfg.APIOptions...)
+	accountClient := api.NewClient(credential, apiOptions...)
 	user, err := currentUser(accountClient)
 	if err != nil {
 		return nil, err
@@ -70,6 +87,8 @@ func New(options schema.Options) (*Provider, error) {
 		region:     region,
 		projectID:  projectID,
 		regions:    regions,
+		apiOptions: apiOptions,
+		apiClient:  accountClient,
 	}
 
 	payload := strings.TrimSpace(options[utils.Payload])
@@ -79,7 +98,9 @@ func New(options schema.Options) (*Provider, error) {
 		if pj := displayCurrentProject(projectID, projectName); pj != "" {
 			logger.Warning("Current project:", pj)
 		}
-		cache.Cfg.CredInsert(display, provider, options)
+		if !cfg.SkipCredentialCache {
+			cache.Cfg.CredInsert(display, provider, options)
+		}
 	}
 
 	return provider, nil
@@ -90,18 +111,27 @@ func (p *Provider) Name() string {
 	return "ucloud"
 }
 
+func (p *Provider) newClient() *api.Client {
+	if p.apiClient != nil {
+		return p.apiClient
+	}
+	return api.NewClient(p.credential, p.apiOptions...)
+}
+
 // Resources returns cloud assets for the asset inventory payload.
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	collector := schema.NewResourceCollector(p.Name()).
 		Register("balance", func(ctx context.Context, _ *schema.Resources) {
 			(&billing.Driver{
 				Credential: p.credential,
+				Client:     p.newClient(),
 				ProjectID:  p.projectID,
 			}).QueryAccountBalance(ctx)
 		}).
 		Register("host", func(ctx context.Context, list *schema.Resources) {
 			d := &uhost.Driver{
 				Credential: p.credential,
+				Client:     p.newClient(),
 				ProjectID:  p.projectID,
 				Regions:    p.regions,
 			}
@@ -112,6 +142,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 		Register("domain", func(ctx context.Context, list *schema.Resources) {
 			d := &udns.Driver{
 				Credential: p.credential,
+				Client:     p.newClient(),
 				ProjectID:  p.projectID,
 				Regions:    p.regions,
 			}
@@ -122,6 +153,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 		Register("database", func(ctx context.Context, list *schema.Resources) {
 			d := &udb.Driver{
 				Credential: p.credential,
+				Client:     p.newClient(),
 				ProjectID:  p.projectID,
 				Regions:    p.regions,
 			}
@@ -132,6 +164,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 		Register("bucket", func(ctx context.Context, list *schema.Resources) {
 			d := &ufile.Driver{
 				Credential: p.credential,
+				Client:     p.newClient(),
 				ProjectID:  p.projectID,
 				Region:     p.region,
 			}
@@ -140,7 +173,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			list.AddError("bucket", err)
 		}).
 		Register("account", func(ctx context.Context, list *schema.Resources) {
-			d := &_iam.Driver{Credential: p.credential}
+			d := &_iam.Driver{Credential: p.credential, Client: p.newClient()}
 			users, err := d.ListUsers(ctx)
 			schema.AppendAssets(list, users)
 			list.AddError("account", err)
@@ -152,6 +185,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 func (p *Provider) UserManagement(action, username, password string) (schema.IAMResult, error) {
 	driver := &_iam.Driver{
 		Credential: p.credential,
+		Client:     p.newClient(),
 		ProjectID:  p.projectID,
 		UserName:   username,
 		Password:   password,
