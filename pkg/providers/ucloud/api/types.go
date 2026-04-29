@@ -57,6 +57,35 @@ type UserInfo struct {
 	UserName  string `json:"UserName"`
 }
 
+type IAMUserSummary struct {
+	CreatedAt   int64  `json:"CreatedAt"`
+	DisplayName string `json:"DisplayName"`
+	Email       string `json:"Email"`
+	Status      string `json:"Status"`
+	UserName    string `json:"UserName"`
+}
+
+type IAMPolicyInfo struct {
+	PolicyName string `json:"PolicyName"`
+	PolicyURN  string `json:"PolicyURN"`
+}
+
+type MemberProjectInfo struct {
+	CharacterID string `json:"CharacterId"`
+	ProjectID   string `json:"ProjectId"`
+	ProjectName string `json:"ProjectName"`
+}
+
+type MemberInfo struct {
+	ActivateFlag int                 `json:"ActivateFlag"`
+	Created      int64               `json:"Created"`
+	LastLogin    int64               `json:"LastLogin"`
+	MemberEmail  string              `json:"MemberEmail"`
+	MemberName   string              `json:"MemberName"`
+	ProjectSet   []MemberProjectInfo `json:"ProjectSet"`
+	State        string              `json:"State"`
+}
+
 type ProjectListInfo struct {
 	IsDefault   bool   `json:"IsDefault"`
 	ProjectID   string `json:"ProjectId"`
@@ -138,6 +167,48 @@ type GetRegionResponse struct {
 type GetBalanceResponse struct {
 	BaseResponse
 	AccountInfo AccountInfo `json:"AccountInfo"`
+}
+
+type IAMListUsersResponse struct {
+	BaseResponse
+	TotalCount int              `json:"TotalCount"`
+	Users      []IAMUserSummary `json:"Users"`
+}
+
+type IAMCreateUserResponse struct {
+	BaseResponse
+	APIAccess       bool   `json:"APIAccess"`
+	AccessKeyID     string `json:"AccessKeyID"`
+	AccessKeySecret string `json:"AccessKeySecret"`
+	CompanyID       int64  `json:"CompanyId"`
+	ConsoleAccess   bool   `json:"ConsoleAccess"`
+	DisplayName     string `json:"DisplayName"`
+	Password        string `json:"Password"`
+	UserName        string `json:"UserName"`
+}
+
+type IAMDeleteUserResponse struct {
+	BaseResponse
+}
+
+type IAMListPoliciesResponse struct {
+	BaseResponse
+	Policies   []IAMPolicyInfo `json:"Policies"`
+	TotalCount int             `json:"TotalCount"`
+}
+
+type IAMAttachPoliciesToUserResponse struct {
+	BaseResponse
+}
+
+type IAMRemoveUserFromProjectResponse struct {
+	BaseResponse
+}
+
+type DescribeMemberListResponse struct {
+	BaseResponse
+	MemberSet  []MemberInfo `json:"MemberSet"`
+	TotalCount int          `json:"TotalCount"`
 }
 
 type DescribeUHostInstanceResponse struct {

@@ -50,11 +50,11 @@ type APIError struct {
 func (e *APIError) Error() string {
 	switch {
 	case e.Code > 0 && strings.TrimSpace(e.Message) != "":
-		return fmt.Sprintf("ucloud api error: code=%d %s", e.Code, strings.TrimSpace(e.Message))
+		return fmt.Sprintf("ucloud code=%d %s", e.Code, strings.TrimSpace(e.Message))
 	case strings.TrimSpace(e.Message) != "":
-		return fmt.Sprintf("ucloud api error: %s", strings.TrimSpace(e.Message))
+		return fmt.Sprintf("ucloud %s", strings.TrimSpace(e.Message))
 	case e.StatusCode > 0:
-		return fmt.Sprintf("ucloud api error: http status %d", e.StatusCode)
+		return fmt.Sprintf("ucloud status %d", e.StatusCode)
 	default:
 		return "ucloud api error"
 	}

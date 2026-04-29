@@ -10,6 +10,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/api"
 	ucloudauth "github.com/404tk/cloudtoolkit/pkg/providers/ucloud/auth"
 	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/billing"
+	_iam "github.com/404tk/cloudtoolkit/pkg/providers/ucloud/iam"
 	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/udb"
 	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/udns"
 	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/ufile"
@@ -72,11 +73,7 @@ func New(options schema.Options) (*Provider, error) {
 
 	if strings.TrimSpace(options[utils.Payload]) == "cloudlist" {
 		display := displayCurrentUser(user)
-		if display != "" {
-			logger.Warning("Current user:", display)
-		} else {
-			display = "<none>"
-		}
+		logger.Warning("Current user:", display)
 		if pj := displayCurrentProject(projectID, projectName); pj != "" {
 			logger.Warning("Current project:", pj)
 		}
@@ -139,12 +136,35 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			buckets, err := d.GetBuckets(ctx)
 			schema.AppendAssets(&list, buckets)
 			list.AddError("bucket", err)
-		case "account", "sms", "log":
+		case "account":
+			d := &_iam.Driver{Credential: p.credential}
+			users, err := d.ListUsers(ctx)
+			schema.AppendAssets(&list, users)
+			list.AddError("account", err)
+		case "sms", "log":
 		default:
 		}
 	}
 
 	return list, list.Err()
+}
+
+func (p *Provider) UserManagement(action, username, password string) (schema.IAMResult, error) {
+	driver := &_iam.Driver{
+		Credential: p.credential,
+		ProjectID:  p.projectID,
+		UserName:   username,
+		Password:   password,
+	}
+
+	switch action {
+	case "add":
+		return driver.AddUser()
+	case "del":
+		return driver.DelUser()
+	default:
+		return schema.IAMResult{}, fmt.Errorf("invalid action: %s (expected: add, del)", action)
+	}
 }
 
 func normalizeRegion(region string) string {
@@ -243,7 +263,7 @@ func displayCurrentUser(user api.UserInfo) string {
 	case user.UserID > 0:
 		return "user-" + strconv.Itoa(user.UserID)
 	default:
-		return ""
+		return "<none>"
 	}
 }
 

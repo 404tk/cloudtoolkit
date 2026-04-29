@@ -143,7 +143,7 @@ var providerSpecs = map[string]ProviderSpec{
 			{Text: "th-bkk", Description: "Bangkok"},
 			{Text: "ge-fra", Description: "Frankfurt"},
 		},
-		Capabilities: []string{"cloudlist"},
+		Capabilities: []string{"cloudlist", "iam"},
 	},
 	"azure": {
 		Options: []ProviderOption{
