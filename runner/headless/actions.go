@@ -76,6 +76,106 @@ var actionSpecs = map[string]actionSpec{
 		usage:   "shell <instance-id> <cmd...> -r <region> (-sh | -cmd)",
 		summary: "run validation on a single instance",
 	},
+	"rolels": {
+		payload: "role-binding-check",
+		minArgs: 0,
+		maxArgs: 2,
+		usage:   "rolels [principal] [scope]",
+		summary: "list role bindings at a scope",
+		build: func(args []string) string {
+			parts := []string{"list"}
+			parts = append(parts, args...)
+			return strings.Join(parts, " ")
+		},
+	},
+	"roleadd": {
+		payload: "role-binding-check",
+		minArgs: 2,
+		maxArgs: 3,
+		usage:   "roleadd <principal> <role> [scope]",
+		summary: "bind a principal to a role at a scope",
+		build: func(args []string) string {
+			parts := []string{"add"}
+			parts = append(parts, args...)
+			return strings.Join(parts, " ")
+		},
+	},
+	"roledel": {
+		payload: "role-binding-check",
+		minArgs: 2,
+		maxArgs: 3,
+		usage:   "roledel <principal> <role> [scope]",
+		summary: "remove a principal/role binding at a scope",
+		build: func(args []string) string {
+			parts := []string{"del"}
+			parts = append(parts, args...)
+			return strings.Join(parts, " ")
+		},
+	},
+	"bacl": {
+		payload: "bucket-acl-check",
+		minArgs: 0,
+		maxArgs: 1,
+		usage:   "bacl [container]",
+		summary: "audit storage container public access",
+		build: func(args []string) string {
+			parts := []string{"audit"}
+			parts = append(parts, args...)
+			return strings.Join(parts, " ")
+		},
+	},
+	"expose": {
+		payload: "bucket-acl-check",
+		minArgs: 1,
+		maxArgs: 2,
+		usage:   "expose <container> [level]",
+		summary: "set public access on a storage container",
+		build: func(args []string) string {
+			parts := []string{"expose"}
+			parts = append(parts, args...)
+			return strings.Join(parts, " ")
+		},
+	},
+	"unexpose": {
+		payload: "bucket-acl-check",
+		minArgs: 1,
+		maxArgs: 1,
+		usage:   "unexpose <container>",
+		summary: "revert public access on a storage container",
+		build: func(args []string) string {
+			return "unexpose " + args[0]
+		},
+	},
+	"keyls": {
+		payload: "sa-key-check",
+		minArgs: 1,
+		maxArgs: 1,
+		usage:   "keyls <service-account>",
+		summary: "list service-account keys",
+		build: func(args []string) string {
+			return "list " + args[0]
+		},
+	},
+	"keyadd": {
+		payload: "sa-key-check",
+		minArgs: 1,
+		maxArgs: 1,
+		usage:   "keyadd <service-account>",
+		summary: "mint a validation service-account key",
+		build: func(args []string) string {
+			return "create " + args[0]
+		},
+	},
+	"keydel": {
+		payload: "sa-key-check",
+		minArgs: 2,
+		maxArgs: 2,
+		usage:   "keydel <service-account> <key-id>",
+		summary: "revoke a service-account key",
+		build: func(args []string) string {
+			return "delete " + args[0] + " " + args[1]
+		},
+	},
 }
 
 func resolveRunRequest(command string, args []string, flags commandFlags) (string, string, error) {

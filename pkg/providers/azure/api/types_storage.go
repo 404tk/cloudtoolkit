@@ -23,11 +23,23 @@ type ListBlobServicesResponse struct {
 }
 
 type BlobContainer struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID         string                  `json:"id"`
+	Name       string                  `json:"name"`
+	Properties *BlobContainerProperties `json:"properties,omitempty"`
+}
+
+type BlobContainerProperties struct {
+	PublicAccess string `json:"publicAccess,omitempty"`
 }
 
 type ListBlobContainersResponse struct {
 	Value    []BlobContainer `json:"value"`
 	NextLink string          `json:"nextLink"`
+}
+
+// BlobContainerPatchRequest is the body of PATCH on the container resource. It
+// is also valid for PUT (update). PublicAccess values: "None", "Blob",
+// "Container".
+type BlobContainerPatchRequest struct {
+	Properties BlobContainerProperties `json:"properties"`
 }

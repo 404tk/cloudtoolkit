@@ -75,6 +75,68 @@ var demoServiceAccounts = []serviceAccountFixture{
 	},
 }
 
+func findServiceAccount(emailOrUniqueID string) (serviceAccountFixture, bool) {
+	emailOrUniqueID = strings.TrimSpace(emailOrUniqueID)
+	for _, sa := range demoServiceAccounts {
+		if strings.EqualFold(sa.Email, emailOrUniqueID) || sa.UniqueID == emailOrUniqueID {
+			return sa, true
+		}
+	}
+	return serviceAccountFixture{}, false
+}
+
+// demoBindings is the seeded project IAM policy. The replay returns this on
+// the first getIamPolicy call, then mutates it on setIamPolicy under
+// transport-state.
+var demoBindings = []bindingFixture{
+	{Role: "roles/owner", Members: []string{"user:ctk-owner@example.com"}},
+	{Role: "roles/viewer", Members: []string{
+		"serviceAccount:ctk-readonly@ctk-demo-project.iam.gserviceaccount.com",
+	}},
+}
+
+type bindingFixture struct {
+	Role    string
+	Members []string
+}
+
+// demoSAKeys is the seed list of system-managed keys returned by
+// projects.serviceAccounts.keys.list. Replays add user-managed keys to
+// transport-state on create.
+var demoSAKeys = map[string][]saKeyFixture{
+	"ctk-demo@ctk-demo-project.iam.gserviceaccount.com": {
+		{KeyID: "00000000aaaaaaaa1111111122222222deadbeef", KeyType: "SYSTEM_MANAGED", ValidAfter: "2026-01-01T00:00:00Z", ValidBefore: "2027-01-01T00:00:00Z"},
+	},
+	"ctk-readonly@ctk-demo-project.iam.gserviceaccount.com": {
+		{KeyID: "11111111bbbbbbbb2222222233333333cafef00d", KeyType: "SYSTEM_MANAGED", ValidAfter: "2026-01-01T00:00:00Z", ValidBefore: "2027-01-01T00:00:00Z"},
+	},
+}
+
+type saKeyFixture struct {
+	KeyID       string
+	KeyType     string
+	ValidAfter  string
+	ValidBefore string
+}
+
+// seedSAKeys clones the seed map so the transport can mutate it freely.
+func seedSAKeys() map[string][]saKeyFixture {
+	out := make(map[string][]saKeyFixture, len(demoSAKeys))
+	for k, v := range demoSAKeys {
+		out[k] = append([]saKeyFixture(nil), v...)
+	}
+	return out
+}
+
+// seedBindings clones the seed slice so the transport can mutate it freely.
+func seedBindings() []bindingFixture {
+	out := make([]bindingFixture, len(demoBindings))
+	for i, b := range demoBindings {
+		out[i] = bindingFixture{Role: b.Role, Members: append([]string(nil), b.Members...)}
+	}
+	return out
+}
+
 type managedZoneFixture struct {
 	Name    string
 	DNSName string

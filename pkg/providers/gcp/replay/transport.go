@@ -1,18 +1,34 @@
 package replay
 
 import (
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/gcp/api"
 	demoreplay "github.com/404tk/cloudtoolkit/pkg/providers/replay"
 )
 
-type transport struct{}
+type transport struct {
+	mu       sync.Mutex
+	bindings []bindingFixture
+	policyEt int64
+	saKeys   map[string][]saKeyFixture
+}
 
-func newTransport() *transport { return &transport{} }
+func newTransport() *transport {
+	return &transport{
+		bindings: seedBindings(),
+		saKeys:   seedSAKeys(),
+	}
+}
 
 func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	body, err := demoreplay.ReadRequestBody(req)
@@ -34,13 +50,19 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 			return apiErrorResponse(req, http.StatusUnauthorized, "UNAUTHENTICATED",
 				"Request had invalid authentication credentials."), nil
 		}
-		return t.handleIAM(req)
+		return t.handleIAM(req, body)
 	case "dns.googleapis.com":
 		if !verifyBearer(req) {
 			return apiErrorResponse(req, http.StatusUnauthorized, "UNAUTHENTICATED",
 				"Request had invalid authentication credentials."), nil
 		}
 		return t.handleDNS(req)
+	case "cloudresourcemanager.googleapis.com":
+		if !verifyBearer(req) {
+			return apiErrorResponse(req, http.StatusUnauthorized, "UNAUTHENTICATED",
+				"Request had invalid authentication credentials."), nil
+		}
+		return t.handleResourceManager(req, body)
 	}
 	return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
 		fmt.Sprintf("unsupported replay host: %s", host)), nil
@@ -187,11 +209,14 @@ func handleListInstances(req *http.Request, zone string) (*http.Response, error)
 	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 }
 
-func (t *transport) handleIAM(req *http.Request) (*http.Response, error) {
+func (t *transport) handleIAM(req *http.Request, body []byte) (*http.Response, error) {
 	path := strings.Trim(req.URL.Path, "/")
 	parts := strings.Split(path, "/")
-	// expected: v1/projects/{p}/serviceAccounts
-	if len(parts) != 4 || parts[0] != "v1" || parts[1] != "projects" || parts[3] != "serviceAccounts" {
+	// expected:
+	//   v1/projects/{p}/serviceAccounts                      (list)
+	//   v1/projects/{p}/serviceAccounts/{sa}/keys            (list / create)
+	//   v1/projects/{p}/serviceAccounts/{sa}/keys/{keyId}    (delete)
+	if len(parts) < 4 || parts[0] != "v1" || parts[1] != "projects" || parts[3] != "serviceAccounts" {
 		return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
 			fmt.Sprintf("unsupported iam path: %s", path)), nil
 	}
@@ -199,6 +224,43 @@ func (t *transport) handleIAM(req *http.Request) (*http.Response, error) {
 		return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
 			fmt.Sprintf("project %s not visible to current credentials", parts[2])), nil
 	}
+	switch len(parts) {
+	case 4:
+		return handleListServiceAccounts(req)
+	case 5, 6, 7:
+		// fall through to keys handling
+	default:
+		return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
+			fmt.Sprintf("unsupported iam path: %s", path)), nil
+	}
+	if len(parts) < 6 || parts[5] != "keys" {
+		return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
+			fmt.Sprintf("unsupported iam path: %s", path)), nil
+	}
+	saEmail := parts[4]
+	sa, ok := findServiceAccount(saEmail)
+	if !ok {
+		return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
+			fmt.Sprintf("service account %s not found", saEmail)), nil
+	}
+	switch len(parts) {
+	case 6:
+		switch req.Method {
+		case http.MethodGet:
+			return t.handleListSAKeys(req, sa)
+		case http.MethodPost:
+			return t.handleCreateSAKey(req, sa, body)
+		}
+	case 7:
+		if req.Method == http.MethodDelete {
+			return t.handleDeleteSAKey(req, sa, parts[6])
+		}
+	}
+	return apiErrorResponse(req, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED",
+		fmt.Sprintf("method %s not supported on iam path", req.Method)), nil
+}
+
+func handleListServiceAccounts(req *http.Request) (*http.Response, error) {
 	resp := api.ListServiceAccountsResponse{}
 	for _, sa := range demoServiceAccounts {
 		resp.Accounts = append(resp.Accounts, api.ServiceAccount{
@@ -212,6 +274,192 @@ func (t *transport) handleIAM(req *http.Request) (*http.Response, error) {
 		})
 	}
 	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+}
+
+func (t *transport) handleListSAKeys(req *http.Request, sa serviceAccountFixture) (*http.Response, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	resp := api.ListServiceAccountKeysResponse{}
+	for _, k := range t.saKeys[sa.Email] {
+		resp.Keys = append(resp.Keys, api.ServiceAccountKey{
+			Name:            fmt.Sprintf("%s/keys/%s", sa.Name, k.KeyID),
+			KeyType:         k.KeyType,
+			KeyAlgorithm:    "KEY_ALG_RSA_2048",
+			ValidAfterTime:  k.ValidAfter,
+			ValidBeforeTime: k.ValidBefore,
+		})
+	}
+	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+}
+
+func (t *transport) handleCreateSAKey(req *http.Request, sa serviceAccountFixture, body []byte) (*http.Response, error) {
+	if len(body) > 0 {
+		var payload api.CreateServiceAccountKeyRequest
+		if err := json.Unmarshal(body, &payload); err != nil {
+			return apiErrorResponse(req, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error()), nil
+		}
+	}
+	keyID, err := newSAKeyID()
+	if err != nil {
+		return apiErrorResponse(req, http.StatusInternalServerError, "INTERNAL", err.Error()), nil
+	}
+	now := time.Now().UTC()
+	t.mu.Lock()
+	t.saKeys[sa.Email] = append(t.saKeys[sa.Email], saKeyFixture{
+		KeyID:       keyID,
+		KeyType:     "USER_MANAGED",
+		ValidAfter:  now.Format(time.RFC3339),
+		ValidBefore: now.AddDate(2, 0, 0).Format(time.RFC3339),
+	})
+	t.mu.Unlock()
+	demoCredJSON := buildDemoServiceAccountKeyJSON(sa.Email, keyID)
+	resp := api.ServiceAccountKey{
+		Name:            fmt.Sprintf("%s/keys/%s", sa.Name, keyID),
+		KeyType:         "USER_MANAGED",
+		KeyAlgorithm:    "KEY_ALG_RSA_2048",
+		PrivateKeyType:  "TYPE_GOOGLE_CREDENTIALS_FILE",
+		PrivateKeyData:  base64.StdEncoding.EncodeToString([]byte(demoCredJSON)),
+		ValidAfterTime:  now.Format(time.RFC3339),
+		ValidBeforeTime: now.AddDate(2, 0, 0).Format(time.RFC3339),
+	}
+	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+}
+
+func (t *transport) handleDeleteSAKey(req *http.Request, sa serviceAccountFixture, keyID string) (*http.Response, error) {
+	t.mu.Lock()
+	keys := t.saKeys[sa.Email]
+	idx := -1
+	for i, k := range keys {
+		if k.KeyID == keyID {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		t.mu.Unlock()
+		return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
+			fmt.Sprintf("service account key %s not found", keyID)), nil
+	}
+	t.saKeys[sa.Email] = append(keys[:idx], keys[idx+1:]...)
+	t.mu.Unlock()
+	return demoreplay.JSONResponse(req, http.StatusOK, struct{}{}), nil
+}
+
+// handleResourceManager dispatches getIamPolicy / setIamPolicy under
+// cloudresourcemanager.googleapis.com.
+func (t *transport) handleResourceManager(req *http.Request, body []byte) (*http.Response, error) {
+	path := strings.Trim(req.URL.Path, "/")
+	// expected: v1/projects/{p}:getIamPolicy or v1/projects/{p}:setIamPolicy
+	if !strings.HasPrefix(path, "v1/projects/") {
+		return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
+			fmt.Sprintf("unsupported resource manager path: %s", path)), nil
+	}
+	tail := strings.TrimPrefix(path, "v1/projects/")
+	colon := strings.LastIndex(tail, ":")
+	if colon < 0 {
+		return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
+			fmt.Sprintf("unsupported resource manager path: %s", path)), nil
+	}
+	project := tail[:colon]
+	verb := tail[colon+1:]
+	if project != demoProjectID {
+		return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
+			fmt.Sprintf("project %s not visible to current credentials", project)), nil
+	}
+	switch verb {
+	case "getIamPolicy":
+		return t.handleGetIamPolicy(req)
+	case "setIamPolicy":
+		return t.handleSetIamPolicy(req, body)
+	}
+	return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
+		fmt.Sprintf("unsupported resource manager verb: %s", verb)), nil
+}
+
+func (t *transport) handleGetIamPolicy(req *http.Request) (*http.Response, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	resp := api.IamPolicy{
+		Version:  3,
+		Etag:     t.currentEtag(),
+		Bindings: cloneBindingsAPI(t.bindings),
+	}
+	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+}
+
+func (t *transport) handleSetIamPolicy(req *http.Request, body []byte) (*http.Response, error) {
+	var payload api.SetIamPolicyRequest
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return apiErrorResponse(req, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error()), nil
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	expected := t.currentEtag()
+	if strings.TrimSpace(payload.Policy.Etag) != expected {
+		return apiErrorResponse(req, http.StatusConflict, "ABORTED",
+			"etag does not match current policy version"), nil
+	}
+	bindings := make([]bindingFixture, 0, len(payload.Policy.Bindings))
+	for _, b := range payload.Policy.Bindings {
+		bindings = append(bindings, bindingFixture{
+			Role:    b.Role,
+			Members: append([]string(nil), b.Members...),
+		})
+	}
+	t.bindings = bindings
+	t.policyEt++
+	resp := api.IamPolicy{
+		Version:  3,
+		Etag:     t.currentEtag(),
+		Bindings: cloneBindingsAPI(t.bindings),
+	}
+	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+}
+
+func (t *transport) currentEtag() string {
+	return "etag-" + strconv.FormatInt(t.policyEt, 10)
+}
+
+func cloneBindingsAPI(bindings []bindingFixture) []api.Binding {
+	if len(bindings) == 0 {
+		return nil
+	}
+	out := make([]api.Binding, len(bindings))
+	for i, b := range bindings {
+		out[i] = api.Binding{
+			Role:    b.Role,
+			Members: append([]string(nil), b.Members...),
+		}
+	}
+	return out
+}
+
+// newSAKeyID returns a 40-char hex string mimicking GCP service account key IDs.
+func newSAKeyID() (string, error) {
+	var b [20]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%x", b[:]), nil
+}
+
+// buildDemoServiceAccountKeyJSON renders a fake credentials JSON the replay
+// returns from CreateKey. The key is unusable for real auth (the private key
+// material is a placeholder) but the shape mirrors GCP output so callers can
+// validate parsing.
+func buildDemoServiceAccountKeyJSON(email, keyID string) string {
+	doc := map[string]string{
+		"type":           "service_account",
+		"project_id":     demoProjectID,
+		"private_key_id": keyID,
+		"private_key":    "-----BEGIN PRIVATE KEY-----\nDEMO_REPLAY_PLACEHOLDER\n-----END PRIVATE KEY-----\n",
+		"client_email":   email,
+		"client_id":      "100000000000000000099",
+		"auth_uri":       "https://accounts.google.com/o/oauth2/auth",
+		"token_uri":      "https://oauth2.googleapis.com/token",
+	}
+	body, _ := json.Marshal(doc)
+	return string(body)
 }
 
 func (t *transport) handleDNS(req *http.Request) (*http.Response, error) {

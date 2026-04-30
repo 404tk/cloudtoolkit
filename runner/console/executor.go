@@ -135,6 +135,12 @@ func set(args []string) {
 			config[utils.Metadata] = utils.BucketCheck
 		case "event-check":
 			config[utils.Metadata] = utils.EventCheck
+		case "role-binding-check":
+			config[utils.Metadata] = "list"
+		case "bucket-acl-check":
+			config[utils.Metadata] = "audit"
+		case "sa-key-check":
+			config[utils.Metadata] = ""
 		default:
 			config[utils.Metadata] = ""
 		}

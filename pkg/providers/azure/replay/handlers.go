@@ -1,11 +1,13 @@
 package replay
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
 
 	azapi "github.com/404tk/cloudtoolkit/pkg/providers/azure/api"
+	demoreplay "github.com/404tk/cloudtoolkit/pkg/providers/replay"
 )
 
 func (t *transport) handleARM(req *http.Request) (*http.Response, error) {
@@ -117,6 +119,10 @@ func (t *transport) handleSubscriptionProvider(req *http.Request, subscription s
 	switch {
 	case strings.EqualFold(provider, "Microsoft.Storage") && len(rest) >= 1 && rest[0] == "storageAccounts":
 		return t.handleListStorageAccounts(req, subscription)
+	case strings.EqualFold(provider, "Microsoft.Authorization") && len(rest) >= 1 && rest[0] == "roleAssignments":
+		return t.handleRoleAssignments(req, subscription, rest[1:])
+	case strings.EqualFold(provider, "Microsoft.Authorization") && len(rest) >= 1 && rest[0] == "roleDefinitions":
+		return t.handleRoleDefinitions(req, subscription, rest[1:])
 	}
 	return armErrorResponse(req, http.StatusNotFound, "InvalidPath",
 		fmt.Sprintf("unsupported subscription provider: %s/%v", provider, rest)), nil
@@ -217,12 +223,14 @@ func (t *transport) handleStorageScoped(req *http.Request, subscription, group s
 	}
 	rest := parts[1:]
 	if len(rest) >= 1 && rest[0] == "blobServices" {
-		// blobServices, blobServices/default, blobServices/default/containers
+		// blobServices, blobServices/default, blobServices/default/containers, blobServices/default/containers/{name}
 		switch {
 		case len(rest) == 1:
 			return t.handleListBlobServices(req, subscription, group, account)
-		case len(rest) >= 3 && rest[2] == "containers":
+		case len(rest) == 3 && rest[2] == "containers":
 			return t.handleListBlobContainers(req, subscription, group, account, rest[1])
+		case len(rest) == 4 && rest[2] == "containers":
+			return t.handleContainerACL(req, subscription, group, account, rest[1], rest[3])
 		}
 	}
 	return armErrorResponse(req, http.StatusNotFound, "InvalidPath",
@@ -244,11 +252,299 @@ func (t *transport) handleListBlobServices(req *http.Request, subscription, grou
 func (t *transport) handleListBlobContainers(req *http.Request, subscription, group string, account storageAccountFixture, serviceName string) (*http.Response, error) {
 	resp := azapi.ListBlobContainersResponse{}
 	for _, name := range account.BlobContainers {
+		level := t.lookupContainerACL(group, account.Name, name)
 		resp.Value = append(resp.Value, azapi.BlobContainer{
 			ID: fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Storage/storageAccounts/%s/blobServices/%s/containers/%s",
 				subscription, group, account.Name, serviceName, name),
 			Name: name,
+			Properties: &azapi.BlobContainerProperties{
+				PublicAccess: level,
+			},
 		})
 	}
 	return jsonResponse(req, resp), nil
+}
+
+func (t *transport) handleContainerACL(req *http.Request, subscription, group string, account storageAccountFixture, serviceName, container string) (*http.Response, error) {
+	if !containerExists(account, container) {
+		return armErrorResponse(req, http.StatusNotFound, "ContainerNotFound",
+			fmt.Sprintf("container %s not found in account %s", container, account.Name)), nil
+	}
+	switch req.Method {
+	case http.MethodGet:
+		level := t.lookupContainerACL(group, account.Name, container)
+		resp := azapi.BlobContainer{
+			ID: fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Storage/storageAccounts/%s/blobServices/%s/containers/%s",
+				subscription, group, account.Name, serviceName, container),
+			Name: container,
+			Properties: &azapi.BlobContainerProperties{
+				PublicAccess: level,
+			},
+		}
+		return jsonResponse(req, resp), nil
+	case http.MethodPatch, http.MethodPut:
+		body, err := readBody(req)
+		if err != nil {
+			return armErrorResponse(req, http.StatusBadRequest, "InvalidRequestBody", err.Error()), nil
+		}
+		var patch azapi.BlobContainerPatchRequest
+		if err := json.Unmarshal(body, &patch); err != nil {
+			return armErrorResponse(req, http.StatusBadRequest, "InvalidRequestBody", err.Error()), nil
+		}
+		level := strings.TrimSpace(patch.Properties.PublicAccess)
+		if level == "" {
+			level = "None"
+		}
+		switch level {
+		case "None", "Blob", "Container":
+		default:
+			return armErrorResponse(req, http.StatusBadRequest, "InvalidParameter",
+				fmt.Sprintf("publicAccess %q is not one of None / Blob / Container", level)), nil
+		}
+		t.setContainerACL(group, account.Name, container, level)
+		resp := azapi.BlobContainer{
+			ID: fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Storage/storageAccounts/%s/blobServices/%s/containers/%s",
+				subscription, group, account.Name, serviceName, container),
+			Name: container,
+			Properties: &azapi.BlobContainerProperties{
+				PublicAccess: level,
+			},
+		}
+		return jsonResponse(req, resp), nil
+	}
+	return armErrorResponse(req, http.StatusMethodNotAllowed, "MethodNotAllowed",
+		fmt.Sprintf("method %s not supported on container", req.Method)), nil
+}
+
+func (t *transport) lookupContainerACL(group, account, container string) string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if v, ok := t.containerACLOverrides[containerACLKey(group, account, container)]; ok {
+		return v
+	}
+	return "None"
+}
+
+func (t *transport) setContainerACL(group, account, container, level string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.containerACLOverrides[containerACLKey(group, account, container)] = level
+}
+
+func containerExists(account storageAccountFixture, name string) bool {
+	for _, c := range account.BlobContainers {
+		if c == name {
+			return true
+		}
+	}
+	return false
+}
+
+func readBody(req *http.Request) ([]byte, error) {
+	return demoreplay.ReadRequestBody(req)
+}
+
+// handleRoleAssignments serves PUT/GET/DELETE under
+// /subscriptions/{sub}/providers/Microsoft.Authorization/roleAssignments[/{name}].
+func (t *transport) handleRoleAssignments(req *http.Request, subscription string, parts []string) (*http.Response, error) {
+	scope := "/subscriptions/" + subscription
+	switch len(parts) {
+	case 0:
+		if req.Method != http.MethodGet {
+			return armErrorResponse(req, http.StatusMethodNotAllowed, "MethodNotAllowed",
+				fmt.Sprintf("method %s not supported on roleAssignments", req.Method)), nil
+		}
+		filter := req.URL.Query().Get("$filter")
+		principalFilter := parsePrincipalIDFilter(filter)
+		assignments := t.activeAssignments(scope)
+		resp := azapi.ListRoleAssignmentsResponse{}
+		for _, a := range assignments {
+			if principalFilter != "" && !strings.EqualFold(a.PrincipalID, principalFilter) {
+				continue
+			}
+			resp.Value = append(resp.Value, t.assignmentToARM(scope, a))
+		}
+		return jsonResponse(req, resp), nil
+	case 1:
+		assignmentName := parts[0]
+		switch req.Method {
+		case http.MethodPut:
+			body, err := readBody(req)
+			if err != nil {
+				return armErrorResponse(req, http.StatusBadRequest, "InvalidRequestBody", err.Error()), nil
+			}
+			var payload azapi.CreateRoleAssignmentRequest
+			if err := json.Unmarshal(body, &payload); err != nil {
+				return armErrorResponse(req, http.StatusBadRequest, "InvalidRequestBody", err.Error()), nil
+			}
+			if !isKnownPrincipal(payload.Properties.PrincipalID) {
+				return armErrorResponse(req, http.StatusBadRequest, "PrincipalNotFound",
+					fmt.Sprintf("principal %s not found in directory", payload.Properties.PrincipalID)), nil
+			}
+			defGUID := extractRoleDefinitionGUID(payload.Properties.RoleDefinitionID)
+			if _, ok := roleDefinitionByGUID(defGUID); !ok {
+				return armErrorResponse(req, http.StatusBadRequest, "RoleDefinitionDoesNotExist",
+					fmt.Sprintf("role definition %s does not exist", payload.Properties.RoleDefinitionID)), nil
+			}
+			fixture := roleAssignmentFixture{
+				Name:             assignmentName,
+				PrincipalID:      payload.Properties.PrincipalID,
+				RoleDefinitionID: defGUID,
+				Scope:            scope,
+			}
+			t.storeAssignment(fixture)
+			return jsonResponse(req, t.assignmentToARM(scope, fixture)), nil
+		case http.MethodGet:
+			fixture, ok := t.findAssignment(assignmentName, scope)
+			if !ok {
+				return armErrorResponse(req, http.StatusNotFound, "RoleAssignmentNotFound",
+					fmt.Sprintf("role assignment %s not found", assignmentName)), nil
+			}
+			return jsonResponse(req, t.assignmentToARM(scope, fixture)), nil
+		case http.MethodDelete:
+			fixture, ok := t.findAssignment(assignmentName, scope)
+			if !ok {
+				return armErrorResponse(req, http.StatusNotFound, "RoleAssignmentNotFound",
+					fmt.Sprintf("role assignment %s not found", assignmentName)), nil
+			}
+			t.deleteAssignment(assignmentName)
+			return jsonResponse(req, t.assignmentToARM(scope, fixture)), nil
+		}
+		return armErrorResponse(req, http.StatusMethodNotAllowed, "MethodNotAllowed",
+			fmt.Sprintf("method %s not supported on roleAssignment", req.Method)), nil
+	}
+	return armErrorResponse(req, http.StatusNotFound, "InvalidPath",
+		fmt.Sprintf("unsupported roleAssignments path: %v", parts)), nil
+}
+
+// handleRoleDefinitions serves GET under
+// /subscriptions/{sub}/providers/Microsoft.Authorization/roleDefinitions[?$filter=...].
+func (t *transport) handleRoleDefinitions(req *http.Request, subscription string, parts []string) (*http.Response, error) {
+	if req.Method != http.MethodGet {
+		return armErrorResponse(req, http.StatusMethodNotAllowed, "MethodNotAllowed",
+			fmt.Sprintf("method %s not supported on roleDefinitions", req.Method)), nil
+	}
+	filter := req.URL.Query().Get("$filter")
+	wantName := parseRoleNameFilter(filter)
+	scope := "/subscriptions/" + subscription
+	resp := azapi.ListRoleDefinitionsResponse{}
+	for _, def := range demoRoleDefinitions {
+		if wantName != "" && !strings.EqualFold(def.Name, wantName) {
+			continue
+		}
+		resp.Value = append(resp.Value, azapi.RoleDefinition{
+			ID:   scope + "/providers/Microsoft.Authorization/roleDefinitions/" + def.GUID,
+			Name: def.GUID,
+			Type: "Microsoft.Authorization/roleDefinitions",
+			Properties: azapi.RoleDefinitionProperties{
+				RoleName: def.Name,
+				Type:     "BuiltInRole",
+			},
+		})
+	}
+	return jsonResponse(req, resp), nil
+}
+
+func (t *transport) activeAssignments(scope string) []roleAssignmentFixture {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	out := make([]roleAssignmentFixture, 0, len(demoRoleAssignments)+len(t.createdAssignments))
+	for _, a := range demoRoleAssignments {
+		if t.deletedAssignments[a.Name] {
+			continue
+		}
+		copy := a
+		if copy.Scope == "" {
+			copy.Scope = scope
+		}
+		out = append(out, copy)
+	}
+	for _, a := range t.createdAssignments {
+		if t.deletedAssignments[a.Name] {
+			continue
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
+func (t *transport) findAssignment(name, scope string) (roleAssignmentFixture, bool) {
+	for _, a := range t.activeAssignments(scope) {
+		if a.Name == name {
+			return a, true
+		}
+	}
+	return roleAssignmentFixture{}, false
+}
+
+func (t *transport) storeAssignment(fixture roleAssignmentFixture) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.createdAssignments[fixture.Name] = fixture
+	delete(t.deletedAssignments, fixture.Name)
+}
+
+func (t *transport) deleteAssignment(name string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	delete(t.createdAssignments, name)
+	t.deletedAssignments[name] = true
+}
+
+func (t *transport) assignmentToARM(scope string, fixture roleAssignmentFixture) azapi.RoleAssignment {
+	target := scope
+	if fixture.Scope != "" {
+		target = fixture.Scope
+	}
+	return azapi.RoleAssignment{
+		ID:   target + "/providers/Microsoft.Authorization/roleAssignments/" + fixture.Name,
+		Name: fixture.Name,
+		Type: "Microsoft.Authorization/roleAssignments",
+		Properties: azapi.RoleAssignmentProperties{
+			RoleDefinitionID: target + "/providers/Microsoft.Authorization/roleDefinitions/" + fixture.RoleDefinitionID,
+			PrincipalID:      fixture.PrincipalID,
+			Scope:            target,
+		},
+	}
+}
+
+func extractRoleDefinitionGUID(id string) string {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return ""
+	}
+	idx := strings.LastIndex(id, "/")
+	if idx < 0 {
+		return id
+	}
+	return id[idx+1:]
+}
+
+func parseRoleNameFilter(filter string) string {
+	return parseEqFilter(filter, "roleName")
+}
+
+func parsePrincipalIDFilter(filter string) string {
+	return parseEqFilter(filter, "principalId")
+}
+
+// parseEqFilter pulls "value" out of a filter clause shaped like
+// "<field> eq '<value>'". Returns "" when the clause does not match. Replay
+// only needs the equality form.
+func parseEqFilter(filter, field string) string {
+	filter = strings.TrimSpace(filter)
+	if filter == "" {
+		return ""
+	}
+	prefix := field + " eq '"
+	idx := strings.Index(filter, prefix)
+	if idx < 0 {
+		return ""
+	}
+	rest := filter[idx+len(prefix):]
+	end := strings.Index(rest, "'")
+	if end < 0 {
+		return ""
+	}
+	return rest[:end]
 }

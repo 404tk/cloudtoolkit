@@ -111,6 +111,8 @@ var providers = map[string]providerMeta{
 		},
 		Payloads: []string{
 			"cloudlist",
+			"role-binding-check",
+			"bucket-acl-check",
 		},
 	},
 	"gcp": {
@@ -123,6 +125,8 @@ var providers = map[string]providerMeta{
 		},
 		Payloads: []string{
 			"cloudlist",
+			"role-binding-check",
+			"sa-key-check",
 		},
 	},
 	"jdcloud": {

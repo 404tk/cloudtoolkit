@@ -106,6 +106,81 @@ type DBManager interface {
 	DBManagement(context.Context, string, string) (DatabaseActionResult, error)
 }
 
+// RoleBindingManager powers the role-binding-check payload. It abstracts the
+// "bind a principal to a role at a scope" operation that Azure RBAC and GCP
+// IAM project bindings share, so a single payload can drive validation across
+// providers. `scope` is provider-specific: an absolute Azure resource ID or a
+// GCP project / resource path. An empty scope means "use the provider default
+// scope" (subscription / current project).
+type RoleBindingManager interface {
+	Provider
+	RoleBinding(ctx context.Context, action, principal, role, scope string) (RoleBindingResult, error)
+}
+
+type RoleBindingResult struct {
+	Action       string
+	Principal    string
+	Role         string
+	Scope        string
+	AssignmentID string
+	Bindings     []RoleBinding
+	Message      string
+}
+
+type RoleBinding struct {
+	Principal    string
+	Role         string
+	Scope        string
+	AssignmentID string
+}
+
+// BucketACLManager powers the bucket-acl-check payload. It exposes operations
+// to audit and toggle public access on object-storage containers. `level` is
+// only used for `expose` and is provider-specific (e.g. Azure "Blob"|"Container").
+type BucketACLManager interface {
+	Provider
+	BucketACL(ctx context.Context, action, container, level string) (BucketACLResult, error)
+}
+
+type BucketACLResult struct {
+	Action     string
+	Container  string
+	Level      string
+	Containers []BucketACLEntry
+	Message    string
+}
+
+type BucketACLEntry struct {
+	Account   string
+	Container string
+	Level     string
+}
+
+// ServiceAccountKeyManager powers the sa-key-check payload. It validates
+// detection coverage for service-account credential lifecycle: enumerating,
+// minting, and revoking long-lived keys. PrivateKeyData on a `create` action
+// is base64 of the credential JSON the cloud returns once at creation time.
+type ServiceAccountKeyManager interface {
+	Provider
+	ServiceAccountKey(ctx context.Context, action, serviceAccount, keyID string) (ServiceAccountKeyResult, error)
+}
+
+type ServiceAccountKeyResult struct {
+	Action         string
+	ServiceAccount string
+	KeyID          string
+	PrivateKeyData string
+	Keys           []ServiceAccountKey
+	Message        string
+}
+
+type ServiceAccountKey struct {
+	KeyID       string
+	KeyType     string
+	ValidAfter  string
+	ValidBefore string
+}
+
 type EventActionResult struct {
 	Action  string
 	Scope   string

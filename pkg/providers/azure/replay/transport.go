@@ -6,13 +6,25 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 
 	demoreplay "github.com/404tk/cloudtoolkit/pkg/providers/replay"
 )
 
-type transport struct{}
+type transport struct {
+	mu                    sync.Mutex
+	createdAssignments    map[string]roleAssignmentFixture
+	deletedAssignments    map[string]bool
+	containerACLOverrides map[string]string
+}
 
-func newTransport() *transport { return &transport{} }
+func newTransport() *transport {
+	return &transport{
+		createdAssignments:    make(map[string]roleAssignmentFixture),
+		deletedAssignments:    make(map[string]bool),
+		containerACLOverrides: make(map[string]string),
+	}
+}
 
 func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	body, err := demoreplay.ReadRequestBody(req)

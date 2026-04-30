@@ -10,7 +10,7 @@ CloudToolKit helps defenders reproduce realistic cloud security scenarios in own
 
 - **Multi-Cloud Coverage** - Alibaba, Tencent, Huawei, AWS, Azure, GCP, Volcengine, JDCloud, and UCloud
 - **Cloud Asset Inventory** - Hosts, databases, storage buckets, domains, IAM users, and related cloud resources
-- **Defender-Side Validation Payloads** - `iam-user-check`, `bucket-check`, `instance-cmd-check`, `event-check`, and `rds-account-check`
+- **Defender-Side Validation Payloads** - `iam-user-check`, `bucket-check`, `instance-cmd-check`, `event-check`, `rds-account-check`, `role-binding-check`, `bucket-acl-check`, and `sa-key-check`
 - **Interactive CLI** - Tab completion, session management, and credential caching
 - **Lightweight Provider Clients** - AWS, Azure, Tencent, Huawei, and Alibaba integrations are being gradually decoupled from heavy official SDK paths
 
@@ -22,8 +22,8 @@ CloudToolKit helps defenders reproduce realistic cloud security scenarios in own
 | Tencent Cloud | CVM, Lighthouse, COS, CAM, CDB, DNSPod | iam-user-check, bucket-check, instance-cmd-check |
 | Huawei Cloud | ECS, OBS, IAM, RDS | iam-user-check, bucket-check |
 | AWS | EC2, S3, IAM | iam-user-check, bucket-check |
-| Azure | Virtual Machines, Blob Storage | - |
-| GCP | Compute Engine, Cloud DNS, IAM | - |
+| Azure | Virtual Machines, Blob Storage | role-binding-check, bucket-acl-check |
+| GCP | Compute Engine, Cloud DNS, IAM | role-binding-check, sa-key-check |
 | Volcengine | ECS, IAM, TOS, RDS, DNS | iam-user-check, bucket-check, instance-cmd-check |
 | JDCloud | VM, LAVM, IAM, OSS | iam-user-check, bucket-check, instance-cmd-check |
 | UCloud | UHost, IAM, US3, UDB, UDNS | iam-user-check |
@@ -35,11 +35,16 @@ CloudToolKit helps defenders reproduce realistic cloud security scenarios in own
 - Use `instance-cmd-check` to generate telemetry for command execution, process correlation, and investigation workflows on a test instance.
 - Use `event-check` to review cloud security events and suspicious resource operations for investigation context, enrichment quality, and timeline reconstruction.
 - Use `rds-account-check` to provision read-only RDS access in an authorized environment to validate database visibility, control coverage, and investigation readiness.
+- Use `role-binding-check` to bind or unbind a test principal at an authorized scope to validate role-assignment telemetry, alerting, and audit trail coverage (Azure RBAC, GCP project IAM bindings).
+- Use `bucket-acl-check` to toggle storage container public-access settings in an authorized environment to validate detection coverage for unintended data exposure (Azure Blob containers).
+- Use `sa-key-check` to mint or revoke a service-account key in an authorized environment to validate detection coverage for credential lifecycle abuse (GCP service accounts).
 
 ## Use Cases
 
 - storage exposure checks in authorized environments
 - IAM lifecycle checks for identity telemetry and alert validation
+- role assignment / IAM binding checks for privilege change detection coverage
+- service-account key lifecycle checks for long-lived credential abuse detection
 - instance execution telemetry checks for detection and investigation workflows
 - RDS account validation for database visibility and control verification
 - cross-signal investigation testing across identity, compute, storage, and database activity

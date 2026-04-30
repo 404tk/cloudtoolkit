@@ -3,7 +3,9 @@ package gcp
 import (
 	"context"
 	"encoding/base64"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/gcp/api"
@@ -114,4 +116,105 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 		})
 
 	return collector.Collect(ctx, env.From(ctx).Cloudlist)
+}
+
+// RoleBinding implements schema.RoleBindingManager for GCP project-level IAM
+// bindings. The scope argument is the project ID; an empty value falls back
+// to the credential's project.
+func (p *Provider) RoleBinding(ctx context.Context, action, principal, role, scope string) (schema.RoleBindingResult, error) {
+	driver := &_iam.Driver{Projects: p.projects, Client: p.apiClient}
+	project := strings.TrimSpace(scope)
+	if project == "" && len(p.projects) > 0 {
+		project = p.projects[0]
+	}
+	if project == "" {
+		return schema.RoleBindingResult{Action: action}, fmt.Errorf("gcp: no project configured for role binding")
+	}
+	result := schema.RoleBindingResult{
+		Action:    action,
+		Principal: principal,
+		Role:      role,
+		Scope:     project,
+	}
+	switch action {
+	case "list":
+		policy, err := driver.GetProjectIamPolicy(ctx, project)
+		if err != nil {
+			return result, err
+		}
+		for _, b := range policy.Bindings {
+			for _, member := range b.Members {
+				if principal != "" && !strings.EqualFold(member, principal) {
+					continue
+				}
+				result.Bindings = append(result.Bindings, schema.RoleBinding{
+					Principal: member,
+					Role:      b.Role,
+					Scope:     project,
+				})
+			}
+		}
+		result.Message = fmt.Sprintf("%d role bindings on project %s", len(result.Bindings), project)
+		return result, nil
+	case "add":
+		if _, err := driver.AddBinding(ctx, project, role, principal); err != nil {
+			return result, err
+		}
+		result.Message = fmt.Sprintf("bound %s to %s on project %s", principal, role, project)
+		return result, nil
+	case "del":
+		if _, err := driver.RemoveBinding(ctx, project, role, principal); err != nil {
+			return result, err
+		}
+		result.Message = fmt.Sprintf("removed %s from %s on project %s", principal, role, project)
+		return result, nil
+	}
+	return result, fmt.Errorf("gcp: unsupported role-binding action %q", action)
+}
+
+// ServiceAccountKey implements schema.ServiceAccountKeyManager.
+func (p *Provider) ServiceAccountKey(ctx context.Context, action, account, keyID string) (schema.ServiceAccountKeyResult, error) {
+	driver := &_iam.Driver{Projects: p.projects, Client: p.apiClient}
+	if len(p.projects) == 0 || p.projects[0] == "" {
+		return schema.ServiceAccountKeyResult{Action: action}, fmt.Errorf("gcp: no project configured for service account key")
+	}
+	project := p.projects[0]
+	result := schema.ServiceAccountKeyResult{
+		Action:         action,
+		ServiceAccount: account,
+		KeyID:          keyID,
+	}
+	switch action {
+	case "list":
+		keys, err := driver.ListKeys(ctx, project, account)
+		if err != nil {
+			return result, err
+		}
+		for _, k := range keys {
+			result.Keys = append(result.Keys, schema.ServiceAccountKey{
+				KeyID:       _iam.KeyShortID(k.Name),
+				KeyType:     k.KeyType,
+				ValidAfter:  k.ValidAfterTime,
+				ValidBefore: k.ValidBeforeTime,
+			})
+		}
+		result.Message = fmt.Sprintf("%d keys on %s", len(result.Keys), account)
+		return result, nil
+	case "create":
+		key, err := driver.CreateKey(ctx, project, account)
+		if err != nil {
+			return result, err
+		}
+		result.KeyID = _iam.KeyShortID(key.Name)
+		result.PrivateKeyData = key.PrivateKeyData
+		result.Message = fmt.Sprintf("minted key %s for %s", result.KeyID, account)
+		return result, nil
+	case "delete":
+		if err := driver.DeleteKey(ctx, project, account, keyID); err != nil {
+			return result, err
+		}
+		result.Message = fmt.Sprintf("revoked key %s on %s", keyID, account)
+		return result, nil
+	}
+	return result, fmt.Errorf("gcp: unsupported sa-key action %q", action)
 }

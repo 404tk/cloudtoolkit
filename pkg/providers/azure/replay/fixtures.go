@@ -52,6 +52,88 @@ var demoStorageAccounts = []storageAccountFixture{
 	},
 }
 
+// demoRoleDefinitions is a small, fixed catalog of the most commonly assigned
+// built-in roles. The replay returns only entries with names that match the
+// `$filter=roleName eq '...'` filter on roleDefinitions.
+type roleDefinitionFixture struct {
+	Name string
+	GUID string
+}
+
+var demoRoleDefinitions = []roleDefinitionFixture{
+	{Name: "Reader", GUID: "acdd72a7-3385-48ef-bd42-f606fba81ae7"},
+	{Name: "Contributor", GUID: "b24988ac-6180-42a0-ab88-20f7382dd24c"},
+	{Name: "Owner", GUID: "8e3af657-a8ff-443c-a75c-2fe8c4bcb635"},
+	{Name: "Storage Blob Data Reader", GUID: "2a2b9908-6ea1-4ae2-8e65-a410df84e7d1"},
+	{Name: "Storage Blob Data Contributor", GUID: "ba92f5b4-2d11-453d-a403-e96b0029c9fe"},
+}
+
+func roleDefinitionByName(name string) (roleDefinitionFixture, bool) {
+	name = strings.TrimSpace(name)
+	for _, def := range demoRoleDefinitions {
+		if strings.EqualFold(def.Name, name) {
+			return def, true
+		}
+	}
+	return roleDefinitionFixture{}, false
+}
+
+func roleDefinitionByGUID(guid string) (roleDefinitionFixture, bool) {
+	guid = strings.TrimSpace(guid)
+	for _, def := range demoRoleDefinitions {
+		if strings.EqualFold(def.GUID, guid) {
+			return def, true
+		}
+	}
+	return roleDefinitionFixture{}, false
+}
+
+// demoPrincipals are the only object IDs the replay accepts as PUT body
+// principalId. Any other value comes back as PrincipalNotFound, mirroring real
+// Azure behavior.
+var demoPrincipals = []string{
+	"11111111-2222-3333-4444-555555555555",
+	"22222222-3333-4444-5555-666666666666",
+	"33333333-4444-5555-6666-777777777777",
+}
+
+func isKnownPrincipal(id string) bool {
+	id = strings.TrimSpace(id)
+	for _, p := range demoPrincipals {
+		if strings.EqualFold(p, id) {
+			return true
+		}
+	}
+	return false
+}
+
+// roleAssignmentFixture is the shape stored both for the seed list and for
+// transport-state assignments created during a replay session.
+type roleAssignmentFixture struct {
+	Name             string
+	PrincipalID      string
+	RoleDefinitionID string
+	Scope            string
+}
+
+// demoRoleAssignments is the seeded list returned at the start of a replay
+// session. Newly-created assignments are stored on the transport state.
+// Scope of "" means "default subscription scope".
+var demoRoleAssignments = []roleAssignmentFixture{
+	{
+		Name:             "11112222-3333-4444-5555-666677778888",
+		PrincipalID:      "11111111-2222-3333-4444-555555555555",
+		RoleDefinitionID: "acdd72a7-3385-48ef-bd42-f606fba81ae7",
+		Scope:            "",
+	},
+	{
+		Name:             "aaaa1111-bbbb-2222-cccc-3333dddd4444",
+		PrincipalID:      "22222222-3333-4444-5555-666666666666",
+		RoleDefinitionID: "2a2b9908-6ea1-4ae2-8e65-a410df84e7d1",
+		Scope:            "",
+	},
+}
+
 func resourceGroupsFor(subscription string) []string {
 	if subscription == "" {
 		return nil
@@ -129,4 +211,11 @@ func vmByPublicIPName(publicIPName string) (vmFixture, bool) {
 		}
 	}
 	return vmFixture{}, false
+}
+
+// containerACLKey is the join of resource group, account, and container name
+// used as the override map key. It must match the path-derived form used by
+// the PATCH/GET handlers.
+func containerACLKey(group, account, container string) string {
+	return group + "/" + account + "/" + container
 }

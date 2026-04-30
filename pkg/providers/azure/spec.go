@@ -14,6 +14,6 @@ func init() {
 			{Name: utils.AzureSubscriptionId, Description: "Subscription ID"},
 			{Name: utils.Version, Description: "International or custom edition"},
 		},
-		Capabilities: []string{"cloudlist"},
+		Capabilities: []string{"cloudlist", "iam-role", "bucket-acl"},
 	})
 }
