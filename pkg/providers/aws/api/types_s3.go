@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/xml"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -162,4 +163,109 @@ func normalizeS3LocationConstraint(region string) string {
 	default:
 		return strings.TrimSpace(region)
 	}
+}
+
+// GetBucketAclOutput is a slimmed projection of the GetBucketAcl response.
+// Only the fields needed to derive a canonical canned-ACL summary are kept.
+type GetBucketAclOutput struct {
+	Owner  S3Owner
+	Grants []S3Grant
+}
+
+type S3Owner struct {
+	ID          string
+	DisplayName string
+}
+
+type S3Grant struct {
+	GranteeType string
+	GranteeID   string
+	GranteeURI  string
+	Permission  string
+}
+
+type getBucketAclResponse struct {
+	XMLName           xml.Name `xml:"AccessControlPolicy"`
+	Owner             struct {
+		ID          string `xml:"ID"`
+		DisplayName string `xml:"DisplayName"`
+	} `xml:"Owner"`
+	AccessControlList struct {
+		Grant []struct {
+			Grantee struct {
+				Type string `xml:"http://www.w3.org/2001/XMLSchema-instance type,attr"`
+				ID   string `xml:"ID"`
+				URI  string `xml:"URI"`
+			} `xml:"Grantee"`
+			Permission string `xml:"Permission"`
+		} `xml:"Grant"`
+	} `xml:"AccessControlList"`
+}
+
+// GetBucketAcl returns the parsed `?acl` response for bucket. Callers collapse
+// the grant list into a canned-ACL summary via S3CannedACLFromGrants.
+func (c *Client) GetBucketAcl(ctx context.Context, region, bucket string) (GetBucketAclOutput, error) {
+	var wire getBucketAclResponse
+	query := url.Values{}
+	query.Set("acl", "")
+	err := c.DoRESTXML(ctx, Request{
+		Service:    "s3",
+		Region:     region,
+		Method:     http.MethodGet,
+		Path:       "/" + strings.TrimSpace(bucket),
+		Query:      query,
+		Idempotent: true,
+	}, &wire)
+	if err != nil {
+		return GetBucketAclOutput{}, err
+	}
+	out := GetBucketAclOutput{
+		Owner: S3Owner{ID: wire.Owner.ID, DisplayName: wire.Owner.DisplayName},
+	}
+	for _, g := range wire.AccessControlList.Grant {
+		out.Grants = append(out.Grants, S3Grant{
+			GranteeType: strings.TrimSpace(g.Grantee.Type),
+			GranteeID:   strings.TrimSpace(g.Grantee.ID),
+			GranteeURI:  strings.TrimSpace(g.Grantee.URI),
+			Permission:  strings.ToUpper(strings.TrimSpace(g.Permission)),
+		})
+	}
+	return out, nil
+}
+
+// PutBucketAcl sets a canned ACL on bucket via the `x-amz-acl` header.
+// Common values: private, public-read, public-read-write, authenticated-read.
+func (c *Client) PutBucketAcl(ctx context.Context, region, bucket, cannedACL string) error {
+	cannedACL = strings.TrimSpace(cannedACL)
+	if cannedACL == "" {
+		return fmt.Errorf("aws s3: empty canned acl")
+	}
+	query := url.Values{}
+	query.Set("acl", "")
+	headers := http.Header{}
+	headers.Set("x-amz-acl", cannedACL)
+	return c.DoRESTXML(ctx, Request{
+		Service: "s3",
+		Region:  region,
+		Method:  http.MethodPut,
+		Path:    "/" + strings.TrimSpace(bucket),
+		Query:   query,
+		Headers: headers,
+	}, nil)
+}
+
+// DeletePublicAccessBlock clears the BlockPublicAcls / IgnorePublicAcls
+// settings on bucket so a subsequent canned ACL change actually surfaces.
+// New AWS accounts ship with BPA enabled by default; without this call the
+// `expose` flow will silently no-op even after PutBucketAcl returns 200.
+func (c *Client) DeletePublicAccessBlock(ctx context.Context, region, bucket string) error {
+	query := url.Values{}
+	query.Set("publicAccessBlock", "")
+	return c.DoRESTXML(ctx, Request{
+		Service: "s3",
+		Region:  region,
+		Method:  http.MethodDelete,
+		Path:    "/" + strings.TrimSpace(bucket),
+		Query:   query,
+	}, nil)
 }

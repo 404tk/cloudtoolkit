@@ -28,6 +28,6 @@ func init() {
 			{Text: "eu-west-1", Description: "Ireland"},
 			{Text: "eu-central-1", Description: "Frankfurt"},
 		},
-		Capabilities: []string{"cloudlist", "iam", "bucket"},
+		Capabilities: []string{"cloudlist", "iam", "bucket", "iam-role", "bucket-acl", "vm", "event"},
 	})
 }

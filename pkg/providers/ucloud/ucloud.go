@@ -201,6 +201,150 @@ func (p *Provider) UserManagement(action, username, password string) (schema.IAM
 	}
 }
 
+// BucketDump implements schema.BucketManager for UCloud UFile. The control
+// plane (DescribeBucket) lives on `api.ucloud.cn` while data-plane object
+// listing flows through the per-bucket `*.ufileos.com` host with HMAC-SHA1
+// signing — the ufile.Driver carries both clients.
+func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([]schema.BucketResult, error) {
+	driver := p.newUFileDriver()
+	infos, err := p.bucketInfos(ctx, driver, bucketName)
+	if err != nil {
+		return nil, fmt.Errorf("list buckets: %w", err)
+	}
+	switch action {
+	case "list":
+		return driver.ListObjects(ctx, infos)
+	case "total":
+		return driver.TotalObjects(ctx, infos)
+	default:
+		return nil, fmt.Errorf("invalid action: %s (expected: list, total)", action)
+	}
+}
+
+// BucketACL implements schema.BucketACLManager for UCloud UFile. `level`
+// accepts the UFile bucket access type (`private` / `public` / `limited`) or
+// a friendly alias resolved by the driver.
+func (p *Provider) BucketACL(ctx context.Context, action, container, level string) (schema.BucketACLResult, error) {
+	driver := p.newUFileDriver()
+	result := schema.BucketACLResult{
+		Action:    action,
+		Container: container,
+		Level:     level,
+	}
+	switch action {
+	case "audit":
+		entries, err := driver.AuditBucketACL(ctx, container)
+		if err != nil {
+			return result, err
+		}
+		result.Containers = entries
+		result.Message = fmt.Sprintf("%d buckets audited", len(entries))
+		return result, nil
+	case "expose":
+		applied, err := driver.ExposeBucket(ctx, container, level)
+		if err != nil {
+			return result, err
+		}
+		result.Level = applied
+		result.Message = fmt.Sprintf("bucket %s set to %s", container, applied)
+		return result, nil
+	case "unexpose":
+		if err := driver.UnexposeBucket(ctx, container); err != nil {
+			return result, err
+		}
+		result.Level = ufile.UFileTypePrivate
+		result.Message = fmt.Sprintf("bucket %s reverted to private", container)
+		return result, nil
+	}
+	return result, fmt.Errorf("ucloud: unsupported bucket-acl action %q", action)
+}
+
+func (p *Provider) newUFileDriver() *ufile.Driver {
+	return &ufile.Driver{
+		Credential: p.credential,
+		Client:     p.newClient(),
+		ProjectID:  p.projectID,
+		Region:     p.region,
+	}
+}
+
+func (p *Provider) bucketInfos(ctx context.Context, driver *ufile.Driver, bucketName string) (map[string]string, error) {
+	infos := make(map[string]string)
+	bucketName = strings.TrimSpace(bucketName)
+	switch {
+	case bucketName == "":
+		return nil, fmt.Errorf("empty bucket name")
+	case bucketName == "all":
+		buckets, err := driver.GetBuckets(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, bucket := range buckets {
+			infos[bucket.BucketName] = bucket.Region
+		}
+		if len(infos) == 0 {
+			return nil, fmt.Errorf("no buckets found")
+		}
+		return infos, nil
+	case p.region != "" && p.region != "all":
+		infos[bucketName] = p.region
+		return infos, nil
+	default:
+		region, err := driver.ResolveBucketRegion(ctx, bucketName)
+		if err != nil {
+			return nil, fmt.Errorf("bucket %s region not found; set region explicitly or use `list all` first", bucketName)
+		}
+		infos[bucketName] = region
+		return infos, nil
+	}
+}
+
+// RoleBinding implements schema.RoleBindingManager for UCloud IAM. `principal`
+// is a sub user name, `role` is a UCloud policy URN (or short name like
+// `AdministratorAccess`, expanded to `ucs:iam::ucs:policy/...`). `scope`
+// selects between account-wide (`Unspecified`) and project-scoped
+// (`Specified`, requires the provider's projectId); empty defaults to
+// `Unspecified`.
+func (p *Provider) RoleBinding(ctx context.Context, action, principal, role, scope string) (schema.RoleBindingResult, error) {
+	driver := &_iam.Driver{
+		Credential: p.credential,
+		Client:     p.newClient(),
+		ProjectID:  p.projectID,
+	}
+	resolvedRole := _iam.ResolvePolicyURN(role)
+	result := schema.RoleBindingResult{
+		Action:    action,
+		Principal: principal,
+		Role:      resolvedRole,
+		Scope:     scope,
+	}
+	switch action {
+	case "list":
+		bindings, err := driver.ListRoleBindings(ctx, principal)
+		if err != nil {
+			return result, err
+		}
+		result.Bindings = bindings
+		result.Message = fmt.Sprintf("%d policies attached to user %s", len(bindings), principal)
+		return result, nil
+	case "add":
+		if err := driver.AttachPolicy(ctx, principal, resolvedRole, scope); err != nil {
+			return result, err
+		}
+		result.AssignmentID = resolvedRole
+		result.Message = fmt.Sprintf("attached %s to user %s", resolvedRole, principal)
+		return result, nil
+	case "del":
+		if err := driver.DetachPolicy(ctx, principal, resolvedRole, scope); err != nil {
+			return result, err
+		}
+		result.AssignmentID = resolvedRole
+		result.Message = fmt.Sprintf("detached %s from user %s", resolvedRole, principal)
+		return result, nil
+	}
+	return result, fmt.Errorf("ucloud: unsupported role-binding action %q", action)
+}
+
 func normalizeRegion(region string) string {
 	region = strings.TrimSpace(region)
 	if region == "" {

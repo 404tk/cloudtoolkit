@@ -105,3 +105,16 @@ func (s *iamMutationState) detachPolicy(user, policy string) bool {
 	delete(policies, policy)
 	return true
 }
+
+// policiesFor returns the set of policy names currently attached to user.
+// Snapshotted under the lock so handlers can iterate without races.
+func (s *iamMutationState) policiesFor(user string) []string {
+	user = strings.TrimSpace(user)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]string, 0)
+	for name := range s.policies[user] {
+		out = append(out, name)
+	}
+	return out
+}

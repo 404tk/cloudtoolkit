@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	awsapi "github.com/404tk/cloudtoolkit/pkg/providers/aws/api"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/api"
 	jdauth "github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/auth"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
@@ -24,10 +25,11 @@ var knownJDCloudOSSRegions = []string{
 }
 
 type Driver struct {
-	Client       *api.Client
-	Credential   jdauth.Credential
-	Region       string
-	ObjectClient *Client
+	Client              *api.Client
+	Credential          jdauth.Credential
+	Region              string
+	ObjectClient        *Client
+	ObjectClientOptions []awsapi.Option
 }
 
 func (d *Driver) ListBuckets(ctx context.Context) ([]schema.Storage, error) {
@@ -108,7 +110,7 @@ func (d *Driver) objectClient() (*Client, error) {
 	if err := d.Credential.Validate(); err != nil {
 		return nil, err
 	}
-	d.ObjectClient = NewClient(d.Credential)
+	d.ObjectClient = NewClient(d.Credential, d.ObjectClientOptions...)
 	return d.ObjectClient, nil
 }
 

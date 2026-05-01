@@ -70,6 +70,12 @@ type IAMGroup struct {
 	Name string `json:"name"`
 }
 
+// ListGroupsForUserResponse models the keystone
+// `GET /v3/users/{user_id}/groups` payload.
+type ListGroupsForUserResponse struct {
+	Groups []IAMGroup `json:"groups"`
+}
+
 type ListAuthDomainsResponse struct {
 	Domains []IAMDomain `json:"domains"`
 }

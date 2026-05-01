@@ -41,11 +41,12 @@ type Client struct {
 }
 
 type request struct {
-	Method string
-	Host   string
-	Path   string
-	Query  url.Values
-	Body   []byte
+	Method  string
+	Host    string
+	Path    string
+	Query   url.Values
+	Body    []byte
+	Headers http.Header
 }
 
 func NewClient(cred auth.Credential, opts ...Option) *Client {
@@ -141,11 +142,19 @@ func (c *Client) doJSON(ctx context.Context, req request, out any) error {
 		return fmt.Errorf("volcengine tos: empty host")
 	}
 	body := append([]byte(nil), req.Body...)
-	headers, err := c.signHeaders(method, signHost, req.Path, req.Query, body)
+	headers, err := c.signHeaders(method, signHost, req.Path, req.Query, body, req.Headers)
 	if err != nil {
 		return err
 	}
 	headers.Set("Accept", "application/json")
+	for key, values := range req.Headers {
+		if strings.EqualFold(key, "host") {
+			continue
+		}
+		for _, v := range values {
+			headers.Add(key, v)
+		}
+	}
 
 	requestURL, err := c.requestURL(signHost, req.Path, req.Query)
 	if err != nil {
@@ -181,7 +190,7 @@ func (c *Client) doJSON(ctx context.Context, req request, out any) error {
 	return nil
 }
 
-func (c *Client) signHeaders(method, host, path string, query url.Values, body []byte) (http.Header, error) {
+func (c *Client) signHeaders(method, host, path string, query url.Values, body []byte, extra http.Header) (http.Header, error) {
 	timestamp := c.now().UTC()
 	if timestamp.IsZero() {
 		timestamp = time.Now().UTC()
@@ -205,6 +214,19 @@ func (c *Client) signHeaders(method, host, path string, query url.Values, body [
 	}
 	if token := strings.TrimSpace(c.credential.SessionToken); token != "" {
 		canonicalHeaders["x-tos-security-token"] = token
+	}
+	// Fold any caller-supplied x-tos-* / content-md5 / content-type headers
+	// into the canonical set so the signature covers them.
+	for key, values := range extra {
+		lower := strings.ToLower(strings.TrimSpace(key))
+		if !strings.HasPrefix(lower, "x-tos-") &&
+			lower != "content-md5" && lower != "content-type" {
+			continue
+		}
+		if len(values) == 0 {
+			continue
+		}
+		canonicalHeaders[lower] = strings.TrimSpace(values[0])
 	}
 
 	signedHeaders := signedHeaderNames(canonicalHeaders)

@@ -16,6 +16,7 @@ const pageSize = 100
 type Driver struct {
 	Credential ucloudauth.Credential
 	Client     *api.Client
+	FileClient *FileClient
 	ProjectID  string
 	Region     string
 }

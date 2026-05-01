@@ -20,6 +20,6 @@ func init() {
 			{Text: "cn-shanghai", Description: "Shanghai"},
 			{Text: "ap-southeast-1", Description: "Singapore"},
 		},
-		Capabilities: []string{"cloudlist", "iam", "bucket", "vm"},
+		Capabilities: []string{"cloudlist", "iam", "bucket", "vm", "iam-role", "bucket-acl"},
 	})
 }

@@ -16,6 +16,8 @@ func (t *transport) handleIAM(req *http.Request, _ string, body []byte) (*http.R
 	switch {
 	case method == http.MethodGet && strings.HasPrefix(path, "/v3.0/OS-CREDENTIAL/credentials/"):
 		return t.handleShowPermanentAccessKey(req, path)
+	case method == http.MethodGet && strings.HasPrefix(path, "/v3/users/") && strings.HasSuffix(path, "/groups"):
+		return t.handleListGroupsForUser(req, path)
 	case method == http.MethodGet && strings.HasPrefix(path, "/v3/users/") && !strings.Contains(strings.TrimPrefix(path, "/v3/users/"), "/"):
 		return t.handleShowUser(req, path)
 	case method == http.MethodGet && path == "/v3/auth/domains":
@@ -34,6 +36,8 @@ func (t *transport) handleIAM(req *http.Request, _ string, body []byte) (*http.R
 		return t.handleDeleteUser(req, path)
 	case method == http.MethodPut && strings.HasPrefix(path, "/v3/groups/") && strings.Contains(path, "/users/"):
 		return t.handleAddUserToGroup(req, path)
+	case method == http.MethodDelete && strings.HasPrefix(path, "/v3/groups/") && strings.Contains(path, "/users/"):
+		return t.handleRemoveUserFromGroup(req, path)
 	}
 	return apiErrorResponse(req, http.StatusNotFound, "IAM.0001",
 		fmt.Sprintf("unsupported iam path: %s %s", method, path)), nil
@@ -149,4 +153,38 @@ func (t *transport) handleAddUserToGroup(req *http.Request, path string) (*http.
 	}
 	t.iam.recordGroupMembership(parts[0], parts[1])
 	return demoreplay.JSONResponse(req, http.StatusNoContent, struct{}{}), nil
+}
+
+func (t *transport) handleRemoveUserFromGroup(req *http.Request, path string) (*http.Response, error) {
+	rest := strings.TrimPrefix(path, "/v3/groups/")
+	parts := strings.SplitN(rest, "/users/", 2)
+	if len(parts) != 2 {
+		return apiErrorResponse(req, http.StatusBadRequest, "IAM.0002",
+			fmt.Sprintf("malformed group membership path: %s", path)), nil
+	}
+	if !t.iam.removeGroupMembership(parts[0], parts[1]) {
+		return apiErrorResponse(req, http.StatusNotFound, "IAM.0009",
+			fmt.Sprintf("user %s not in group %s", parts[1], parts[0])), nil
+	}
+	return demoreplay.JSONResponse(req, http.StatusNoContent, struct{}{}), nil
+}
+
+func (t *transport) handleListGroupsForUser(req *http.Request, path string) (*http.Response, error) {
+	trimmed := strings.TrimPrefix(path, "/v3/users/")
+	userID := strings.TrimSuffix(trimmed, "/groups")
+	if _, ok := t.iam.findByID(userID); !ok {
+		return apiErrorResponse(req, http.StatusNotFound, "IAM.0009",
+			fmt.Sprintf("user %s not found", userID)), nil
+	}
+	groupIDs := t.iam.groupsForUser(userID)
+	resp := api.ListGroupsForUserResponse{}
+	for _, gid := range groupIDs {
+		for _, g := range demoIAMGroups {
+			if g.ID == gid {
+				resp.Groups = append(resp.Groups, api.IAMGroup{ID: g.ID, Name: g.Name})
+				break
+			}
+		}
+	}
+	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 }

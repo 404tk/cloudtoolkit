@@ -114,6 +114,15 @@ func (t *transport) handleDescribeUHostInstance(req *http.Request, params map[st
 func (t *transport) handleDescribeBucket(req *http.Request, params map[string]string) (*http.Response, error) {
 	region := strings.TrimSpace(params["Region"])
 	all := bucketsForRegion(region)
+	if bucketName := strings.TrimSpace(params["BucketName"]); bucketName != "" {
+		filtered := make([]bucketFixture, 0, 1)
+		for _, bucket := range all {
+			if bucket.BucketName == bucketName {
+				filtered = append(filtered, bucket)
+			}
+		}
+		all = filtered
+	}
 	offset, limit := paginationOffsetLimit(params, 100)
 	end := offset + limit
 	if end > len(all) {
@@ -131,9 +140,42 @@ func (t *transport) handleDescribeBucket(req *http.Request, params map[string]st
 		resp.DataSet = append(resp.DataSet, api.UFileBucketSet{
 			BucketName: bucket.BucketName,
 			Region:     bucket.Region,
+			Type:       t.bucketType(bucket.BucketName),
 		})
 	}
 	return successResponse(req, resp), nil
+}
+
+func (t *transport) handleUpdateBucket(req *http.Request, params map[string]string) (*http.Response, error) {
+	bucket := strings.TrimSpace(params["BucketName"])
+	bucketType := strings.TrimSpace(params["Type"])
+	if bucket == "" || bucketType == "" {
+		return errorResponse(req, http.StatusBadRequest, 1010, "BucketName and Type required"), nil
+	}
+	t.mu.Lock()
+	if t.bucketTypes == nil {
+		t.bucketTypes = make(map[string]string)
+	}
+	t.bucketTypes[bucket] = bucketType
+	t.mu.Unlock()
+	resp := api.UpdateBucketResponse{
+		BaseResponse: newBase("UpdateBucketResponse"),
+		BucketName:   bucket,
+	}
+	return successResponse(req, resp), nil
+}
+
+// bucketType returns the current Type for bucket: a previously-mutated value
+// from t.bucketTypes if any, otherwise the fixture default ("private").
+func (t *transport) bucketType(bucket string) string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.bucketTypes != nil {
+		if v, ok := t.bucketTypes[bucket]; ok && v != "" {
+			return v
+		}
+	}
+	return "private"
 }
 
 func (t *transport) handleDescribeUDBInstance(req *http.Request, params map[string]string) (*http.Response, error) {
@@ -282,5 +324,36 @@ func (t *transport) handleAttachPolicies(req *http.Request, params map[string]st
 		t.iam.attachPolicy(user, value)
 	}
 	resp := api.IAMAttachPoliciesToUserResponse{BaseResponse: newBase("AttachPoliciesToUserResponse")}
+	return successResponse(req, resp), nil
+}
+
+func (t *transport) handleDetachPolicies(req *http.Request, params map[string]string) (*http.Response, error) {
+	user := strings.TrimSpace(params["UserName"])
+	for key, value := range params {
+		if !strings.HasPrefix(key, "PolicyURNs.") {
+			continue
+		}
+		t.iam.detachPolicy(user, value)
+	}
+	resp := api.IAMDetachPoliciesFromUserResponse{BaseResponse: newBase("DetachPoliciesFromUserResponse")}
+	return successResponse(req, resp), nil
+}
+
+func (t *transport) handleListPoliciesForUser(req *http.Request, params map[string]string) (*http.Response, error) {
+	user := strings.TrimSpace(params["UserName"])
+	policies := t.iam.policiesFor(user)
+	resp := api.IAMListPoliciesForUserResponse{BaseResponse: newBase("ListPoliciesForUserResponse")}
+	for _, urn := range policies {
+		name := urn
+		if idx := strings.LastIndex(urn, "/"); idx >= 0 && idx+1 < len(urn) {
+			name = urn[idx+1:]
+		}
+		resp.Policies = append(resp.Policies, api.IAMUserAttachedPolicy{
+			PolicyURN:  urn,
+			PolicyName: name,
+			Scope:      "Unspecified",
+		})
+	}
+	resp.TotalCount = len(resp.Policies)
 	return successResponse(req, resp), nil
 }

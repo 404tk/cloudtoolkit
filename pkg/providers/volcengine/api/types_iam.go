@@ -87,6 +87,21 @@ type DeleteUserResponse struct {
 	ResponseMetadata ResponseMetadata `json:"ResponseMetadata"`
 }
 
+type ListAttachedUserPoliciesResponse struct {
+	ResponseMetadata ResponseMetadata `json:"ResponseMetadata"`
+	Result           struct {
+		AttachedPolicyMetadata []IAMAttachedPolicy `json:"AttachedPolicyMetadata"`
+	} `json:"Result"`
+}
+
+type IAMAttachedPolicy struct {
+	PolicyName  string `json:"PolicyName"`
+	PolicyType  string `json:"PolicyType"`
+	Description string `json:"Description,omitempty"`
+	PolicyTrn   string `json:"PolicyTrn,omitempty"`
+	AttachDate  string `json:"AttachDate,omitempty"`
+}
+
 func (c *Client) ListProjects(ctx context.Context, region string) (ListProjectsResponse, error) {
 	var out ListProjectsResponse
 	err := c.DoOpenAPI(ctx, Request{
@@ -248,6 +263,23 @@ func (c *Client) DeleteUser(ctx context.Context, region, userName string) (Delet
 		Region:  region,
 		Path:    "/",
 		Query:   query,
+	}, &out)
+	return out, err
+}
+
+func (c *Client) ListAttachedUserPolicies(ctx context.Context, region, userName string) (ListAttachedUserPoliciesResponse, error) {
+	query := url.Values{}
+	setTrimmedQueryValue(query, "UserName", userName)
+	var out ListAttachedUserPoliciesResponse
+	err := c.DoOpenAPI(ctx, Request{
+		Service:    "iam",
+		Version:    iamUserAPIVersion,
+		Action:     "ListAttachedUserPolicies",
+		Method:     http.MethodGet,
+		Region:     region,
+		Path:       "/",
+		Query:      query,
+		Idempotent: true,
 	}, &out)
 	return out, err
 }

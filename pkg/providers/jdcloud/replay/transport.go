@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/internal/httpclient"
@@ -13,10 +14,25 @@ import (
 )
 
 type transport struct {
-	iam *iamMutationState
+	mu        sync.Mutex
+	iam       *iamMutationState
+	bucketACL map[string]string
 }
 
-func newTransport() *transport { return &transport{iam: newIAMState()} }
+func newTransport() *transport {
+	return &transport{
+		iam:       newIAMState(),
+		bucketACL: seedBucketACL(),
+	}
+}
+
+func seedBucketACL() map[string]string {
+	out := make(map[string]string, len(demoBuckets))
+	for _, bucket := range demoBuckets {
+		out[bucket.Name] = "private"
+	}
+	return out
+}
 
 func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	body, err := demoreplay.ReadRequestBody(req)
@@ -24,6 +40,9 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 	host := normalizeHost(firstNonEmpty(req.Host, req.URL.Hostname()))
+	if isOSSDataPlaneHost(host) {
+		return t.handleOSSDataPlane(req, host, body)
+	}
 	service := serviceFromHost(host)
 	if service == "" {
 		return apiErrorResponse(req, http.StatusNotFound, "InvalidEndpoint",
@@ -62,6 +81,11 @@ func serviceFromHost(host string) string {
 		return ""
 	}
 	return strings.TrimSuffix(host, suffix)
+}
+
+func isOSSDataPlaneHost(host string) bool {
+	host = normalizeHost(host)
+	return strings.HasPrefix(host, "s3.") && strings.HasSuffix(host, ".jdcloud-oss.com")
 }
 
 func normalizeHost(host string) string {
@@ -168,9 +192,9 @@ func parseAuth(value string) (parsedAuth, bool) {
 }
 
 type errorEnvelope struct {
-	RequestID string             `json:"requestId"`
-	Error     *api.APIErrorBody  `json:"error,omitempty"`
-	Result    map[string]any     `json:"result"`
+	RequestID string            `json:"requestId"`
+	Error     *api.APIErrorBody `json:"error,omitempty"`
+	Result    map[string]any    `json:"result"`
 }
 
 func apiErrorResponse(req *http.Request, statusCode int, status, message string) *http.Response {

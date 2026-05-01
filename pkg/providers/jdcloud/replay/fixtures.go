@@ -109,10 +109,42 @@ var demoBaseSubUsers = []subUserFixture{
 }
 
 type bucketFixture struct {
-	Name string
+	Name    string
+	Region  string
+	Objects []bucketObjectFixture
+}
+
+type bucketObjectFixture struct {
+	Key          string
+	Size         int64
+	LastModified string
+	StorageClass string
 }
 
 var demoBuckets = []bucketFixture{
-	{Name: "ctk-validation-logs"},
-	{Name: "ctk-validation-archive"},
+	{
+		Name:   "ctk-validation-logs",
+		Region: "cn-north-1",
+		Objects: []bucketObjectFixture{
+			{Key: "audit/2026-04-22.json", Size: 4096, LastModified: "2026-04-22T09:10:11Z", StorageClass: "STANDARD"},
+			{Key: "audit/2026-04-23.json", Size: 6144, LastModified: "2026-04-23T10:20:31Z", StorageClass: "STANDARD"},
+		},
+	},
+	{
+		Name:   "ctk-validation-archive",
+		Region: "cn-east-2",
+		Objects: []bucketObjectFixture{
+			{Key: "archive/2026-04-20.tar.gz", Size: 16384, LastModified: "2026-04-20T12:00:00Z", StorageClass: "STANDARD"},
+		},
+	},
+}
+
+func findBucket(name string) (bucketFixture, bool) {
+	name = strings.TrimSpace(name)
+	for _, bucket := range demoBuckets {
+		if bucket.Name == name {
+			return bucket, true
+		}
+	}
+	return bucketFixture{}, false
 }

@@ -152,6 +152,47 @@ func (p *Provider) UserManagement(action, username, password string) (schema.IAM
 	}
 }
 
+// RoleBinding implements schema.RoleBindingManager for volcengine IAM.
+// `principal` is the IAM user name; `role` is the policy name (e.g.
+// `AdministratorAccess`); `scope` is the policy type (`System` or `Custom`,
+// defaulting to `System`).
+func (p *Provider) RoleBinding(ctx context.Context, action, principal, role, scope string) (schema.RoleBindingResult, error) {
+	driver := &iam.Driver{Client: p.apiClient, Region: p.region}
+	resolvedScope := scope
+	if strings.TrimSpace(resolvedScope) == "" {
+		resolvedScope = "System"
+	}
+	result := schema.RoleBindingResult{
+		Action:    action,
+		Principal: principal,
+		Role:      role,
+		Scope:     resolvedScope,
+	}
+	switch action {
+	case "list":
+		bindings, err := driver.ListRoleBindings(ctx, principal)
+		if err != nil {
+			return result, err
+		}
+		result.Bindings = bindings
+		result.Message = fmt.Sprintf("%d policies attached to user %s", len(bindings), principal)
+		return result, nil
+	case "add":
+		if err := driver.AttachPolicy(ctx, principal, role, resolvedScope); err != nil {
+			return result, err
+		}
+		result.Message = fmt.Sprintf("attached policy %s (%s) to user %s", role, resolvedScope, principal)
+		return result, nil
+	case "del":
+		if err := driver.DetachPolicy(ctx, principal, role, resolvedScope); err != nil {
+			return result, err
+		}
+		result.Message = fmt.Sprintf("detached policy %s (%s) from user %s", role, resolvedScope, principal)
+		return result, nil
+	}
+	return result, fmt.Errorf("volcengine: unsupported role-binding action %q", action)
+}
+
 func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([]schema.BucketResult, error) {
 	driver := p.newTOSDriver(p.region)
 	infos, err := p.bucketInfos(context.Background(), driver, bucketName)
@@ -167,6 +208,44 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([
 	default:
 		return nil, fmt.Errorf("invalid action: %s (expected: list, total)", action)
 	}
+}
+
+// BucketACL implements schema.BucketACLManager for volcengine TOS. `level`
+// accepts the canned TOS ACL values (private / public-read / public-read-write)
+// or friendly aliases resolved by tos.NormalizeTOSACL.
+func (p *Provider) BucketACL(ctx context.Context, action, container, level string) (schema.BucketACLResult, error) {
+	driver := p.newTOSDriver(p.region)
+	result := schema.BucketACLResult{
+		Action:    action,
+		Container: container,
+		Level:     level,
+	}
+	switch action {
+	case "audit":
+		entries, err := driver.AuditBucketACL(ctx, container)
+		if err != nil {
+			return result, err
+		}
+		result.Containers = entries
+		result.Message = fmt.Sprintf("%d buckets audited", len(entries))
+		return result, nil
+	case "expose":
+		applied, err := driver.ExposeBucket(ctx, container, level)
+		if err != nil {
+			return result, err
+		}
+		result.Level = applied
+		result.Message = fmt.Sprintf("bucket %s set to %s", container, applied)
+		return result, nil
+	case "unexpose":
+		if err := driver.UnexposeBucket(ctx, container); err != nil {
+			return result, err
+		}
+		result.Level = tos.TOSACLPrivate
+		result.Message = fmt.Sprintf("bucket %s reverted to private", container)
+		return result, nil
+	}
+	return result, fmt.Errorf("volcengine: unsupported bucket-acl action %q", action)
 }
 
 func (p *Provider) ExecuteCloudVMCommand(ctx context.Context, instanceID, cmd string) (schema.CommandResult, error) {

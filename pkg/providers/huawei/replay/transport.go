@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/api"
@@ -13,11 +14,26 @@ import (
 )
 
 type transport struct {
-	iam *iamMutationState
+	iam       *iamMutationState
+	mu        sync.Mutex
+	bucketACL map[string]string
 }
 
 func newTransport() *transport {
-	return &transport{iam: newIAMMutationState()}
+	return &transport{
+		iam:       newIAMMutationState(),
+		bucketACL: seedHuaweiBucketACL(),
+	}
+}
+
+// seedHuaweiBucketACL gives every demo OBS bucket a starting "private" canned
+// ACL so audit/expose/audit/unexpose cycles surface deterministic state.
+func seedHuaweiBucketACL() map[string]string {
+	out := make(map[string]string, len(demoOBSBuckets))
+	for _, bucket := range demoOBSBuckets {
+		out[bucket.Name] = "private"
+	}
+	return out
 }
 
 func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {

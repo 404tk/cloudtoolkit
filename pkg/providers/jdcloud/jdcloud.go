@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	awsapi "github.com/404tk/cloudtoolkit/pkg/providers/aws/api"
 	"github.com/404tk/cloudtoolkit/pkg/providers/internal/credverify"
 	_api "github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/api"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/asset"
@@ -22,17 +23,19 @@ import (
 )
 
 type Provider struct {
-	credential _auth.Credential
-	region     string
-	accessKey  string
-	apiClient  *_api.Client
-	apiOptions []_api.Option
+	credential       _auth.Credential
+	region           string
+	accessKey        string
+	apiClient        *_api.Client
+	apiOptions       []_api.Option
+	objectAPIOptions []awsapi.Option
 }
 
 // ClientConfig allows callers (e.g. demo replay) to inject custom api.Option
 // values and skip credential cache writes for ephemeral credentials.
 type ClientConfig struct {
 	APIOptions          []_api.Option
+	ObjectAPIOptions    []awsapi.Option
 	SkipCredentialCache bool
 }
 
@@ -56,11 +59,12 @@ func NewWithConfig(options schema.Options, cfg ClientConfig) (*Provider, error) 
 	}
 	apiClient := _api.NewClient(credential, cfg.APIOptions...)
 	provider := &Provider{
-		credential: credential,
-		region:     region,
-		accessKey:  credential.AccessKey,
-		apiClient:  apiClient,
-		apiOptions: append([]_api.Option(nil), cfg.APIOptions...),
+		credential:       credential,
+		region:           region,
+		accessKey:        credential.AccessKey,
+		apiClient:        apiClient,
+		apiOptions:       append([]_api.Option(nil), cfg.APIOptions...),
+		objectAPIOptions: append([]awsapi.Option(nil), cfg.ObjectAPIOptions...),
 	}
 	if err := credverify.ForCloudlist(options, provider, cfg.SkipCredentialCache, func(context.Context) (credverify.Result, error) {
 		d := &iam.Driver{Client: apiClient, AccessKey: credential.AccessKey}
@@ -151,6 +155,42 @@ func (p *Provider) UserManagement(action, username, password string) (schema.IAM
 	}
 }
 
+// RoleBinding implements schema.RoleBindingManager for JDCloud IAM. `principal`
+// is the sub user name, `role` is the policy name (e.g. `JDCloudAdmin-New`).
+// `scope` is reserved (JDCloud sub-user policies are not scoped per resource).
+func (p *Provider) RoleBinding(ctx context.Context, action, principal, role, scope string) (schema.RoleBindingResult, error) {
+	driver := &iam.Driver{Client: p.apiClient, AccessKey: p.accessKey}
+	result := schema.RoleBindingResult{
+		Action:    action,
+		Principal: principal,
+		Role:      role,
+		Scope:     scope,
+	}
+	switch action {
+	case "list":
+		bindings, err := driver.ListRoleBindings(ctx, principal)
+		if err != nil {
+			return result, err
+		}
+		result.Bindings = bindings
+		result.Message = fmt.Sprintf("%d policies attached to sub user %s", len(bindings), principal)
+		return result, nil
+	case "add":
+		if err := driver.AttachPolicy(ctx, principal, role); err != nil {
+			return result, err
+		}
+		result.Message = fmt.Sprintf("attached policy %s to sub user %s", role, principal)
+		return result, nil
+	case "del":
+		if err := driver.DetachPolicy(ctx, principal, role); err != nil {
+			return result, err
+		}
+		result.Message = fmt.Sprintf("detached policy %s from sub user %s", role, principal)
+		return result, nil
+	}
+	return result, fmt.Errorf("jdcloud: unsupported role-binding action %q", action)
+}
+
 func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([]schema.BucketResult, error) {
 	driver := p.newOSSDriver(p.region)
 	infos, err := p.bucketInfos(context.Background(), driver, bucketName)
@@ -166,6 +206,45 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([
 	default:
 		return nil, fmt.Errorf("invalid action: %s (expected: list, total)", action)
 	}
+}
+
+// BucketACL implements schema.BucketACLManager for JDCloud OSS (S3-compatible
+// data plane). `level` accepts the canned S3-style ACL values (private,
+// public-read, public-read-write, authenticated-read) or friendly aliases
+// resolved by oss.NormalizeOSSACL.
+func (p *Provider) BucketACL(ctx context.Context, action, container, level string) (schema.BucketACLResult, error) {
+	driver := p.newOSSDriver(p.region)
+	result := schema.BucketACLResult{
+		Action:    action,
+		Container: container,
+		Level:     level,
+	}
+	switch action {
+	case "audit":
+		entries, err := driver.AuditBucketACL(ctx, container)
+		if err != nil {
+			return result, err
+		}
+		result.Containers = entries
+		result.Message = fmt.Sprintf("%d buckets audited", len(entries))
+		return result, nil
+	case "expose":
+		applied, err := driver.ExposeBucket(ctx, container, level)
+		if err != nil {
+			return result, err
+		}
+		result.Level = applied
+		result.Message = fmt.Sprintf("bucket %s set to %s", container, applied)
+		return result, nil
+	case "unexpose":
+		if err := driver.UnexposeBucket(ctx, container); err != nil {
+			return result, err
+		}
+		result.Level = oss.OSSACLPrivate
+		result.Message = fmt.Sprintf("bucket %s reverted to private", container)
+		return result, nil
+	}
+	return result, fmt.Errorf("jdcloud: unsupported bucket-acl action %q", action)
 }
 
 // ExecuteCloudVMCommand routes through JDCloud Cloud Assistant (assistant.jdcloud-api.com).
@@ -209,9 +288,10 @@ func (p *Provider) lookupHost(instanceID string) (schema.Host, bool) {
 
 func (p *Provider) newOSSDriver(region string) *oss.Driver {
 	return &oss.Driver{
-		Client:     p.apiClient,
-		Credential: p.credential,
-		Region:     region,
+		Client:              p.apiClient,
+		Credential:          p.credential,
+		Region:              region,
+		ObjectClientOptions: append([]awsapi.Option(nil), p.objectAPIOptions...),
 	}
 }
 

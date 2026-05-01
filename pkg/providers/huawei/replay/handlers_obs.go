@@ -23,18 +23,93 @@ func (t *transport) handleOBS(req *http.Request, host, region string, body []byt
 			"The request signature we calculated does not match the signature you provided."), nil
 	}
 
+	path := strings.TrimPrefix(req.URL.Path, "/")
+	query := req.URL.Query()
+	if path == "" {
+		if req.Method != http.MethodGet {
+			return obsErrorResponse(req, http.StatusMethodNotAllowed, "MethodNotAllowed",
+				"The specified method is not allowed against this resource."), nil
+		}
+		return handleListBuckets(req)
+	}
+	bucket, _, _ := strings.Cut(path, "/")
+	if query.Has("acl") {
+		return t.handleOBSBucketACL(req, bucket, region)
+	}
 	if req.Method != http.MethodGet {
 		return obsErrorResponse(req, http.StatusMethodNotAllowed, "MethodNotAllowed",
 			"The specified method is not allowed against this resource."), nil
 	}
-
-	path := strings.TrimPrefix(req.URL.Path, "/")
-	query := req.URL.Query()
-	if path == "" {
-		return handleListBuckets(req)
-	}
-	bucket, _, _ := strings.Cut(path, "/")
 	return handleListObjects(req, bucket, region, query)
+}
+
+func (t *transport) handleOBSBucketACL(req *http.Request, bucketName, region string) (*http.Response, error) {
+	bucket, ok := findOBSBucket(bucketName)
+	if !ok {
+		return obsErrorResponse(req, http.StatusNotFound, "NoSuchBucket",
+			"The specified bucket does not exist."), nil
+	}
+	if region != "" && bucket.Region != region {
+		return obsErrorResponse(req, http.StatusMovedPermanently, "PermanentRedirect",
+			"The bucket you are attempting to access must be addressed using the specified endpoint."), nil
+	}
+	switch req.Method {
+	case http.MethodGet:
+		t.mu.Lock()
+		acl, ok := t.bucketACL[bucketName]
+		t.mu.Unlock()
+		if !ok {
+			acl = "private"
+		}
+		resp := obs.BucketACLResponse{}
+		resp.Owner.ID = "ctk-demo-owner"
+		resp.Owner.DisplayName = "ctk-demo"
+		switch acl {
+		case "public-read":
+			resp.AccessControlList.Grant = append(resp.AccessControlList.Grant, struct {
+				Grantee struct {
+					Type string `xml:"http://www.w3.org/2001/XMLSchema-instance type,attr"`
+					ID   string `xml:"ID"`
+					URI  string `xml:"URI"`
+				} `xml:"Grantee"`
+				Permission string `xml:"Permission"`
+			}{
+				Grantee: struct {
+					Type string `xml:"http://www.w3.org/2001/XMLSchema-instance type,attr"`
+					ID   string `xml:"ID"`
+					URI  string `xml:"URI"`
+				}{Type: "Group", URI: "Everyone"},
+				Permission: "READ",
+			})
+		case "public-read-write":
+			resp.AccessControlList.Grant = append(resp.AccessControlList.Grant, struct {
+				Grantee struct {
+					Type string `xml:"http://www.w3.org/2001/XMLSchema-instance type,attr"`
+					ID   string `xml:"ID"`
+					URI  string `xml:"URI"`
+				} `xml:"Grantee"`
+				Permission string `xml:"Permission"`
+			}{
+				Grantee: struct {
+					Type string `xml:"http://www.w3.org/2001/XMLSchema-instance type,attr"`
+					ID   string `xml:"ID"`
+					URI  string `xml:"URI"`
+				}{Type: "Group", URI: "Everyone"},
+				Permission: "FULL_CONTROL",
+			})
+		}
+		return xmlResponse(req, http.StatusOK, resp), nil
+	case http.MethodPut:
+		acl := strings.TrimSpace(req.Header.Get("x-obs-acl"))
+		if acl == "" {
+			return obsErrorResponse(req, http.StatusBadRequest, "InvalidArgument", "missing x-obs-acl header"), nil
+		}
+		t.mu.Lock()
+		t.bucketACL[bucketName] = acl
+		t.mu.Unlock()
+		return xmlResponse(req, http.StatusOK, struct{}{}), nil
+	}
+	return obsErrorResponse(req, http.StatusMethodNotAllowed, "MethodNotAllowed", "unsupported acl method"), nil
 }
 
 func handleListBuckets(req *http.Request) (*http.Response, error) {

@@ -50,6 +50,8 @@ var providers = map[string]providerMeta{
 			"event-check",
 			"rds-account-check",
 			"instance-cmd-check",
+			"role-binding-check",
+			"bucket-acl-check",
 		},
 	},
 	"volcengine": {
@@ -62,6 +64,8 @@ var providers = map[string]providerMeta{
 			"iam-user-check",
 			"bucket-check",
 			"instance-cmd-check",
+			"role-binding-check",
+			"bucket-acl-check",
 		},
 	},
 	"tencent": {
@@ -74,6 +78,9 @@ var providers = map[string]providerMeta{
 			"iam-user-check",
 			"bucket-check",
 			"instance-cmd-check",
+			"role-binding-check",
+			"bucket-acl-check",
+			"event-check",
 		},
 	},
 	"aws": {
@@ -85,6 +92,10 @@ var providers = map[string]providerMeta{
 			"cloudlist",
 			"iam-user-check",
 			"bucket-check",
+			"role-binding-check",
+			"bucket-acl-check",
+			"instance-cmd-check",
+			"event-check",
 		},
 	},
 	"huawei": {
@@ -96,6 +107,8 @@ var providers = map[string]providerMeta{
 			"cloudlist",
 			"iam-user-check",
 			"bucket-check",
+			"role-binding-check",
+			"bucket-acl-check",
 		},
 	},
 	"azure": {
@@ -138,6 +151,8 @@ var providers = map[string]providerMeta{
 			"cloudlist",
 			"iam-user-check",
 			"bucket-check",
+			"role-binding-check",
+			"bucket-acl-check",
 		},
 	},
 	"ucloud": {
@@ -148,6 +163,9 @@ var providers = map[string]providerMeta{
 		Payloads: []string{
 			"cloudlist",
 			"iam-user-check",
+			"role-binding-check",
+			"bucket-check",
+			"bucket-acl-check",
 		},
 	},
 }

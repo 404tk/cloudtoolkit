@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -173,6 +174,31 @@ func (c *Client) DoXML(ctx context.Context, req Request, resp any) error {
 }
 
 func (c *Client) DoRESTXML(ctx context.Context, req Request, resp any) error {
+	return c.doREST(ctx, req, resp, decodeXMLBody)
+}
+
+// DoRESTJSON sends req as a JSON-bodied REST call (used by SSM, ECS-style
+// services that speak JSON-1.1). Caller provides Headers including
+// `Content-Type: application/x-amz-json-1.1` and `X-Amz-Target: <service>.<action>`.
+func (c *Client) DoRESTJSON(ctx context.Context, req Request, resp any) error {
+	return c.doREST(ctx, req, resp, decodeJSONBody)
+}
+
+func decodeXMLBody(body []byte, out any) error {
+	if err := xml.Unmarshal(body, out); err != nil {
+		return fmt.Errorf("decode aws response: %w", err)
+	}
+	return nil
+}
+
+func decodeJSONBody(body []byte, out any) error {
+	if err := json.Unmarshal(body, out); err != nil {
+		return fmt.Errorf("decode aws response: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) doREST(ctx context.Context, req Request, resp any, decode func([]byte, any) error) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -246,10 +272,7 @@ func (c *Client) DoRESTXML(ctx context.Context, req Request, resp any) error {
 	if resp == nil || len(responseBody) == 0 {
 		return nil
 	}
-	if err := xml.Unmarshal(responseBody, resp); err != nil {
-		return fmt.Errorf("decode aws response: %w", err)
-	}
-	return nil
+	return decode(responseBody, resp)
 }
 
 func (c *Client) resolveEndpoint(req Request, service, region string) (string, string, string) {

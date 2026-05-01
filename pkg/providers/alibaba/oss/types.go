@@ -49,6 +49,20 @@ type errorResponse struct {
 	HostID    string   `xml:"HostId"`
 }
 
+// BucketACLResponse maps the body returned by `GET /?acl` on a bucket. The
+// canned ACL value lives at AccessControlPolicy/AccessControlList/Grant and is
+// one of "private", "public-read", or "public-read-write".
+type BucketACLResponse struct {
+	XMLName xml.Name `xml:"AccessControlPolicy"`
+	Owner   struct {
+		ID          string `xml:"ID"`
+		DisplayName string `xml:"DisplayName"`
+	} `xml:"Owner"`
+	AccessControlList struct {
+		Grant string `xml:"Grant"`
+	} `xml:"AccessControlList"`
+}
+
 func decodeListObjectsResponse(result *ListObjectsResponse) error {
 	if result == nil {
 		return nil

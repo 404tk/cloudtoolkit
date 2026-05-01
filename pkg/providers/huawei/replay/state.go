@@ -133,6 +133,41 @@ func (s *iamMutationState) recordGroupMembership(groupID, userID string) {
 	s.memberOf[groupID][userID] = true
 }
 
+func (s *iamMutationState) removeGroupMembership(groupID, userID string) bool {
+	groupID = strings.TrimSpace(groupID)
+	userID = strings.TrimSpace(userID)
+	if groupID == "" || userID == "" {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	members, ok := s.memberOf[groupID]
+	if !ok {
+		return false
+	}
+	if !members[userID] {
+		return false
+	}
+	delete(members, userID)
+	return true
+}
+
+// groupsForUser returns the group IDs that userID currently belongs to.
+// Membership is mutation-only here; demo-baseline users start with no groups
+// so list/add/list cycles surface deterministic state in replay.
+func (s *iamMutationState) groupsForUser(userID string) []string {
+	userID = strings.TrimSpace(userID)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	groups := make([]string, 0)
+	for groupID, members := range s.memberOf {
+		if members[userID] {
+			groups = append(groups, groupID)
+		}
+	}
+	return groups
+}
+
 func newSyntheticUserID(sequence int) string {
 	return fmt.Sprintf("06f1d2dca680f0a02fa4c01acc0e9%03d", sequence%1000)
 }

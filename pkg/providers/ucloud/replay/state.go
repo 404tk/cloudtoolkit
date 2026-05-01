@@ -93,3 +93,27 @@ func (s *iamMutationState) attachPolicy(user, policy string) {
 	}
 	s.policies[user][policy] = true
 }
+
+func (s *iamMutationState) detachPolicy(user, policy string) bool {
+	user = strings.TrimSpace(user)
+	policy = strings.TrimSpace(policy)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	policies, ok := s.policies[user]
+	if !ok || !policies[policy] {
+		return false
+	}
+	delete(policies, policy)
+	return true
+}
+
+func (s *iamMutationState) policiesFor(user string) []string {
+	user = strings.TrimSpace(user)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := make([]string, 0)
+	for name := range s.policies[user] {
+		out = append(out, name)
+	}
+	return out
+}

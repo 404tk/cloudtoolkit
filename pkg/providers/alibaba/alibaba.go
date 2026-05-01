@@ -173,6 +173,46 @@ func (p *Provider) UserManagement(action, username, password string) (schema.IAM
 	}
 }
 
+// RoleBinding implements schema.RoleBindingManager for alibaba RAM. `principal`
+// is a RAM user name, `role` is the policy name, and `scope` is the policy
+// type (System or Custom; defaults to System).
+func (p *Provider) RoleBinding(ctx context.Context, action, principal, role, scope string) (schema.RoleBindingResult, error) {
+	driver := p.newIAMDriver(p.region)
+	resolvedScope := scope
+	if strings.TrimSpace(resolvedScope) == "" {
+		resolvedScope = "System"
+	}
+	result := schema.RoleBindingResult{
+		Action:    action,
+		Principal: principal,
+		Role:      role,
+		Scope:     resolvedScope,
+	}
+	switch action {
+	case "list":
+		bindings, err := driver.ListRoleBindings(ctx, principal)
+		if err != nil {
+			return result, err
+		}
+		result.Bindings = bindings
+		result.Message = fmt.Sprintf("%d policies attached to user %s", len(bindings), principal)
+		return result, nil
+	case "add":
+		if err := driver.AttachPolicyToUser(ctx, principal, role, resolvedScope); err != nil {
+			return result, err
+		}
+		result.Message = fmt.Sprintf("attached policy %s (%s) to user %s", role, resolvedScope, principal)
+		return result, nil
+	case "del":
+		if err := driver.DetachPolicyFromUser(ctx, principal, role, resolvedScope); err != nil {
+			return result, err
+		}
+		result.Message = fmt.Sprintf("detached policy %s (%s) from user %s", role, resolvedScope, principal)
+		return result, nil
+	}
+	return result, fmt.Errorf("alibaba: unsupported role-binding action %q", action)
+}
+
 func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([]schema.BucketResult, error) {
 	ossdrvier := p.newOSSDriver(p.region)
 	switch action {
@@ -191,6 +231,45 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([
 	default:
 		return nil, fmt.Errorf("invalid action: %s (expected: list, total)", action)
 	}
+}
+
+// BucketACL implements schema.BucketACLManager for alibaba OSS. `container`
+// is a bucket name; `level` is the canned OSS ACL value (private,
+// public-read, public-read-write) or a friendly alias resolved by
+// NormalizeOSSACL.
+func (p *Provider) BucketACL(ctx context.Context, action, container, level string) (schema.BucketACLResult, error) {
+	driver := p.newOSSDriver(p.region)
+	result := schema.BucketACLResult{
+		Action:    action,
+		Container: container,
+		Level:     level,
+	}
+	switch action {
+	case "audit":
+		entries, err := driver.AuditBucketACL(ctx, container)
+		if err != nil {
+			return result, err
+		}
+		result.Containers = entries
+		result.Message = fmt.Sprintf("%d buckets audited", len(entries))
+		return result, nil
+	case "expose":
+		applied, err := driver.ExposeBucket(ctx, container, level)
+		if err != nil {
+			return result, err
+		}
+		result.Level = applied
+		result.Message = fmt.Sprintf("bucket %s set to %s", container, applied)
+		return result, nil
+	case "unexpose":
+		if err := driver.UnexposeBucket(ctx, container); err != nil {
+			return result, err
+		}
+		result.Level = _oss.OSSACLPrivate
+		result.Message = fmt.Sprintf("bucket %s reverted to private", container)
+		return result, nil
+	}
+	return result, fmt.Errorf("alibaba: unsupported bucket-acl action %q", action)
 }
 
 func (p *Provider) EventDump(ctx context.Context, action, args string) (schema.EventActionResult, error) {

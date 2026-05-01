@@ -179,6 +179,45 @@ func (p *Provider) UserManagement(action, username, password string) (schema.IAM
 	}
 }
 
+// RoleBinding implements schema.RoleBindingManager for huawei IAM. Huawei has
+// no direct user-policy attachment; policies live on keystone groups and users
+// gain permissions by joining groups. The capability therefore models group
+// membership: `principal` is the user name, `role` is the group name, `scope`
+// is reserved (membership is domain-scoped via the X-Domain-Id header).
+func (p *Provider) RoleBinding(ctx context.Context, action, principal, role, scope string) (schema.RoleBindingResult, error) {
+	cred := p.iamCredential()
+	driver := &_iam.Driver{Cred: cred, DomainID: p.domainID, Client: p.newAPIClient(cred)}
+	result := schema.RoleBindingResult{
+		Action:    action,
+		Principal: principal,
+		Role:      role,
+		Scope:     scope,
+	}
+	switch action {
+	case "list":
+		bindings, err := driver.ListRoleBindings(ctx, principal)
+		if err != nil {
+			return result, err
+		}
+		result.Bindings = bindings
+		result.Message = fmt.Sprintf("%d groups for user %s", len(bindings), principal)
+		return result, nil
+	case "add":
+		if err := driver.AttachGroup(ctx, principal, role); err != nil {
+			return result, err
+		}
+		result.Message = fmt.Sprintf("added user %s to group %s", principal, role)
+		return result, nil
+	case "del":
+		if err := driver.DetachGroup(ctx, principal, role); err != nil {
+			return result, err
+		}
+		result.Message = fmt.Sprintf("removed user %s from group %s", principal, role)
+		return result, nil
+	}
+	return result, fmt.Errorf("huawei: unsupported role-binding action %q", action)
+}
+
 func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([]schema.BucketResult, error) {
 	cred := p.iamCredential()
 	obsprovider := &_obs.Driver{Cred: cred, Regions: p.regions, Client: p.newOBSClient(cred)}
@@ -219,6 +258,46 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([
 	default:
 		return nil, fmt.Errorf("invalid action: %s (expected: list, total)", action)
 	}
+}
+
+// BucketACL implements schema.BucketACLManager for huawei OBS. `level`
+// accepts canned OBS ACL values (private / public-read / public-read-write
+// + the *-delivered variants) or friendly aliases resolved by
+// obs.NormalizeOBSACL.
+func (p *Provider) BucketACL(ctx context.Context, action, container, level string) (schema.BucketACLResult, error) {
+	cred := p.iamCredential()
+	driver := &_obs.Driver{Cred: cred, Regions: p.regions, Client: p.newOBSClient(cred)}
+	result := schema.BucketACLResult{
+		Action:    action,
+		Container: container,
+		Level:     level,
+	}
+	switch action {
+	case "audit":
+		entries, err := driver.AuditBucketACL(ctx, container)
+		if err != nil {
+			return result, err
+		}
+		result.Containers = entries
+		result.Message = fmt.Sprintf("%d buckets audited", len(entries))
+		return result, nil
+	case "expose":
+		applied, err := driver.ExposeBucket(ctx, container, level)
+		if err != nil {
+			return result, err
+		}
+		result.Level = applied
+		result.Message = fmt.Sprintf("bucket %s set to %s", container, applied)
+		return result, nil
+	case "unexpose":
+		if err := driver.UnexposeBucket(ctx, container); err != nil {
+			return result, err
+		}
+		result.Level = _obs.OBSACLPrivate
+		result.Message = fmt.Sprintf("bucket %s reverted to private", container)
+		return result, nil
+	}
+	return result, fmt.Errorf("huawei: unsupported bucket-acl action %q", action)
 }
 
 func (p *Provider) iamCredential() huaweiauth.Credential {

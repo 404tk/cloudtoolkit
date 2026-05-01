@@ -16,17 +16,46 @@ import (
 )
 
 type transport struct {
-	mu           sync.Mutex
-	sequence     int
-	createdUsers map[string]iamUserFixture
-	deletedUsers map[string]bool
+	mu             sync.Mutex
+	sequence       int
+	createdUsers   map[string]iamUserFixture
+	deletedUsers   map[string]bool
+	userPolicy     map[string][]iamPolicyFixture
+	bucketACL      map[string]string
+	ssmInvocations map[string]ssmInvocation
 }
 
 func newTransport() *transport {
 	return &transport{
-		createdUsers: make(map[string]iamUserFixture),
-		deletedUsers: make(map[string]bool),
+		createdUsers:   make(map[string]iamUserFixture),
+		deletedUsers:   make(map[string]bool),
+		userPolicy:     seedAWSUserPolicies(),
+		bucketACL:      seedAWSBucketACL(),
+		ssmInvocations: make(map[string]ssmInvocation),
 	}
+}
+
+// seedAWSUserPolicies copies fixture attachments into a mutable map so the
+// transport can model AttachUserPolicy/DetachUserPolicy without altering the
+// shared demoIAMUsers slice.
+func seedAWSUserPolicies() map[string][]iamPolicyFixture {
+	out := make(map[string][]iamPolicyFixture, len(demoIAMUsers))
+	for _, user := range demoIAMUsers {
+		policies := make([]iamPolicyFixture, len(user.AttachedPolicy))
+		copy(policies, user.AttachedPolicy)
+		out[user.UserName] = policies
+	}
+	return out
+}
+
+// seedAWSBucketACL gives every demo S3 bucket a starting "private" canned ACL
+// so audit/expose/audit/unexpose cycles surface deterministic state.
+func seedAWSBucketACL() map[string]string {
+	out := make(map[string]string, len(demoS3Buckets))
+	for _, bucket := range demoS3Buckets {
+		out[bucket.Name] = "private"
+	}
+	return out
 }
 
 func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -51,6 +80,10 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return t.handleIAM(req, body)
 	case isS3Host(host):
 		return t.handleS3(req, host)
+	case isSSMHost(host):
+		return t.handleSSM(req, body)
+	case isCloudTrailHost(host):
+		return t.handleCloudTrail(req, body)
 	}
 	return apiErrorResponse(req, http.StatusNotFound, "InvalidEndpoint", fmt.Sprintf("unsupported replay host: %s", host)), nil
 }
@@ -153,14 +186,16 @@ func (t *transport) handleIAM(req *http.Request, body []byte) (*http.Response, e
 		return demoreplay.XMLResponse(req, http.StatusOK, resp), nil
 	case "ListAttachedUserPolicies":
 		userName := strings.TrimSpace(form.Get("UserName"))
-		user, ok := t.findUser(userName)
-		if !ok {
+		if _, ok := t.findUser(userName); !ok {
 			return apiErrorResponse(req, http.StatusNotFound, "NoSuchEntity", fmt.Sprintf("user %s not found", userName)), nil
 		}
+		t.mu.Lock()
+		policies := append([]iamPolicyFixture(nil), t.userPolicy[userName]...)
+		t.mu.Unlock()
 		resp := iamListAttachedUserPoliciesResponse{
 			Metadata: awsResponseMetadata{RequestID: "req-replay-iam-list-policies"},
 		}
-		for _, policy := range user.AttachedPolicy {
+		for _, policy := range policies {
 			resp.Result.Policies = append(resp.Result.Policies, iamAttachedPolicyWire{
 				PolicyName: policy.Name,
 				PolicyArn:  policy.Arn,
@@ -188,11 +223,59 @@ func (t *transport) handleIAM(req *http.Request, body []byte) (*http.Response, e
 			Metadata: awsResponseMetadata{RequestID: "req-replay-iam-create-login-profile"},
 		}), nil
 	case "AttachUserPolicy":
+		userName := strings.TrimSpace(form.Get("UserName"))
+		policyArn := strings.TrimSpace(form.Get("PolicyArn"))
+		if userName == "" || policyArn == "" {
+			return apiErrorResponse(req, http.StatusBadRequest, "ValidationError", "UserName and PolicyArn required"), nil
+		}
+		if _, ok := t.findUser(userName); !ok {
+			return apiErrorResponse(req, http.StatusNotFound, "NoSuchEntity", fmt.Sprintf("user %s not found", userName)), nil
+		}
+		t.mu.Lock()
+		existing := t.userPolicy[userName]
+		for _, p := range existing {
+			if p.Arn == policyArn {
+				t.mu.Unlock()
+				return demoreplay.XMLResponse(req, http.StatusOK, awsAckResponse{
+					Name:     "AttachUserPolicyResponse",
+					Metadata: awsResponseMetadata{RequestID: "req-replay-iam-attach-user-policy"},
+				}), nil
+			}
+		}
+		t.userPolicy[userName] = append(existing, iamPolicyFixture{
+			Name: policyNameFromARN(policyArn),
+			Arn:  policyArn,
+		})
+		t.mu.Unlock()
 		return demoreplay.XMLResponse(req, http.StatusOK, awsAckResponse{
 			Name:     "AttachUserPolicyResponse",
 			Metadata: awsResponseMetadata{RequestID: "req-replay-iam-attach-user-policy"},
 		}), nil
 	case "DetachUserPolicy":
+		userName := strings.TrimSpace(form.Get("UserName"))
+		policyArn := strings.TrimSpace(form.Get("PolicyArn"))
+		if userName == "" || policyArn == "" {
+			return apiErrorResponse(req, http.StatusBadRequest, "ValidationError", "UserName and PolicyArn required"), nil
+		}
+		if _, ok := t.findUser(userName); !ok {
+			return apiErrorResponse(req, http.StatusNotFound, "NoSuchEntity", fmt.Sprintf("user %s not found", userName)), nil
+		}
+		t.mu.Lock()
+		existing := t.userPolicy[userName]
+		filtered := make([]iamPolicyFixture, 0, len(existing))
+		removed := false
+		for _, p := range existing {
+			if !removed && p.Arn == policyArn {
+				removed = true
+				continue
+			}
+			filtered = append(filtered, p)
+		}
+		t.userPolicy[userName] = filtered
+		t.mu.Unlock()
+		if !removed {
+			return apiErrorResponse(req, http.StatusNotFound, "NoSuchEntity", "policy not attached"), nil
+		}
 		return demoreplay.XMLResponse(req, http.StatusOK, awsAckResponse{
 			Name:     "DetachUserPolicyResponse",
 			Metadata: awsResponseMetadata{RequestID: "req-replay-iam-detach-user-policy"},
@@ -216,12 +299,10 @@ func (t *transport) handleIAM(req *http.Request, body []byte) (*http.Response, e
 }
 
 func (t *transport) handleS3(req *http.Request, host string) (*http.Response, error) {
-	if req.Method != http.MethodGet {
-		return s3ErrorResponse(req, http.StatusMethodNotAllowed, "MethodNotAllowed", "the specified method is not allowed against this resource"), nil
-	}
 	path := strings.TrimPrefix(req.URL.Path, "/")
 	query := req.URL.Query()
-	if path == "" {
+
+	if req.Method == http.MethodGet && path == "" {
 		resp := s3ListBucketsResponse{}
 		for _, bucket := range demoS3Buckets {
 			resp.Buckets = append(resp.Buckets, s3BucketWire{
@@ -236,6 +317,19 @@ func (t *transport) handleS3(req *http.Request, host string) (*http.Response, er
 	bucket, ok := findS3Bucket(bucketName)
 	if !ok {
 		return s3ErrorResponse(req, http.StatusNotFound, "NoSuchBucket", "The specified bucket does not exist"), nil
+	}
+
+	if query.Has("acl") {
+		return t.handleS3BucketACL(req, bucket.Name)
+	}
+	if query.Has("publicAccessBlock") {
+		// Best-effort: AWS S3 returns NoSuchPublicAccessBlockConfiguration when
+		// the bucket has no BPA. The expose flow expects this to soft-fail.
+		return s3ErrorResponse(req, http.StatusNotFound, "NoSuchPublicAccessBlockConfiguration", "The public access block configuration was not found"), nil
+	}
+
+	if req.Method != http.MethodGet {
+		return s3ErrorResponse(req, http.StatusMethodNotAllowed, "MethodNotAllowed", "the specified method is not allowed against this resource"), nil
 	}
 
 	if query.Has("location") {
@@ -272,6 +366,50 @@ func (t *transport) handleS3(req *http.Request, host string) (*http.Response, er
 	}
 
 	return s3ErrorResponse(req, http.StatusBadRequest, "InvalidRequest", "unsupported s3 replay request"), nil
+}
+
+func (t *transport) handleS3BucketACL(req *http.Request, bucketName string) (*http.Response, error) {
+	switch req.Method {
+	case http.MethodGet:
+		t.mu.Lock()
+		acl, ok := t.bucketACL[bucketName]
+		t.mu.Unlock()
+		if !ok {
+			acl = "private"
+		}
+		resp := s3GetBucketAclResponse{}
+		resp.Owner.ID = "ctk-demo-owner"
+		resp.Owner.DisplayName = "ctk-demo"
+		switch acl {
+		case "public-read":
+			resp.AccessControlList.Grants = append(resp.AccessControlList.Grants, s3GrantWire{
+				Permission: "READ",
+				Grantee: s3GranteeWire{
+					Type: "Group",
+					URI:  "http://acs.amazonaws.com/groups/global/AllUsers",
+				},
+			})
+		case "public-read-write":
+			resp.AccessControlList.Grants = append(resp.AccessControlList.Grants, s3GrantWire{
+				Permission: "FULL_CONTROL",
+				Grantee: s3GranteeWire{
+					Type: "Group",
+					URI:  "http://acs.amazonaws.com/groups/global/AllUsers",
+				},
+			})
+		}
+		return demoreplay.XMLResponse(req, http.StatusOK, resp), nil
+	case http.MethodPut:
+		acl := strings.TrimSpace(req.Header.Get("x-amz-acl"))
+		if acl == "" {
+			return s3ErrorResponse(req, http.StatusBadRequest, "InvalidRequest", "missing x-amz-acl header"), nil
+		}
+		t.mu.Lock()
+		t.bucketACL[bucketName] = acl
+		t.mu.Unlock()
+		return demoreplay.XMLResponse(req, http.StatusOK, struct{}{}), nil
+	}
+	return s3ErrorResponse(req, http.StatusMethodNotAllowed, "MethodNotAllowed", "unsupported acl method"), nil
 }
 
 func (t *transport) snapshotIAMUsers() []iamUserFixture {
@@ -346,6 +484,17 @@ func (t *transport) deleteUser(userName string) {
 	defer t.mu.Unlock()
 	delete(t.createdUsers, userName)
 	t.deletedUsers[userName] = true
+}
+
+func policyNameFromARN(arn string) string {
+	arn = strings.TrimSpace(arn)
+	if arn == "" {
+		return ""
+	}
+	if idx := strings.LastIndex(arn, "/"); idx >= 0 && idx+1 < len(arn) {
+		return arn[idx+1:]
+	}
+	return arn
 }
 
 func verifyAuth(req *http.Request, body []byte) demoreplay.AuthFailureKind {
@@ -447,6 +596,14 @@ func isIAMHost(host string) bool {
 
 func isS3Host(host string) bool {
 	return strings.HasPrefix(host, "s3.")
+}
+
+func isSSMHost(host string) bool {
+	return strings.HasPrefix(host, "ssm.")
+}
+
+func isCloudTrailHost(host string) bool {
+	return strings.HasPrefix(host, "cloudtrail.")
 }
 
 type awsResponseMetadata struct {
@@ -607,6 +764,28 @@ type s3ObjectWire struct {
 	Size         int64  `xml:"Size"`
 	LastModified string `xml:"LastModified"`
 	StorageClass string `xml:"StorageClass"`
+}
+
+type s3GetBucketAclResponse struct {
+	XMLName xml.Name `xml:"AccessControlPolicy"`
+	Owner   struct {
+		ID          string `xml:"ID"`
+		DisplayName string `xml:"DisplayName"`
+	} `xml:"Owner"`
+	AccessControlList struct {
+		Grants []s3GrantWire `xml:"Grant"`
+	} `xml:"AccessControlList"`
+}
+
+type s3GrantWire struct {
+	Grantee    s3GranteeWire `xml:"Grantee"`
+	Permission string        `xml:"Permission"`
+}
+
+type s3GranteeWire struct {
+	Type string `xml:"http://www.w3.org/2001/XMLSchema-instance type,attr,omitempty"`
+	ID   string `xml:"ID,omitempty"`
+	URI  string `xml:"URI,omitempty"`
 }
 
 func apiErrorResponse(req *http.Request, statusCode int, code, message string) *http.Response {

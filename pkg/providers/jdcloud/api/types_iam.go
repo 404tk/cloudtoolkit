@@ -89,6 +89,25 @@ type DeleteSubUserResponse struct {
 	Result    struct{}      `json:"result"`
 }
 
+// DescribeAttachedPoliciesResponse maps the
+// `GET /subUser/{subUser}:describeAttachedPolicies` action that lists managed
+// policies bound to a sub user. The exact field names follow the JDCloud SDK
+// convention used by sibling :attach/:detach actions.
+type DescribeAttachedPoliciesResponse struct {
+	RequestID string        `json:"requestId"`
+	Error     *APIErrorBody `json:"error,omitempty"`
+	Result    struct {
+		Policies []AttachedPolicy `json:"policies"`
+	} `json:"result"`
+}
+
+type AttachedPolicy struct {
+	PolicyName  string `json:"policyName"`
+	PolicyType  string `json:"policyType,omitempty"`
+	AttachTime  string `json:"attachTime,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
 // DescribeUserPinResponse maps GET /regions/{regionId}/user:describeUserPin.
 // When called with master AK/SK the returned pin is the master account's pin,
 // which is what the JDCloud sub-account login URL expects.

@@ -28,17 +28,46 @@ type invocationResult struct {
 }
 
 type transport struct {
-	mu          sync.Mutex
-	sequence    int
-	commands    map[string]string
-	invocations map[string]invocationResult
+	mu           sync.Mutex
+	sequence     int
+	commands     map[string]string
+	invocations  map[string]invocationResult
+	userPolicies map[string][]api.IAMAttachedPolicy
+	bucketACL    map[string]string
 }
 
 func newTransport() *transport {
 	return &transport{
-		commands:    make(map[string]string),
-		invocations: make(map[string]invocationResult),
+		commands:     make(map[string]string),
+		invocations:  make(map[string]invocationResult),
+		userPolicies: seedVolcengineUserPolicies(),
+		bucketACL:    seedVolcengineBucketACL(),
 	}
+}
+
+// seedVolcengineUserPolicies gives each demo IAM user the AdministratorAccess
+// system policy by default so list/add/del cycles surface meaningful state.
+func seedVolcengineUserPolicies() map[string][]api.IAMAttachedPolicy {
+	out := make(map[string][]api.IAMAttachedPolicy, len(demoIAMUsers))
+	for _, user := range demoIAMUsers {
+		out[user.UserName] = []api.IAMAttachedPolicy{{
+			PolicyName: "AdministratorAccess",
+			PolicyType: "System",
+			PolicyTrn:  "trn:iam:::policy/AdministratorAccess",
+			AttachDate: user.CreateDate,
+		}}
+	}
+	return out
+}
+
+// seedVolcengineBucketACL gives every demo TOS bucket a starting "private"
+// canned ACL so audit/expose/audit/unexpose cycles surface deterministic state.
+func seedVolcengineBucketACL() map[string]string {
+	out := make(map[string]string, len(demoBuckets))
+	for _, bucket := range demoBuckets {
+		out[bucket.Name] = "private"
+	}
+	return out
 }
 
 func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -161,11 +190,75 @@ func (t *transport) handleIAM(req *http.Request, action string, body []byte) (*h
 			PasswordResetRequired: false,
 		}
 		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+	case "ListAttachedUserPolicies":
+		userName := strings.TrimSpace(query.Get("UserName"))
+		if _, ok := findUser(userName); !ok {
+			return openAPIErrorResponse(req, http.StatusNotFound, "EntityNotExist.User", "user not found"), nil
+		}
+		t.mu.Lock()
+		policies := append([]api.IAMAttachedPolicy(nil), t.userPolicies[userName]...)
+		t.mu.Unlock()
+		resp := api.ListAttachedUserPoliciesResponse{}
+		resp.ResponseMetadata.RequestID = "req-iam-list-attached-policies"
+		resp.Result.AttachedPolicyMetadata = policies
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "AttachUserPolicy":
+		userName := strings.TrimSpace(query.Get("UserName"))
+		policyName := strings.TrimSpace(query.Get("PolicyName"))
+		policyType := strings.TrimSpace(query.Get("PolicyType"))
+		if userName == "" || policyName == "" {
+			return openAPIErrorResponse(req, http.StatusBadRequest, "MissingParameter", "UserName and PolicyName required"), nil
+		}
+		if _, ok := findUser(userName); !ok {
+			return openAPIErrorResponse(req, http.StatusNotFound, "EntityNotExist.User", "user not found"), nil
+		}
+		t.mu.Lock()
+		existing := t.userPolicies[userName]
+		duplicate := false
+		for _, p := range existing {
+			if p.PolicyName == policyName && p.PolicyType == policyType {
+				duplicate = true
+				break
+			}
+		}
+		if !duplicate {
+			t.userPolicies[userName] = append(existing, api.IAMAttachedPolicy{
+				PolicyName: policyName,
+				PolicyType: policyType,
+				PolicyTrn:  "trn:iam:::policy/" + policyName,
+				AttachDate: "20260430T120000Z",
+			})
+		}
+		t.mu.Unlock()
 		resp := api.AttachUserPolicyResponse{}
 		resp.ResponseMetadata.RequestID = "req-iam-attach-policy"
 		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "DetachUserPolicy":
+		userName := strings.TrimSpace(query.Get("UserName"))
+		policyName := strings.TrimSpace(query.Get("PolicyName"))
+		policyType := strings.TrimSpace(query.Get("PolicyType"))
+		if userName == "" || policyName == "" {
+			return openAPIErrorResponse(req, http.StatusBadRequest, "MissingParameter", "UserName and PolicyName required"), nil
+		}
+		if _, ok := findUser(userName); !ok {
+			return openAPIErrorResponse(req, http.StatusNotFound, "EntityNotExist.User", "user not found"), nil
+		}
+		t.mu.Lock()
+		existing := t.userPolicies[userName]
+		filtered := make([]api.IAMAttachedPolicy, 0, len(existing))
+		removed := false
+		for _, p := range existing {
+			if !removed && p.PolicyName == policyName && p.PolicyType == policyType {
+				removed = true
+				continue
+			}
+			filtered = append(filtered, p)
+		}
+		t.userPolicies[userName] = filtered
+		t.mu.Unlock()
+		if !removed {
+			return openAPIErrorResponse(req, http.StatusNotFound, "EntityNotExist.UserPolicy", "policy not attached"), nil
+		}
 		resp := api.DetachUserPolicyResponse{}
 		resp.ResponseMetadata.RequestID = "req-iam-detach-policy"
 		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
@@ -440,6 +533,9 @@ func (t *transport) handleTOS(req *http.Request, body []byte) (*http.Response, e
 	host := strings.ToLower(strings.TrimSpace(req.URL.Hostname()))
 	query := req.URL.Query()
 	if bucket, region, ok := parseBucketHost(host); ok {
+		if _, hasACL := query["acl"]; hasACL {
+			return t.handleTOSBucketACL(req, bucket, region)
+		}
 		if query.Get("list-type") == "2" {
 			return t.handleListObjects(req, bucket, region, query)
 		}
@@ -449,6 +545,66 @@ func (t *transport) handleTOS(req *http.Request, body []byte) (*http.Response, e
 		return t.handleListBuckets(req)
 	}
 	return tosErrorResponse(req, http.StatusNotFound, "InvalidRequest", "unsupported tos host"), nil
+}
+
+func (t *transport) handleTOSBucketACL(req *http.Request, bucketName, region string) (*http.Response, error) {
+	bucket, ok := findBucket(bucketName)
+	if !ok {
+		return tosErrorResponse(req, http.StatusNotFound, "NoSuchBucket", "The specified bucket does not exist."), nil
+	}
+	if region != "" && bucket.Region != region {
+		return tosErrorResponse(req, http.StatusNotFound, "NoSuchBucket", "The specified bucket does not exist in this region."), nil
+	}
+	switch req.Method {
+	case http.MethodGet:
+		t.mu.Lock()
+		acl, ok := t.bucketACL[bucketName]
+		t.mu.Unlock()
+		if !ok {
+			acl = "private"
+		}
+		out := tos.GetBucketACLOutput{}
+		out.Owner.ID = strconv.FormatInt(demoAccountID, 10)
+		switch acl {
+		case "public-read":
+			out.Grants = append(out.Grants, struct {
+				Grantee struct {
+					Type string `json:"Type"`
+					URI  string `json:"Canned"`
+					ID   string `json:"ID"`
+				} `json:"Grantee"`
+				Permission string `json:"Permission"`
+			}{Grantee: struct {
+				Type string `json:"Type"`
+				URI  string `json:"Canned"`
+				ID   string `json:"ID"`
+			}{Type: "Group", URI: "AllUsers"}, Permission: "READ"})
+		case "public-read-write":
+			out.Grants = append(out.Grants, struct {
+				Grantee struct {
+					Type string `json:"Type"`
+					URI  string `json:"Canned"`
+					ID   string `json:"ID"`
+				} `json:"Grantee"`
+				Permission string `json:"Permission"`
+			}{Grantee: struct {
+				Type string `json:"Type"`
+				URI  string `json:"Canned"`
+				ID   string `json:"ID"`
+			}{Type: "Group", URI: "AllUsers"}, Permission: "FULL_CONTROL"})
+		}
+		return demoreplay.JSONResponse(req, http.StatusOK, out), nil
+	case http.MethodPut:
+		acl := strings.TrimSpace(req.Header.Get("x-tos-acl"))
+		if acl == "" {
+			return tosErrorResponse(req, http.StatusBadRequest, "InvalidRequest", "missing x-tos-acl header"), nil
+		}
+		t.mu.Lock()
+		t.bucketACL[bucketName] = acl
+		t.mu.Unlock()
+		return demoreplay.JSONResponse(req, http.StatusOK, struct{}{}), nil
+	}
+	return tosErrorResponse(req, http.StatusMethodNotAllowed, "MethodNotAllowed", "unsupported acl method"), nil
 }
 
 func (t *transport) handleListBuckets(req *http.Request) (*http.Response, error) {

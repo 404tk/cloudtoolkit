@@ -30,12 +30,38 @@ type invocationResult struct {
 type transport struct {
 	mu          sync.Mutex
 	invocations map[string]invocationResult
+	userPolicy  map[string][]ramPolicyFixture
+	bucketACL   map[string]string
 }
 
 func newTransport() *transport {
 	return &transport{
 		invocations: make(map[string]invocationResult),
+		userPolicy:  seedUserPolicies(),
+		bucketACL:   seedBucketACLs(),
 	}
+}
+
+// seedUserPolicies copies the static policy attachments out of demoRAMUsers so
+// the transport can mutate them per request without altering the fixture.
+func seedUserPolicies() map[string][]ramPolicyFixture {
+	out := make(map[string][]ramPolicyFixture, len(demoRAMUsers))
+	for _, user := range demoRAMUsers {
+		policies := make([]ramPolicyFixture, len(user.AttachedPolicy))
+		copy(policies, user.AttachedPolicy)
+		out[user.UserName] = policies
+	}
+	return out
+}
+
+// seedBucketACLs gives every demo bucket a starting "private" canned ACL so
+// audit/expose/audit/unexpose cycles surface deterministic state.
+func seedBucketACLs() map[string]string {
+	out := make(map[string]string, len(demoBuckets))
+	for _, bucket := range demoBuckets {
+		out[bucket.Name] = "private"
+	}
+	return out
 }
 
 func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -274,12 +300,15 @@ func (t *transport) handleRAM(req *http.Request, action string) (*http.Response,
 			},
 		}), nil
 	case "ListPoliciesForUser":
-		user, ok := findRAMUser(query.Get("UserName"))
-		if !ok {
+		userName := strings.TrimSpace(query.Get("UserName"))
+		if _, ok := findRAMUser(userName); !ok {
 			return rpcErrorResponse(req, http.StatusNotFound, "EntityNotExist.User", "The specified RAM user does not exist."), nil
 		}
-		policies := make([]api.RAMPolicy, 0, len(user.AttachedPolicy))
-		for _, policy := range user.AttachedPolicy {
+		t.mu.Lock()
+		attached := append([]ramPolicyFixture(nil), t.userPolicy[userName]...)
+		t.mu.Unlock()
+		policies := make([]api.RAMPolicy, 0, len(attached))
+		for _, policy := range attached {
 			policies = append(policies, api.RAMPolicy{
 				PolicyName: policy.Name,
 				PolicyType: policy.Type,
@@ -335,8 +364,46 @@ func (t *transport) handleRAM(req *http.Request, action string) (*http.Response,
 			},
 		}), nil
 	case "AttachPolicyToUser":
+		userName := strings.TrimSpace(query.Get("UserName"))
+		policyName := strings.TrimSpace(query.Get("PolicyName"))
+		policyType := strings.TrimSpace(query.Get("PolicyType"))
+		if _, ok := findRAMUser(userName); !ok {
+			return rpcErrorResponse(req, http.StatusNotFound, "EntityNotExist.User", "The specified RAM user does not exist."), nil
+		}
+		t.mu.Lock()
+		policies := t.userPolicy[userName]
+		for _, p := range policies {
+			if p.Name == policyName && p.Type == policyType {
+				t.mu.Unlock()
+				return rpcErrorResponse(req, http.StatusConflict, "EntityAlreadyExists.User.Policy", "The user policy already exists."), nil
+			}
+		}
+		t.userPolicy[userName] = append(policies, ramPolicyFixture{Name: policyName, Type: policyType})
+		t.mu.Unlock()
 		return demoreplay.JSONResponse(req, http.StatusOK, api.AttachRAMPolicyToUserResponse{RequestID: "req-ram-attach-user-policy"}), nil
 	case "DetachPolicyFromUser":
+		userName := strings.TrimSpace(query.Get("UserName"))
+		policyName := strings.TrimSpace(query.Get("PolicyName"))
+		policyType := strings.TrimSpace(query.Get("PolicyType"))
+		if _, ok := findRAMUser(userName); !ok {
+			return rpcErrorResponse(req, http.StatusNotFound, "EntityNotExist.User", "The specified RAM user does not exist."), nil
+		}
+		t.mu.Lock()
+		policies := t.userPolicy[userName]
+		filtered := make([]ramPolicyFixture, 0, len(policies))
+		removed := false
+		for _, p := range policies {
+			if !removed && p.Name == policyName && p.Type == policyType {
+				removed = true
+				continue
+			}
+			filtered = append(filtered, p)
+		}
+		t.userPolicy[userName] = filtered
+		t.mu.Unlock()
+		if !removed {
+			return rpcErrorResponse(req, http.StatusNotFound, "EntityNotExist.User.Policy", "The user policy does not exist."), nil
+		}
 		return demoreplay.JSONResponse(req, http.StatusOK, api.DetachRAMPolicyFromUserResponse{RequestID: "req-ram-detach-user-policy"}), nil
 	case "DeleteUser":
 		return demoreplay.JSONResponse(req, http.StatusOK, api.DeleteRAMUserResponse{RequestID: "req-ram-delete-user"}), nil
@@ -580,6 +647,9 @@ func (t *transport) handleOSS(req *http.Request) (*http.Response, error) {
 		return ossErrorResponse(req, http.StatusNotFound, "NoSuchBucket", "The specified bucket does not exist."), nil
 	}
 	query := req.URL.Query()
+	if _, hasACL := query["acl"]; hasACL {
+		return t.handleOSSBucketACL(req, bucket.Name)
+	}
 	maxKeys := demoreplay.ParseInt(query.Get("max-keys"), 1000)
 	window := demoreplay.PageWindow(len(bucket.Objects), 1, maxKeys)
 	return demoreplay.XMLResponse(req, http.StatusOK, oss.ListObjectsResponse{
@@ -588,6 +658,33 @@ func (t *transport) handleOSS(req *http.Request) (*http.Response, error) {
 		IsTruncated: window.End < len(bucket.Objects),
 		Objects:     append([]oss.OSSObject(nil), bucket.Objects[window.Start:window.End]...),
 	}), nil
+}
+
+func (t *transport) handleOSSBucketACL(req *http.Request, bucketName string) (*http.Response, error) {
+	switch req.Method {
+	case http.MethodGet:
+		t.mu.Lock()
+		grant, ok := t.bucketACL[bucketName]
+		t.mu.Unlock()
+		if !ok {
+			grant = "private"
+		}
+		resp := oss.BucketACLResponse{}
+		resp.Owner.ID = "235000000000000001"
+		resp.Owner.DisplayName = demoAccountAlias()
+		resp.AccessControlList.Grant = grant
+		return demoreplay.XMLResponse(req, http.StatusOK, resp), nil
+	case http.MethodPut:
+		acl := strings.TrimSpace(req.Header.Get("x-oss-acl"))
+		if acl != "private" && acl != "public-read" && acl != "public-read-write" {
+			return ossErrorResponse(req, http.StatusBadRequest, "InvalidArgument", "Unsupported x-oss-acl value."), nil
+		}
+		t.mu.Lock()
+		t.bucketACL[bucketName] = acl
+		t.mu.Unlock()
+		return demoreplay.XMLResponse(req, http.StatusOK, struct{}{}), nil
+	}
+	return ossErrorResponse(req, http.StatusMethodNotAllowed, "MethodNotAllowed", "Unsupported ACL method."), nil
 }
 
 func (t *transport) handleSLS(req *http.Request) (*http.Response, error) {

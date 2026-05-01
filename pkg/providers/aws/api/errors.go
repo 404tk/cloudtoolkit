@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/json"
 	"encoding/xml"
 	"errors"
 	"fmt"
@@ -86,6 +87,37 @@ func DecodeError(statusCode int, body []byte) error {
 				Code:       code,
 				Message:    message,
 				RequestID:  requestID,
+			}
+		}
+	}
+
+	// JSON-1.1 envelope (SSM, ECR, and other JSON RPC services). Errors look
+	// like `{"__type": "<service>#<Code>", "Message": "..."}`.
+	if len(body) > 0 && body[0] == '{' {
+		var jsonResp struct {
+			Type    string `json:"__type"`
+			Code    string `json:"Code"`
+			Message string `json:"message"`
+			Msg     string `json:"Message"`
+		}
+		if err := json.Unmarshal(body, &jsonResp); err == nil {
+			code := strings.TrimSpace(jsonResp.Code)
+			if code == "" && jsonResp.Type != "" {
+				code = jsonResp.Type
+				if idx := strings.LastIndex(code, "#"); idx >= 0 {
+					code = code[idx+1:]
+				}
+			}
+			message := strings.TrimSpace(jsonResp.Message)
+			if message == "" {
+				message = strings.TrimSpace(jsonResp.Msg)
+			}
+			if code != "" || message != "" {
+				return &APIError{
+					StatusCode: statusCode,
+					Code:       code,
+					Message:    message,
+				}
 			}
 		}
 	}

@@ -120,6 +120,15 @@ type UHostSet struct {
 type UFileBucketSet struct {
 	BucketName string `json:"BucketName"`
 	Region     string `json:"Region"`
+	Type       string `json:"Type"`
+}
+
+// UpdateBucketResponse maps the JSON-RPC `UpdateBucket` action used to flip
+// a UFile bucket's access type between private / public / limited (受限公开读).
+type UpdateBucketResponse struct {
+	BaseResponse
+	BucketName string `json:"BucketName"`
+	BucketID   string `json:"BucketId"`
 }
 
 type ValueSet struct {
@@ -199,6 +208,28 @@ type IAMListPoliciesResponse struct {
 
 type IAMAttachPoliciesToUserResponse struct {
 	BaseResponse
+}
+
+// IAMDetachPoliciesFromUserResponse is the no-content reply from the
+// `DetachPoliciesFromUser` action.
+type IAMDetachPoliciesFromUserResponse struct {
+	BaseResponse
+}
+
+// IAMListPoliciesForUserResponse maps the `ListPoliciesForUser` action that
+// enumerates the policies bound to a sub user. Field names mirror the URN-
+// based attachments documented for `AttachPoliciesToUser`.
+type IAMListPoliciesForUserResponse struct {
+	BaseResponse
+	TotalCount int                      `json:"TotalCount"`
+	Policies   []IAMUserAttachedPolicy  `json:"Policies"`
+}
+
+type IAMUserAttachedPolicy struct {
+	PolicyURN  string `json:"PolicyURN"`
+	PolicyName string `json:"PolicyName,omitempty"`
+	Scope      string `json:"Scope,omitempty"`
+	ProjectID  string `json:"ProjectID,omitempty"`
 }
 
 type IAMRemoveUserFromProjectResponse struct {

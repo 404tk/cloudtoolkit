@@ -8,16 +8,24 @@ import (
 	"net/url"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/api"
 	demoreplay "github.com/404tk/cloudtoolkit/pkg/providers/replay"
 )
 
 type transport struct {
-	iam *iamMutationState
+	iam         *iamMutationState
+	mu          sync.Mutex
+	bucketTypes map[string]string
 }
 
-func newTransport() *transport { return &transport{iam: newIAMState()} }
+func newTransport() *transport {
+	return &transport{
+		iam:         newIAMState(),
+		bucketTypes: make(map[string]string),
+	}
+}
 
 func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 	body, err := demoreplay.ReadRequestBody(req)
@@ -56,6 +64,8 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return t.handleDescribeUHostInstance(req, params)
 	case "DescribeBucket":
 		return t.handleDescribeBucket(req, params)
+	case "UpdateBucket":
+		return t.handleUpdateBucket(req, params)
 	case "DescribeUDBInstance":
 		return t.handleDescribeUDBInstance(req, params)
 	case "DescribeUDNSZone":
@@ -70,6 +80,10 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return t.handleDeleteUser(req, params)
 	case "AttachPoliciesToUser":
 		return t.handleAttachPolicies(req, params)
+	case "DetachPoliciesFromUser":
+		return t.handleDetachPolicies(req, params)
+	case "ListPoliciesForUser":
+		return t.handleListPoliciesForUser(req, params)
 	}
 	return errorResponse(req, http.StatusNotFound, 1000,
 		fmt.Sprintf("unsupported replay action: %s", action)), nil

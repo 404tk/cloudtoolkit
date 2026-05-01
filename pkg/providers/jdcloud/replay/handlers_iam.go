@@ -20,6 +20,8 @@ func (t *transport) handleIAM(req *http.Request, body []byte) (*http.Response, e
 		return t.handleDescribeUserPin(req)
 	case method == http.MethodPost && path == "/v1/subUser":
 		return t.handleCreateSubUser(req, body)
+	case method == http.MethodGet && strings.HasPrefix(path, "/v1/subUser/") && strings.HasSuffix(path, ":describeAttachedPolicies"):
+		return t.handleDescribeAttachedPolicies(req)
 	case method == http.MethodDelete && strings.HasPrefix(path, "/v1/subUser/") && strings.HasSuffix(path, ":detachSubUserPolicy"):
 		return t.handleDetachPolicy(req)
 	case method == http.MethodPost && strings.HasPrefix(path, "/v1/subUser/") && strings.HasSuffix(path, ":attachSubUserPolicy"):
@@ -104,5 +106,18 @@ func (t *transport) handleDeleteSubUser(req *http.Request, path string) (*http.R
 			fmt.Sprintf("sub user %s not found", user)), nil
 	}
 	resp := api.DeleteSubUserResponse{RequestID: "req-replay-iam-delete"}
+	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+}
+
+func (t *transport) handleDescribeAttachedPolicies(req *http.Request) (*http.Response, error) {
+	rest := strings.TrimPrefix(req.URL.Path, "/v1/subUser/")
+	user := strings.TrimSuffix(rest, ":describeAttachedPolicies")
+	resp := api.DescribeAttachedPoliciesResponse{RequestID: "req-replay-iam-describe-attached"}
+	for _, name := range t.iam.policiesFor(user) {
+		resp.Result.Policies = append(resp.Result.Policies, api.AttachedPolicy{
+			PolicyName: name,
+			PolicyType: "system",
+		})
+	}
 	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/auth"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/billing"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cdb"
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cloudaudit"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cos"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cvm"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/dns"
@@ -196,6 +197,50 @@ func (p *Provider) UserManagement(action, username, password string) (schema.IAM
 	}
 }
 
+// RoleBinding implements schema.RoleBindingManager for tencent CAM. `principal`
+// is a CAM sub-user name; `role` is a numeric policyID (or the friendly name
+// "AdministratorAccess" → 1). `scope` is reserved (CAM user attachments are
+// account-wide).
+func (p *Provider) RoleBinding(ctx context.Context, action, principal, role, scope string) (schema.RoleBindingResult, error) {
+	c := &iam.Driver{Credential: p.apiCredential}
+	c.SetClientOptions(p.clientOptions...)
+	result := schema.RoleBindingResult{
+		Action:    action,
+		Principal: principal,
+		Role:      role,
+		Scope:     scope,
+	}
+	switch action {
+	case "list":
+		bindings, err := c.ListRoleBindings(ctx, principal)
+		if err != nil {
+			return result, err
+		}
+		result.Bindings = bindings
+		result.Message = fmt.Sprintf("%d policies attached to user %s", len(bindings), principal)
+		return result, nil
+	case "add", "del":
+		policyID, err := iam.ResolvePolicyID(role)
+		if err != nil {
+			return result, err
+		}
+		result.AssignmentID = fmt.Sprintf("%d", policyID)
+		if action == "add" {
+			if err := c.AttachPolicy(ctx, principal, policyID); err != nil {
+				return result, err
+			}
+			result.Message = fmt.Sprintf("attached policyID %d to user %s", policyID, principal)
+			return result, nil
+		}
+		if err := c.DetachPolicy(ctx, principal, policyID); err != nil {
+			return result, err
+		}
+		result.Message = fmt.Sprintf("detached policyID %d from user %s", policyID, principal)
+		return result, nil
+	}
+	return result, fmt.Errorf("tencent: unsupported role-binding action %q", action)
+}
+
 func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([]schema.BucketResult, error) {
 	cosprovider := p.newCOSDriver()
 	switch action {
@@ -213,6 +258,69 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([
 		return cosprovider.TotalObjects(ctx, infos)
 	default:
 		return nil, fmt.Errorf("invalid action: %s (expected: list, total)", action)
+	}
+}
+
+// BucketACL implements schema.BucketACLManager for tencent COS. `level`
+// accepts canned COS ACL values (private / public-read / public-read-write
+// / authenticated-read) or friendly aliases resolved by cos.NormalizeCOSACL.
+func (p *Provider) BucketACL(ctx context.Context, action, container, level string) (schema.BucketACLResult, error) {
+	driver := p.newCOSDriver()
+	result := schema.BucketACLResult{
+		Action:    action,
+		Container: container,
+		Level:     level,
+	}
+	switch action {
+	case "audit":
+		entries, err := driver.AuditBucketACL(ctx, container)
+		if err != nil {
+			return result, err
+		}
+		result.Containers = entries
+		result.Message = fmt.Sprintf("%d buckets audited", len(entries))
+		return result, nil
+	case "expose":
+		applied, err := driver.ExposeBucket(ctx, container, level)
+		if err != nil {
+			return result, err
+		}
+		result.Level = applied
+		result.Message = fmt.Sprintf("bucket %s set to %s", container, applied)
+		return result, nil
+	case "unexpose":
+		if err := driver.UnexposeBucket(ctx, container); err != nil {
+			return result, err
+		}
+		result.Level = cos.COSACLPrivate
+		result.Message = fmt.Sprintf("bucket %s reverted to private", container)
+		return result, nil
+	}
+	return result, fmt.Errorf("tencent: unsupported bucket-acl action %q", action)
+}
+
+// EventDump implements schema.EventReader for tencent CloudAudit. The
+// `dump` action lists recent operation log entries via `LookUpEvents`.
+// Tencent CloudAudit is read-only, so the `whitelist` action returns a
+// clear unsupported-action error rather than silently no-op.
+func (p *Provider) EventDump(ctx context.Context, action, args string) (schema.EventActionResult, error) {
+	d := &cloudaudit.Driver{Credential: p.apiCredential}
+	d.SetClientOptions(p.clientOptions...)
+	switch action {
+	case "dump":
+		events, err := d.DumpEvents(ctx, args)
+		if err != nil {
+			return schema.EventActionResult{}, err
+		}
+		return schema.EventActionResult{
+			Action: "dump",
+			Scope:  args,
+			Events: events,
+		}, nil
+	case "whitelist":
+		return d.HandleEvents(ctx, args)
+	default:
+		return schema.EventActionResult{}, fmt.Errorf("invalid action: %s (expected: dump, whitelist)", action)
 	}
 }
 

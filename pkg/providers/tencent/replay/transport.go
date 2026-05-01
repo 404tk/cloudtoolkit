@@ -32,6 +32,8 @@ type transport struct {
 	mu           sync.Mutex
 	sequence     int
 	createdUsers map[string]camUserFixture
+	userPolicies map[uint64][]camPolicyFixture
+	bucketACL    map[string]string
 	invocations  map[string]invocationResult
 	tasks        map[string]invocationResult
 }
@@ -39,9 +41,42 @@ type transport struct {
 func newTransport() *transport {
 	return &transport{
 		createdUsers: make(map[string]camUserFixture),
+		userPolicies: seedUserPolicies(),
+		bucketACL:    seedTencentBucketACL(),
 		invocations:  make(map[string]invocationResult),
 		tasks:        make(map[string]invocationResult),
 	}
+}
+
+// seedUserPolicies copies fixture policy attachments out of demoCAMUsers so
+// the transport can mutate them per request without altering shared fixtures.
+func seedUserPolicies() map[uint64][]camPolicyFixture {
+	out := make(map[uint64][]camPolicyFixture, len(demoCAMUsers))
+	for _, user := range demoCAMUsers {
+		policies := make([]camPolicyFixture, len(user.Policies))
+		copy(policies, user.Policies)
+		out[user.UIN] = policies
+	}
+	return out
+}
+
+// seedTencentBucketACL gives each demo COS bucket a starting "private" canned
+// ACL so audit/expose/audit/unexpose cycles surface deterministic state.
+func seedTencentBucketACL() map[string]string {
+	out := make(map[string]string, len(demoBuckets))
+	for _, bucket := range demoBuckets {
+		out[bucket.Name] = "private"
+	}
+	return out
+}
+
+func findPolicyByID(id uint64) (camPolicyFixture, bool) {
+	for _, p := range demoPolicies {
+		if p.ID == id {
+			return p, true
+		}
+	}
+	return camPolicyFixture{}, false
 }
 
 func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -88,6 +123,8 @@ func (t *transport) handleOpenAPI(req *http.Request, body []byte) (*http.Respons
 		return t.handleSQLServer(req, action)
 	case "tat":
 		return t.handleTAT(req, action, body)
+	case "cloudaudit":
+		return t.handleCloudAudit(req, action)
 	default:
 		return openAPIErrorResponse(req, http.StatusNotFound, "InvalidAction.NotFound", fmt.Sprintf("Unsupported replay action: %s", action)), nil
 	}
@@ -143,16 +180,19 @@ func (t *transport) handleCAM(req *http.Request, action string, body []byte) (*h
 	case "ListAttachedUserAllPolicies":
 		var payload api.ListAttachedUserAllPoliciesRequest
 		_ = json.Unmarshal(body, &payload)
-		user, ok := t.findUserByUIN(derefUint64(payload.TargetUin))
-		if !ok {
+		uin := derefUint64(payload.TargetUin)
+		if _, ok := t.findUserByUIN(uin); !ok {
 			return openAPIErrorResponse(req, http.StatusNotFound, "ResourceNotFound.User", "The specified user does not exist."), nil
 		}
+		t.mu.Lock()
+		policies := append([]camPolicyFixture(nil), t.userPolicies[uin]...)
+		t.mu.Unlock()
 		resp := api.ListAttachedUserAllPoliciesResponse{}
-		resp.Response.PolicyList = make([]api.AttachedUserPolicy, 0, len(user.Policies))
+		resp.Response.PolicyList = make([]api.AttachedUserPolicy, 0, len(policies))
 		resp.Response.RequestID = "req-replay-cam-list-policies"
-		total := uint64(len(user.Policies))
+		total := uint64(len(policies))
 		resp.Response.TotalNum = &total
-		for _, policy := range user.Policies {
+		for _, policy := range policies {
 			id := fmt.Sprintf("%d", policy.ID)
 			name := policy.Name
 			strategyType := policy.StrategyType
@@ -197,10 +237,59 @@ func (t *transport) handleCAM(req *http.Request, action string, body []byte) (*h
 		resp.Response.RequestID = "req-replay-cam-get-user"
 		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "AttachUserPolicy":
+		var payload api.AttachUserPolicyRequest
+		_ = json.Unmarshal(body, &payload)
+		uin := derefUint64(payload.AttachUin)
+		policyID := derefUint64(payload.PolicyID)
+		if uin == 0 || policyID == 0 {
+			return openAPIErrorResponse(req, http.StatusBadRequest, "InvalidParameter", "AttachUin and PolicyId required"), nil
+		}
+		if _, ok := t.findUserByUIN(uin); !ok {
+			return openAPIErrorResponse(req, http.StatusNotFound, "ResourceNotFound.User", "The specified user does not exist."), nil
+		}
+		policy, ok := findPolicyByID(policyID)
+		if !ok {
+			policy = camPolicyFixture{ID: policyID, Name: fmt.Sprintf("policy-%d", policyID), StrategyType: "1"}
+		}
+		t.mu.Lock()
+		existing := t.userPolicies[uin]
+		for _, p := range existing {
+			if p.ID == policyID {
+				t.mu.Unlock()
+				resp := api.AttachUserPolicyResponse{}
+				resp.Response.RequestID = "req-replay-cam-attach-user-policy"
+				return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+			}
+		}
+		t.userPolicies[uin] = append(existing, policy)
+		t.mu.Unlock()
 		resp := api.AttachUserPolicyResponse{}
 		resp.Response.RequestID = "req-replay-cam-attach-user-policy"
 		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "DetachUserPolicy":
+		var payload api.DetachUserPolicyRequest
+		_ = json.Unmarshal(body, &payload)
+		uin := derefUint64(payload.DetachUin)
+		policyID := derefUint64(payload.PolicyID)
+		if uin == 0 || policyID == 0 {
+			return openAPIErrorResponse(req, http.StatusBadRequest, "InvalidParameter", "DetachUin and PolicyId required"), nil
+		}
+		if _, ok := t.findUserByUIN(uin); !ok {
+			return openAPIErrorResponse(req, http.StatusNotFound, "ResourceNotFound.User", "The specified user does not exist."), nil
+		}
+		t.mu.Lock()
+		existing := t.userPolicies[uin]
+		filtered := make([]camPolicyFixture, 0, len(existing))
+		removed := false
+		for _, p := range existing {
+			if !removed && p.ID == policyID {
+				removed = true
+				continue
+			}
+			filtered = append(filtered, p)
+		}
+		t.userPolicies[uin] = filtered
+		t.mu.Unlock()
 		resp := api.DetachUserPolicyResponse{}
 		resp.Response.RequestID = "req-replay-cam-detach-user-policy"
 		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
@@ -656,8 +745,7 @@ func (t *transport) handleCOS(req *http.Request) (*http.Response, error) {
 	}
 
 	host := strings.ToLower(req.URL.Hostname())
-	switch {
-	case host == "service.cos.myqcloud.com" && req.Method == http.MethodGet:
+	if host == "service.cos.myqcloud.com" && req.Method == http.MethodGet {
 		resp := cos.ListBucketsResponse{
 			Buckets: make([]cos.COSBucket, 0, len(demoBuckets)),
 		}
@@ -669,15 +757,23 @@ func (t *transport) handleCOS(req *http.Request) (*http.Response, error) {
 			})
 		}
 		return demoreplay.XMLResponse(req, http.StatusOK, resp), nil
-	case req.Method == http.MethodGet:
-		bucketName, region, ok := parseBucketHost(host)
-		if !ok {
-			return xmlErrorResponse(req, http.StatusNotFound, "NoSuchBucket", "The specified bucket does not exist."), nil
-		}
-		bucket, found := findBucket(bucketName)
-		if !found || bucket.Region != region {
-			return xmlErrorResponse(req, http.StatusNotFound, "NoSuchBucket", "The specified bucket does not exist."), nil
-		}
+	}
+
+	bucketName, region, ok := parseBucketHost(host)
+	if !ok {
+		return xmlErrorResponse(req, http.StatusNotFound, "NoSuchBucket", "The specified bucket does not exist."), nil
+	}
+	bucket, found := findBucket(bucketName)
+	if !found || bucket.Region != region {
+		return xmlErrorResponse(req, http.StatusNotFound, "NoSuchBucket", "The specified bucket does not exist."), nil
+	}
+
+	if req.URL.Query().Has("acl") {
+		return t.handleCOSBucketACL(req, bucket.Name)
+	}
+
+	switch req.Method {
+	case http.MethodGet:
 		maxKeys := demoreplay.ParseInt(req.URL.Query().Get("max-keys"), 1000)
 		marker := strings.TrimSpace(req.URL.Query().Get("marker"))
 		objects, nextMarker, truncated := bucketPage(bucket.Objects, marker, maxKeys)
@@ -699,6 +795,66 @@ func (t *transport) handleCOS(req *http.Request) (*http.Response, error) {
 	default:
 		return xmlErrorResponse(req, http.StatusMethodNotAllowed, "MethodNotAllowed", "The specified method is not allowed against this resource."), nil
 	}
+}
+
+func (t *transport) handleCOSBucketACL(req *http.Request, bucketName string) (*http.Response, error) {
+	switch req.Method {
+	case http.MethodGet:
+		t.mu.Lock()
+		acl, ok := t.bucketACL[bucketName]
+		t.mu.Unlock()
+		if !ok {
+			acl = "private"
+		}
+		resp := cos.BucketACLResponse{}
+		resp.Owner.ID = "qcs::cam::uin/100000001:uin/100000001"
+		resp.Owner.DisplayName = "ctk-demo"
+		switch acl {
+		case "public-read":
+			resp.AccessControlList.Grant = append(resp.AccessControlList.Grant, struct {
+				Grantee struct {
+					Type string `xml:"http://www.w3.org/2001/XMLSchema-instance type,attr"`
+					ID   string `xml:"ID"`
+					URI  string `xml:"URI"`
+				} `xml:"Grantee"`
+				Permission string `xml:"Permission"`
+			}{
+				Grantee: struct {
+					Type string `xml:"http://www.w3.org/2001/XMLSchema-instance type,attr"`
+					ID   string `xml:"ID"`
+					URI  string `xml:"URI"`
+				}{Type: "Group", URI: "http://cam.qcloud.com/groups/global/AllUsers"},
+				Permission: "READ",
+			})
+		case "public-read-write":
+			resp.AccessControlList.Grant = append(resp.AccessControlList.Grant, struct {
+				Grantee struct {
+					Type string `xml:"http://www.w3.org/2001/XMLSchema-instance type,attr"`
+					ID   string `xml:"ID"`
+					URI  string `xml:"URI"`
+				} `xml:"Grantee"`
+				Permission string `xml:"Permission"`
+			}{
+				Grantee: struct {
+					Type string `xml:"http://www.w3.org/2001/XMLSchema-instance type,attr"`
+					ID   string `xml:"ID"`
+					URI  string `xml:"URI"`
+				}{Type: "Group", URI: "http://cam.qcloud.com/groups/global/AllUsers"},
+				Permission: "FULL_CONTROL",
+			})
+		}
+		return demoreplay.XMLResponse(req, http.StatusOK, resp), nil
+	case http.MethodPut:
+		acl := strings.TrimSpace(req.Header.Get("x-cos-acl"))
+		if acl == "" {
+			return xmlErrorResponse(req, http.StatusBadRequest, "InvalidArgument", "missing x-cos-acl header"), nil
+		}
+		t.mu.Lock()
+		t.bucketACL[bucketName] = acl
+		t.mu.Unlock()
+		return demoreplay.XMLResponse(req, http.StatusOK, struct{}{}), nil
+	}
+	return xmlErrorResponse(req, http.StatusMethodNotAllowed, "MethodNotAllowed", "unsupported acl method"), nil
 }
 
 func verifyOpenAPIAuth(req *http.Request, body []byte) demoreplay.AuthFailureKind {
