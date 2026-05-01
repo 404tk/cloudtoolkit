@@ -109,6 +109,7 @@ var providers = map[string]providerMeta{
 			"bucket-check",
 			"role-binding-check",
 			"bucket-acl-check",
+			"event-check",
 		},
 	},
 	"azure": {
@@ -139,7 +140,7 @@ var providers = map[string]providerMeta{
 		Payloads: []string{
 			"cloudlist",
 			"role-binding-check",
-			"sa-key-check",
+			"iam-credential-check",
 		},
 	},
 	"jdcloud": {

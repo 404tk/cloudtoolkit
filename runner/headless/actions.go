@@ -147,31 +147,31 @@ var actionSpecs = map[string]actionSpec{
 		},
 	},
 	"keyls": {
-		payload: "sa-key-check",
+		payload: "iam-credential-check",
 		minArgs: 1,
 		maxArgs: 1,
-		usage:   "keyls <service-account>",
-		summary: "list service-account keys",
+		usage:   "keyls <principal>",
+		summary: "list long-lived IAM credentials",
 		build: func(args []string) string {
 			return "list " + args[0]
 		},
 	},
 	"keyadd": {
-		payload: "sa-key-check",
+		payload: "iam-credential-check",
 		minArgs: 1,
 		maxArgs: 1,
-		usage:   "keyadd <service-account>",
-		summary: "mint a validation service-account key",
+		usage:   "keyadd <principal>",
+		summary: "mint a validation IAM credential",
 		build: func(args []string) string {
 			return "create " + args[0]
 		},
 	},
 	"keydel": {
-		payload: "sa-key-check",
+		payload: "iam-credential-check",
 		minArgs: 2,
 		maxArgs: 2,
-		usage:   "keydel <service-account> <key-id>",
-		summary: "revoke a service-account key",
+		usage:   "keydel <principal> <credential-id>",
+		summary: "revoke an IAM credential",
 		build: func(args []string) string {
 			return "delete " + args[0] + " " + args[1]
 		},

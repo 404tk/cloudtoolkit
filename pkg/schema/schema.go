@@ -156,29 +156,30 @@ type BucketACLEntry struct {
 	Level     string
 }
 
-// ServiceAccountKeyManager powers the sa-key-check payload. It validates
-// detection coverage for service-account credential lifecycle: enumerating,
-// minting, and revoking long-lived keys. PrivateKeyData on a `create` action
-// is base64 of the credential JSON the cloud returns once at creation time.
-type ServiceAccountKeyManager interface {
+// IAMCredentialManager powers the iam-credential-check payload. It validates
+// detection coverage for long-lived IAM credential lifecycle: enumerating,
+// minting, and revoking credentials such as GCP service-account keys, AWS
+// access keys, or Azure client secrets. CredentialData on a `create` action
+// carries the provider-specific secret material returned once at creation time.
+type IAMCredentialManager interface {
 	Provider
-	ServiceAccountKey(ctx context.Context, action, serviceAccount, keyID string) (ServiceAccountKeyResult, error)
+	IAMCredential(ctx context.Context, action, principal, credentialID string) (IAMCredentialResult, error)
 }
 
-type ServiceAccountKeyResult struct {
+type IAMCredentialResult struct {
 	Action         string
-	ServiceAccount string
-	KeyID          string
-	PrivateKeyData string
-	Keys           []ServiceAccountKey
+	Principal      string
+	CredentialID   string
+	CredentialData string
+	Credentials    []IAMCredential
 	Message        string
 }
 
-type ServiceAccountKey struct {
-	KeyID       string
-	KeyType     string
-	ValidAfter  string
-	ValidBefore string
+type IAMCredential struct {
+	CredentialID   string
+	CredentialType string
+	ValidAfter     string
+	ValidBefore    string
 }
 
 type EventActionResult struct {

@@ -218,3 +218,82 @@ func findOBSBucket(name string) (obsBucketFixture, bool) {
 	}
 	return obsBucketFixture{}, false
 }
+
+type ctsTraceFixture struct {
+	Region       string
+	TraceID      string
+	TraceName    string
+	TraceRating  string
+	TraceType    string
+	Code         string
+	ServiceType  string
+	OperationID  string
+	ResourceID   string
+	ResourceName string
+	ResourceType string
+	SourceIP     string
+	AccessKeyID  string
+	Time         int64
+}
+
+var demoCTSTraces = []ctsTraceFixture{
+	{
+		Region:       "cn-north-4",
+		TraceID:      "cts-replay-eip-001",
+		TraceName:    "deleteEip",
+		TraceRating:  "normal",
+		TraceType:    "ConsoleAction",
+		Code:         "204",
+		ServiceType:  "EIP",
+		OperationID:  "DeletePublicip",
+		ResourceID:   "3224b58b-fca5-4902-a2a3-05757f29da22",
+		ResourceName: "ctk-demo-eip",
+		ResourceType: "publicip",
+		SourceIP:     "203.0.113.10",
+		AccessKeyID:  demoCredentials.AccessKey,
+		Time:         1740710091805,
+	},
+	{
+		Region:       "cn-north-4",
+		TraceID:      "cts-replay-iam-001",
+		TraceName:    "createUser",
+		TraceRating:  "normal",
+		TraceType:    "ApiCall",
+		Code:         "201",
+		ServiceType:  "IAM",
+		OperationID:  "CreateUser",
+		ResourceID:   "06f1d2dca680f0a02fa4c01acc0e0201",
+		ResourceName: "ctk-demo-bot",
+		ResourceType: "user",
+		SourceIP:     "203.0.113.10",
+		AccessKeyID:  demoCredentials.AccessKey,
+		Time:         1740710191805,
+	},
+	{
+		Region:       "cn-east-3",
+		TraceID:      "cts-replay-obs-001",
+		TraceName:    "putObject",
+		TraceRating:  "warning",
+		TraceType:    "ApiCall",
+		Code:         "200",
+		ServiceType:  "OBS",
+		OperationID:  "PutObject",
+		ResourceID:   "ctk-validation-archive",
+		ResourceName: "ctk-validation-archive",
+		ResourceType: "bucket",
+		SourceIP:     "198.51.100.25",
+		AccessKeyID:  demoCredentials.AccessKey,
+		Time:         1740711291805,
+	},
+}
+
+func ctsTracesForRegion(region string) []ctsTraceFixture {
+	region = strings.TrimSpace(region)
+	items := make([]ctsTraceFixture, 0, len(demoCTSTraces))
+	for _, trace := range demoCTSTraces {
+		if trace.Region == region {
+			items = append(items, trace)
+		}
+	}
+	return items
+}

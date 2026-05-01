@@ -8,6 +8,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/api"
 	huaweiauth "github.com/404tk/cloudtoolkit/pkg/providers/huawei/auth"
 	_bss "github.com/404tk/cloudtoolkit/pkg/providers/huawei/bss"
+	_cts "github.com/404tk/cloudtoolkit/pkg/providers/huawei/cts"
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/ecs"
 	_iam "github.com/404tk/cloudtoolkit/pkg/providers/huawei/iam"
 	_obs "github.com/404tk/cloudtoolkit/pkg/providers/huawei/obs"
@@ -298,6 +299,35 @@ func (p *Provider) BucketACL(ctx context.Context, action, container, level strin
 		return result, nil
 	}
 	return result, fmt.Errorf("huawei: unsupported bucket-acl action %q", action)
+}
+
+// EventDump implements schema.EventReader for Huawei CTS. The `dump` action
+// lists recent management traces; `whitelist` returns a clear unsupported
+// error because CTS is a read-only audit service.
+func (p *Provider) EventDump(ctx context.Context, action, args string) (schema.EventActionResult, error) {
+	cred := p.iamCredential()
+	driver := &_cts.Driver{
+		Cred:     cred,
+		Regions:  p.regions,
+		DomainID: p.domainID,
+		Client:   p.newAPIClient(cred),
+	}
+	switch action {
+	case "dump":
+		events, err := driver.DumpEvents(ctx, args)
+		if err != nil {
+			return schema.EventActionResult{}, err
+		}
+		return schema.EventActionResult{
+			Action: "dump",
+			Scope:  args,
+			Events: events,
+		}, nil
+	case "whitelist":
+		return driver.HandleEvents(ctx, args)
+	default:
+		return schema.EventActionResult{}, fmt.Errorf("invalid action: %s (expected: dump, whitelist)", action)
+	}
 }
 
 func (p *Provider) iamCredential() huaweiauth.Credential {

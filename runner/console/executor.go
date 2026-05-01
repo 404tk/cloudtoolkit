@@ -139,7 +139,7 @@ func set(args []string) {
 			config[utils.Metadata] = "list"
 		case "bucket-acl-check":
 			config[utils.Metadata] = "audit"
-		case "sa-key-check":
+		case "iam-credential-check":
 			config[utils.Metadata] = ""
 		default:
 			config[utils.Metadata] = ""

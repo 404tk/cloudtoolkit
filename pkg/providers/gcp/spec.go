@@ -10,6 +10,6 @@ func init() {
 		Options: []registry.Option{
 			{Name: utils.GCPserviceAccountJSON, Description: "GCP Credential encoded through Base64", Required: true, Sensitive: true},
 		},
-		Capabilities: []string{"cloudlist", "iam-role", "iam-sa-key"},
+		Capabilities: []string{"cloudlist", "iam-role", "iam-credential"},
 	})
 }

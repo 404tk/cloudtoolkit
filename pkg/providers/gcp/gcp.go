@@ -172,49 +172,50 @@ func (p *Provider) RoleBinding(ctx context.Context, action, principal, role, sco
 	return result, fmt.Errorf("gcp: unsupported role-binding action %q", action)
 }
 
-// ServiceAccountKey implements schema.ServiceAccountKeyManager.
-func (p *Provider) ServiceAccountKey(ctx context.Context, action, account, keyID string) (schema.ServiceAccountKeyResult, error) {
+// IAMCredential implements schema.IAMCredentialManager. GCP currently maps the
+// generic capability to service-account key lifecycle operations.
+func (p *Provider) IAMCredential(ctx context.Context, action, principal, credentialID string) (schema.IAMCredentialResult, error) {
 	driver := &_iam.Driver{Projects: p.projects, Client: p.apiClient}
 	if len(p.projects) == 0 || p.projects[0] == "" {
-		return schema.ServiceAccountKeyResult{Action: action}, fmt.Errorf("gcp: no project configured for service account key")
+		return schema.IAMCredentialResult{Action: action}, fmt.Errorf("gcp: no project configured for service account key")
 	}
 	project := p.projects[0]
-	result := schema.ServiceAccountKeyResult{
-		Action:         action,
-		ServiceAccount: account,
-		KeyID:          keyID,
+	result := schema.IAMCredentialResult{
+		Action:       action,
+		Principal:    principal,
+		CredentialID: credentialID,
 	}
 	switch action {
 	case "list":
-		keys, err := driver.ListKeys(ctx, project, account)
+		keys, err := driver.ListKeys(ctx, project, principal)
 		if err != nil {
 			return result, err
 		}
 		for _, k := range keys {
-			result.Keys = append(result.Keys, schema.ServiceAccountKey{
-				KeyID:       _iam.KeyShortID(k.Name),
-				KeyType:     k.KeyType,
-				ValidAfter:  k.ValidAfterTime,
-				ValidBefore: k.ValidBeforeTime,
+			result.Credentials = append(result.Credentials, schema.IAMCredential{
+				CredentialID:   _iam.KeyShortID(k.Name),
+				CredentialType: k.KeyType,
+				ValidAfter:     k.ValidAfterTime,
+				ValidBefore:    k.ValidBeforeTime,
 			})
 		}
-		result.Message = fmt.Sprintf("%d keys on %s", len(result.Keys), account)
+		result.Message = fmt.Sprintf("%d credentials on %s", len(result.Credentials), principal)
 		return result, nil
 	case "create":
-		key, err := driver.CreateKey(ctx, project, account)
+		key, err := driver.CreateKey(ctx, project, principal)
 		if err != nil {
 			return result, err
 		}
-		result.KeyID = _iam.KeyShortID(key.Name)
-		result.PrivateKeyData = key.PrivateKeyData
-		result.Message = fmt.Sprintf("minted key %s for %s", result.KeyID, account)
+		result.CredentialID = _iam.KeyShortID(key.Name)
+		result.CredentialData = key.PrivateKeyData
+		result.Message = fmt.Sprintf("minted credential %s for %s", result.CredentialID, principal)
 		return result, nil
 	case "delete":
-		if err := driver.DeleteKey(ctx, project, account, keyID); err != nil {
+		if err := driver.DeleteKey(ctx, project, principal, credentialID); err != nil {
 			return result, err
 		}
-		result.Message = fmt.Sprintf("revoked key %s on %s", keyID, account)
+		result.Message = fmt.Sprintf("revoked credential %s on %s", credentialID, principal)
 		return result, nil
 	}
-	return result, fmt.Errorf("gcp: unsupported sa-key action %q", action)
+	return result, fmt.Errorf("gcp: unsupported iam-credential action %q", action)
 }
