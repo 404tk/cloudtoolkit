@@ -702,19 +702,57 @@ func (t *transport) handleDNS(req *http.Request) (*http.Response, error) {
 		fmt.Sprintf("unsupported dns path: %s", path)), nil
 }
 
+// handleLogging routes Cloud Logging requests. Cloudlist `log` asset uses
+// `GET /v2/projects/{p}/logs` to enumerate log names; `event-check` uses
+// `POST /v2/entries:list` to read recent audit entries.
 func (t *transport) handleLogging(req *http.Request, _ []byte) (*http.Response, error) {
-	if req.Method != http.MethodPost || !strings.HasSuffix(req.URL.Path, "/v2/entries:list") {
-		return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
-			fmt.Sprintf("unsupported logging path: %s %s", req.Method, req.URL.Path)), nil
+	path := req.URL.Path
+	switch {
+	case req.Method == http.MethodPost && strings.HasSuffix(path, "/v2/entries:list"):
+		resp := api.ListLogEntriesResponse{Entries: demoCloudAuditLogEntries()}
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+	case req.Method == http.MethodGet && strings.HasSuffix(path, "/logs") && strings.Contains(path, "/v2/projects/"):
+		project := extractLoggingProject(path)
+		if project != "" && project != demoProjectID {
+			return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
+				fmt.Sprintf("project %s not visible to current credentials", project)), nil
+		}
+		resp := api.ListLogsResponse{LogNames: demoLogNames(demoProjectID)}
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	}
-	resp := api.ListLogEntriesResponse{Entries: demoCloudAuditLogEntries()}
-	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+	return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
+		fmt.Sprintf("unsupported logging path: %s %s", req.Method, req.URL.Path)), nil
+}
+
+// extractLoggingProject parses `/v2/projects/{project}/logs`.
+func extractLoggingProject(path string) string {
+	const prefix = "/v2/projects/"
+	idx := strings.Index(path, prefix)
+	if idx < 0 {
+		return ""
+	}
+	rest := path[idx+len(prefix):]
+	end := strings.Index(rest, "/")
+	if end < 0 {
+		return rest
+	}
+	return rest[:end]
+}
+
+func demoLogNames(project string) []string {
+	return []string{
+		fmt.Sprintf("projects/%s/logs/cloudaudit.googleapis.com%%2Factivity", project),
+		fmt.Sprintf("projects/%s/logs/cloudaudit.googleapis.com%%2Fdata_access", project),
+		fmt.Sprintf("projects/%s/logs/run.googleapis.com%%2Fstdout", project),
+	}
 }
 
 func (t *transport) handleSQLAdmin(req *http.Request, _ []byte) (*http.Response, error) {
 	path := strings.TrimSuffix(req.URL.Path, "/")
 	parts := strings.Split(strings.TrimPrefix(path, "/sql/v1beta4/"), "/")
-	if len(parts) < 4 || parts[0] != "projects" || parts[2] != "instances" {
+	// Minimum well-formed sqladmin path is `projects/{p}/instances` (3 parts).
+	// Deeper paths (`.../instances/{id}/users[...]`) are validated below.
+	if len(parts) < 3 || parts[0] != "projects" || parts[2] != "instances" {
 		return apiErrorResponse(req, http.StatusBadRequest, "INVALID_ARGUMENT",
 			"malformed sqladmin path"), nil
 	}
