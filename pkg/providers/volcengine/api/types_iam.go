@@ -284,6 +284,89 @@ func (c *Client) ListAttachedUserPolicies(ctx context.Context, region, userName 
 	return out, err
 }
 
+type IAMAccessKey struct {
+	AccessKeyID string `json:"AccessKeyId"`
+	Status      string `json:"Status"`
+	CreateDate  string `json:"CreateDate"`
+}
+
+type IAMAccessKeySecret struct {
+	AccessKeyID     string `json:"AccessKeyId"`
+	SecretAccessKey string `json:"SecretAccessKey"`
+	Status          string `json:"Status"`
+	CreateDate      string `json:"CreateDate"`
+}
+
+type ListAccessKeysResponse struct {
+	ResponseMetadata ResponseMetadata `json:"ResponseMetadata"`
+	Result           struct {
+		AccessKeyMetadata []IAMAccessKey `json:"AccessKeyMetadata"`
+	} `json:"Result"`
+}
+
+type CreateAccessKeyResponse struct {
+	ResponseMetadata ResponseMetadata `json:"ResponseMetadata"`
+	Result           struct {
+		AccessKey IAMAccessKeySecret `json:"AccessKey"`
+	} `json:"Result"`
+}
+
+type DeleteAccessKeyResponse struct {
+	ResponseMetadata ResponseMetadata `json:"ResponseMetadata"`
+}
+
+func (c *Client) ListAccessKeys(ctx context.Context, region, userName string) (ListAccessKeysResponse, error) {
+	query := url.Values{}
+	if userName = strings.TrimSpace(userName); userName != "" {
+		query.Set("UserName", userName)
+	}
+	var out ListAccessKeysResponse
+	err := c.DoOpenAPI(ctx, Request{
+		Service:    "iam",
+		Version:    iamUserAPIVersion,
+		Action:     "ListAccessKeys",
+		Method:     http.MethodGet,
+		Region:     region,
+		Path:       "/",
+		Query:      query,
+		Idempotent: true,
+	}, &out)
+	return out, err
+}
+
+func (c *Client) CreateAccessKey(ctx context.Context, region, userName string) (CreateAccessKeyResponse, error) {
+	query := url.Values{}
+	setTrimmedQueryValue(query, "UserName", userName)
+	var out CreateAccessKeyResponse
+	err := c.DoOpenAPI(ctx, Request{
+		Service: "iam",
+		Version: iamUserAPIVersion,
+		Action:  "CreateAccessKey",
+		Method:  http.MethodGet,
+		Region:  region,
+		Path:    "/",
+		Query:   query,
+	}, &out)
+	return out, err
+}
+
+func (c *Client) DeleteAccessKey(ctx context.Context, region, userName, accessKeyID string) (DeleteAccessKeyResponse, error) {
+	query := url.Values{}
+	setTrimmedQueryValue(query, "UserName", userName)
+	setTrimmedQueryValue(query, "AccessKeyId", accessKeyID)
+	var out DeleteAccessKeyResponse
+	err := c.DoOpenAPI(ctx, Request{
+		Service: "iam",
+		Version: iamUserAPIVersion,
+		Action:  "DeleteAccessKey",
+		Method:  http.MethodGet,
+		Region:  region,
+		Path:    "/",
+		Query:   query,
+	}, &out)
+	return out, err
+}
+
 func setTrimmedQueryValue(query url.Values, key, value string) {
 	query.Set(key, strings.TrimSpace(value))
 }

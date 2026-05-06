@@ -22,6 +22,12 @@ func (t *transport) handleIAM(req *http.Request, body []byte) (*http.Response, e
 		return t.handleCreateSubUser(req, body)
 	case method == http.MethodGet && strings.HasPrefix(path, "/v1/subUser/") && strings.HasSuffix(path, ":describeAttachedPolicies"):
 		return t.handleDescribeAttachedPolicies(req)
+	case method == http.MethodGet && strings.HasPrefix(path, "/v1/subUser/") && strings.HasSuffix(path, ":describeAccessKeys"):
+		return t.handleDescribeAccessKeys(req)
+	case method == http.MethodPost && strings.HasPrefix(path, "/v1/subUser/") && strings.HasSuffix(path, ":createAccessKey"):
+		return t.handleCreateAccessKey(req)
+	case method == http.MethodDelete && strings.HasPrefix(path, "/v1/subUser/") && strings.HasSuffix(path, ":deleteAccessKey"):
+		return t.handleDeleteAccessKey(req)
 	case method == http.MethodDelete && strings.HasPrefix(path, "/v1/subUser/") && strings.HasSuffix(path, ":detachSubUserPolicy"):
 		return t.handleDetachPolicy(req)
 	case method == http.MethodPost && strings.HasPrefix(path, "/v1/subUser/") && strings.HasSuffix(path, ":attachSubUserPolicy"):
@@ -119,5 +125,53 @@ func (t *transport) handleDescribeAttachedPolicies(req *http.Request) (*http.Res
 			PolicyType: "system",
 		})
 	}
+	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+}
+
+func (t *transport) handleDescribeAccessKeys(req *http.Request) (*http.Response, error) {
+	rest := strings.TrimPrefix(req.URL.Path, "/v1/subUser/")
+	user := strings.TrimSuffix(rest, ":describeAccessKeys")
+	if !t.iam.userExists(user) {
+		return apiErrorResponse(req, http.StatusNotFound, "ResourceNotFound", fmt.Sprintf("sub user %s not found", user)), nil
+	}
+	resp := api.DescribeAccessKeysResponse{RequestID: "req-replay-iam-describe-access-keys"}
+	for _, k := range t.iam.snapshotAccessKeys(user) {
+		resp.Result.AccessKeys = append(resp.Result.AccessKeys, api.IAMSubUserAccessKey{
+			AccessKey:  k.AccessKey,
+			Status:     k.Status,
+			CreateTime: k.CreateTime,
+		})
+	}
+	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+}
+
+func (t *transport) handleCreateAccessKey(req *http.Request) (*http.Response, error) {
+	rest := strings.TrimPrefix(req.URL.Path, "/v1/subUser/")
+	user := strings.TrimSuffix(rest, ":createAccessKey")
+	if !t.iam.userExists(user) {
+		return apiErrorResponse(req, http.StatusNotFound, "ResourceNotFound", fmt.Sprintf("sub user %s not found", user)), nil
+	}
+	key := t.iam.mintAccessKey(user)
+	resp := api.CreateAccessKeyResponse{RequestID: "req-replay-iam-create-access-key"}
+	resp.Result.AccessKey = api.IAMSubUserAccessKeySecret{
+		AccessKey:  key.AccessKey,
+		SecretKey:  key.SecretKey,
+		Status:     key.Status,
+		CreateTime: key.CreateTime,
+	}
+	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+}
+
+func (t *transport) handleDeleteAccessKey(req *http.Request) (*http.Response, error) {
+	rest := strings.TrimPrefix(req.URL.Path, "/v1/subUser/")
+	user := strings.TrimSuffix(rest, ":deleteAccessKey")
+	accessKey := strings.TrimSpace(req.URL.Query().Get("accessKey"))
+	if accessKey == "" {
+		return apiErrorResponse(req, http.StatusBadRequest, "InvalidParameter", "accessKey required"), nil
+	}
+	if !t.iam.deleteAccessKey(user, accessKey) {
+		return apiErrorResponse(req, http.StatusNotFound, "ResourceNotFound", fmt.Sprintf("access key %s not found", accessKey)), nil
+	}
+	resp := api.DeleteAccessKeyResponse{RequestID: "req-replay-iam-delete-access-key"}
 	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 }

@@ -1,23 +1,35 @@
 package replay
 
 import (
+	"fmt"
 	"strings"
 	"sync"
+	"time"
 )
 
 type iamMutationState struct {
-	mu       sync.Mutex
-	created  map[string]subUserFixture
-	deleted  map[string]bool
-	policies map[string]map[string]bool
+	mu           sync.Mutex
+	created      map[string]subUserFixture
+	deleted      map[string]bool
+	policies     map[string]map[string]bool
+	accessKeys   map[string][]jdcloudAccessKeyFixture
+	accessKeySeq int
 }
 
 func newIAMState() *iamMutationState {
 	return &iamMutationState{
-		created:  make(map[string]subUserFixture),
-		deleted:  make(map[string]bool),
-		policies: make(map[string]map[string]bool),
+		created:    make(map[string]subUserFixture),
+		deleted:    make(map[string]bool),
+		policies:   make(map[string]map[string]bool),
+		accessKeys: make(map[string][]jdcloudAccessKeyFixture),
 	}
+}
+
+type jdcloudAccessKeyFixture struct {
+	AccessKey  string
+	SecretKey  string
+	Status     string
+	CreateTime string
 }
 
 func (s *iamMutationState) snapshotUsers() []subUserFixture {
@@ -117,4 +129,62 @@ func (s *iamMutationState) policiesFor(user string) []string {
 		out = append(out, name)
 	}
 	return out
+}
+
+func (s *iamMutationState) userExists(name string) bool {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.deleted[name] {
+		return false
+	}
+	if _, ok := s.created[name]; ok {
+		return true
+	}
+	for _, user := range demoBaseSubUsers {
+		if user.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *iamMutationState) snapshotAccessKeys(user string) []jdcloudAccessKeyFixture {
+	user = strings.TrimSpace(user)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]jdcloudAccessKeyFixture(nil), s.accessKeys[user]...)
+}
+
+func (s *iamMutationState) mintAccessKey(user string) jdcloudAccessKeyFixture {
+	user = strings.TrimSpace(user)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.accessKeySeq++
+	key := jdcloudAccessKeyFixture{
+		AccessKey:  fmt.Sprintf("JDC_AKLTMINT%06d", s.accessKeySeq),
+		SecretKey:  fmt.Sprintf("JDCMINTsecret%06d", s.accessKeySeq),
+		Status:     "active",
+		CreateTime: time.Now().UTC().Format(time.RFC3339),
+	}
+	s.accessKeys[user] = append(s.accessKeys[user], key)
+	return key
+}
+
+func (s *iamMutationState) deleteAccessKey(user, accessKey string) bool {
+	user = strings.TrimSpace(user)
+	accessKey = strings.TrimSpace(accessKey)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	keys := s.accessKeys[user]
+	for i, k := range keys {
+		if k.AccessKey == accessKey {
+			s.accessKeys[user] = append(keys[:i], keys[i+1:]...)
+			return true
+		}
+	}
+	return false
 }

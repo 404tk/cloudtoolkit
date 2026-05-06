@@ -120,6 +120,38 @@ const (
 	demoCallerID = "qcs::cam::uin/100000001:uin/100000001"
 )
 
+func demoOwnerUIN64() uint64 {
+	return 100000001
+}
+
+type camAccessKeyFixture struct {
+	AccessKeyID     string
+	SecretAccessKey string
+	Status          string
+	CreateTime      string
+}
+
+func seedTencentAccessKeys() map[uint64][]camAccessKeyFixture {
+	out := make(map[uint64][]camAccessKeyFixture, len(demoCAMUsers)+1)
+	out[demoOwnerUIN64()] = []camAccessKeyFixture{
+		{
+			AccessKeyID: "AKIDz8krbsJ5yKBZQpn74WFkmLPx3OWNER",
+			Status:      "Active",
+			CreateTime:  "2026-04-20 09:00:00",
+		},
+	}
+	for _, user := range demoCAMUsers {
+		out[user.UIN] = []camAccessKeyFixture{
+			{
+				AccessKeyID: fmt.Sprintf("AKIDz8krbsJ5yKBZQpn74WFkm%dEXAMPLE", user.UIN%1000),
+				Status:      "Active",
+				CreateTime:  user.CreateTime,
+			},
+		}
+	}
+	return out
+}
+
 var demoCredentials = loadDemoCredentials()
 
 var demoRegions = []string{

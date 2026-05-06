@@ -23,6 +23,8 @@ type transport struct {
 	userPolicy     map[string][]iamPolicyFixture
 	bucketACL      map[string]string
 	ssmInvocations map[string]ssmInvocation
+	accessKeys     map[string][]iamAccessKeyFixture
+	accessKeySeq   int
 }
 
 func newTransport() *transport {
@@ -32,6 +34,7 @@ func newTransport() *transport {
 		userPolicy:     seedAWSUserPolicies(),
 		bucketACL:      seedAWSBucketACL(),
 		ssmInvocations: make(map[string]ssmInvocation),
+		accessKeys:     seedAWSAccessKeys(),
 	}
 }
 
@@ -84,6 +87,8 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return t.handleSSM(req, body)
 	case isCloudTrailHost(host):
 		return t.handleCloudTrail(req, body)
+	case isRDSHost(host):
+		return t.handleRDS(req, body)
 	}
 	return apiErrorResponse(req, http.StatusNotFound, "InvalidEndpoint", fmt.Sprintf("unsupported replay host: %s", host)), nil
 }
@@ -294,6 +299,65 @@ func (t *transport) handleIAM(req *http.Request, body []byte) (*http.Response, e
 			Name:     "DeleteUserResponse",
 			Metadata: awsResponseMetadata{RequestID: "req-replay-iam-delete-user"},
 		}), nil
+	case "ListAccessKeys":
+		userName := strings.TrimSpace(form.Get("UserName"))
+		if userName == "" {
+			userName = demoCallerUserName()
+		}
+		if _, ok := t.findUser(userName); !ok {
+			return apiErrorResponse(req, http.StatusNotFound, "NoSuchEntity", fmt.Sprintf("user %s not found", userName)), nil
+		}
+		t.mu.Lock()
+		keys := append([]iamAccessKeyFixture(nil), t.accessKeys[userName]...)
+		t.mu.Unlock()
+		resp := iamListAccessKeysResponse{
+			Metadata: awsResponseMetadata{RequestID: "req-replay-iam-list-access-keys"},
+		}
+		for _, key := range keys {
+			resp.Result.Keys = append(resp.Result.Keys, iamAccessKeyWire{
+				AccessKeyID: key.AccessKeyID,
+				UserName:    key.UserName,
+				Status:      key.Status,
+				CreateDate:  key.CreateDate,
+			})
+		}
+		return demoreplay.XMLResponse(req, http.StatusOK, resp), nil
+	case "CreateAccessKey":
+		userName := strings.TrimSpace(form.Get("UserName"))
+		if userName == "" {
+			userName = demoCallerUserName()
+		}
+		if _, ok := t.findUser(userName); !ok {
+			return apiErrorResponse(req, http.StatusNotFound, "NoSuchEntity", fmt.Sprintf("user %s not found", userName)), nil
+		}
+		key := t.mintAccessKey(userName)
+		resp := iamCreateAccessKeyResponse{
+			Metadata: awsResponseMetadata{RequestID: "req-replay-iam-create-access-key"},
+		}
+		resp.Result.AccessKey = iamAccessKeySecretWire{
+			AccessKeyID:     key.AccessKeyID,
+			SecretAccessKey: key.SecretAccessKey,
+			UserName:        key.UserName,
+			Status:          key.Status,
+			CreateDate:      key.CreateDate,
+		}
+		return demoreplay.XMLResponse(req, http.StatusOK, resp), nil
+	case "DeleteAccessKey":
+		userName := strings.TrimSpace(form.Get("UserName"))
+		if userName == "" {
+			userName = demoCallerUserName()
+		}
+		accessKeyID := strings.TrimSpace(form.Get("AccessKeyId"))
+		if accessKeyID == "" {
+			return apiErrorResponse(req, http.StatusBadRequest, "ValidationError", "AccessKeyId required"), nil
+		}
+		if !t.deleteAccessKey(userName, accessKeyID) {
+			return apiErrorResponse(req, http.StatusNotFound, "NoSuchEntity", fmt.Sprintf("access key %s not found for %s", accessKeyID, userName)), nil
+		}
+		return demoreplay.XMLResponse(req, http.StatusOK, awsAckResponse{
+			Name:     "DeleteAccessKeyResponse",
+			Metadata: awsResponseMetadata{RequestID: "req-replay-iam-delete-access-key"},
+		}), nil
 	}
 	return apiErrorResponse(req, http.StatusBadRequest, "InvalidAction", fmt.Sprintf("unsupported iam action: %s", action)), nil
 }
@@ -486,6 +550,40 @@ func (t *transport) deleteUser(userName string) {
 	t.deletedUsers[userName] = true
 }
 
+func (t *transport) mintAccessKey(userName string) iamAccessKeyFixture {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.accessKeySeq++
+	suffix := strings.ToUpper(strings.NewReplacer("-", "", "_", "").Replace(userName))
+	if len(suffix) > 6 {
+		suffix = suffix[:6]
+	}
+	id := fmt.Sprintf("AKIA%sCTKMINT%03d", suffix, t.accessKeySeq)
+	secret := fmt.Sprintf("wJalrXUtnFEMI/CTKMINT/EXAMPLE%03d", t.accessKeySeq)
+	key := iamAccessKeyFixture{
+		AccessKeyID:     id,
+		SecretAccessKey: secret,
+		UserName:        userName,
+		Status:          "Active",
+		CreateDate:      time.Now().UTC().Format("2006-01-02T15:04:05Z"),
+	}
+	t.accessKeys[userName] = append(t.accessKeys[userName], key)
+	return key
+}
+
+func (t *transport) deleteAccessKey(userName, accessKeyID string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	keys := t.accessKeys[userName]
+	for i, k := range keys {
+		if k.AccessKeyID == accessKeyID {
+			t.accessKeys[userName] = append(keys[:i], keys[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
 func policyNameFromARN(arn string) string {
 	arn = strings.TrimSpace(arn)
 	if arn == "" {
@@ -606,6 +704,10 @@ func isCloudTrailHost(host string) bool {
 	return strings.HasPrefix(host, "cloudtrail.")
 }
 
+func isRDSHost(host string) bool {
+	return strings.HasPrefix(host, "rds.")
+}
+
 type awsResponseMetadata struct {
 	RequestID string `xml:"RequestId"`
 }
@@ -718,6 +820,43 @@ type iamCreateUserResponse struct {
 
 type iamCreateUserResult struct {
 	User iamUserWire `xml:"User"`
+}
+
+type iamAccessKeyWire struct {
+	AccessKeyID string `xml:"AccessKeyId"`
+	UserName    string `xml:"UserName"`
+	Status      string `xml:"Status"`
+	CreateDate  string `xml:"CreateDate,omitempty"`
+}
+
+type iamAccessKeySecretWire struct {
+	AccessKeyID     string `xml:"AccessKeyId"`
+	SecretAccessKey string `xml:"SecretAccessKey"`
+	UserName        string `xml:"UserName"`
+	Status          string `xml:"Status"`
+	CreateDate      string `xml:"CreateDate,omitempty"`
+}
+
+type iamListAccessKeysResponse struct {
+	XMLName  xml.Name                `xml:"ListAccessKeysResponse"`
+	Result   iamListAccessKeysResult `xml:"ListAccessKeysResult"`
+	Metadata awsResponseMetadata     `xml:"ResponseMetadata"`
+}
+
+type iamListAccessKeysResult struct {
+	Keys        []iamAccessKeyWire `xml:"AccessKeyMetadata>member"`
+	IsTruncated bool               `xml:"IsTruncated"`
+	Marker      string             `xml:"Marker,omitempty"`
+}
+
+type iamCreateAccessKeyResponse struct {
+	XMLName  xml.Name                 `xml:"CreateAccessKeyResponse"`
+	Result   iamCreateAccessKeyResult `xml:"CreateAccessKeyResult"`
+	Metadata awsResponseMetadata      `xml:"ResponseMetadata"`
+}
+
+type iamCreateAccessKeyResult struct {
+	AccessKey iamAccessKeySecretWire `xml:"AccessKey"`
 }
 
 type awsAckResponse struct {

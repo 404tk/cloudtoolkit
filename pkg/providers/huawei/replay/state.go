@@ -4,22 +4,83 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 )
 
 type iamMutationState struct {
-	mu       sync.Mutex
-	created  map[string]iamUserFixture
-	deleted  map[string]bool
-	memberOf map[string]map[string]bool
-	sequence int
+	mu             sync.Mutex
+	created        map[string]iamUserFixture
+	deleted        map[string]bool
+	memberOf       map[string]map[string]bool
+	sequence       int
+	accessKeys     map[string][]huaweiAccessKeyFixture
+	accessKeySeq   int
 }
 
 func newIAMMutationState() *iamMutationState {
 	return &iamMutationState{
-		created:  make(map[string]iamUserFixture),
-		deleted:  make(map[string]bool),
-		memberOf: make(map[string]map[string]bool),
+		created:    make(map[string]iamUserFixture),
+		deleted:    make(map[string]bool),
+		memberOf:   make(map[string]map[string]bool),
+		accessKeys: seedHuaweiAccessKeys(),
 	}
+}
+
+type huaweiAccessKeyFixture struct {
+	Access     string
+	Secret     string
+	UserID     string
+	Status     string
+	CreateTime string
+}
+
+func seedHuaweiAccessKeys() map[string][]huaweiAccessKeyFixture {
+	out := make(map[string][]huaweiAccessKeyFixture)
+	out[demoUserID] = []huaweiAccessKeyFixture{
+		{
+			Access:     demoCredentials.AccessKey,
+			UserID:     demoUserID,
+			Status:     "active",
+			CreateTime: "2026-04-20T08:00:00.000000",
+		},
+	}
+	return out
+}
+
+func (s *iamMutationState) snapshotAccessKeys(userID string) []huaweiAccessKeyFixture {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	keys := append([]huaweiAccessKeyFixture(nil), s.accessKeys[userID]...)
+	return keys
+}
+
+func (s *iamMutationState) mintAccessKey(userID string) huaweiAccessKeyFixture {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.accessKeySeq++
+	key := huaweiAccessKeyFixture{
+		Access:     fmt.Sprintf("HWMINTAK%06d", s.accessKeySeq),
+		Secret:     fmt.Sprintf("HWMINTsecret%06d", s.accessKeySeq),
+		UserID:     userID,
+		Status:     "active",
+		CreateTime: time.Now().UTC().Format("2006-01-02T15:04:05.000000"),
+	}
+	s.accessKeys[userID] = append(s.accessKeys[userID], key)
+	return key
+}
+
+func (s *iamMutationState) deleteAccessKey(accessKey string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for userID, keys := range s.accessKeys {
+		for i, k := range keys {
+			if k.Access == accessKey {
+				s.accessKeys[userID] = append(keys[:i], keys[i+1:]...)
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (s *iamMutationState) snapshotUsers() []iamUserFixture {

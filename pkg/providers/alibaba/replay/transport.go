@@ -28,10 +28,12 @@ type invocationResult struct {
 }
 
 type transport struct {
-	mu          sync.Mutex
-	invocations map[string]invocationResult
-	userPolicy  map[string][]ramPolicyFixture
-	bucketACL   map[string]string
+	mu           sync.Mutex
+	invocations  map[string]invocationResult
+	userPolicy   map[string][]ramPolicyFixture
+	bucketACL    map[string]string
+	accessKeys   map[string][]ramAccessKeyFixture
+	accessKeySeq int
 }
 
 func newTransport() *transport {
@@ -39,6 +41,7 @@ func newTransport() *transport {
 		invocations: make(map[string]invocationResult),
 		userPolicy:  seedUserPolicies(),
 		bucketACL:   seedBucketACLs(),
+		accessKeys:  seedRAMAccessKeys(),
 	}
 }
 
@@ -407,6 +410,60 @@ func (t *transport) handleRAM(req *http.Request, action string) (*http.Response,
 		return demoreplay.JSONResponse(req, http.StatusOK, api.DetachRAMPolicyFromUserResponse{RequestID: "req-ram-detach-user-policy"}), nil
 	case "DeleteUser":
 		return demoreplay.JSONResponse(req, http.StatusOK, api.DeleteRAMUserResponse{RequestID: "req-ram-delete-user"}), nil
+	case "ListAccessKeys":
+		userName := strings.TrimSpace(query.Get("UserName"))
+		if userName == "" {
+			userName = demoCallerUserName()
+		}
+		if _, ok := findRAMUser(userName); !ok {
+			return rpcErrorResponse(req, http.StatusNotFound, "EntityNotExist.User", "The specified RAM user does not exist."), nil
+		}
+		t.mu.Lock()
+		keys := append([]ramAccessKeyFixture(nil), t.accessKeys[userName]...)
+		t.mu.Unlock()
+		out := make([]api.RAMAccessKey, 0, len(keys))
+		for _, k := range keys {
+			out = append(out, api.RAMAccessKey{
+				AccessKeyID: k.AccessKeyID,
+				Status:      k.Status,
+				CreateDate:  k.CreateDate,
+			})
+		}
+		return demoreplay.JSONResponse(req, http.StatusOK, api.ListRAMAccessKeysResponse{
+			RequestID:  "req-ram-list-access-keys",
+			AccessKeys: api.RAMAccessKeyList{AccessKey: out},
+		}), nil
+	case "CreateAccessKey":
+		userName := strings.TrimSpace(query.Get("UserName"))
+		if userName == "" {
+			userName = demoCallerUserName()
+		}
+		if _, ok := findRAMUser(userName); !ok {
+			return rpcErrorResponse(req, http.StatusNotFound, "EntityNotExist.User", "The specified RAM user does not exist."), nil
+		}
+		key := t.mintRAMAccessKey(userName)
+		return demoreplay.JSONResponse(req, http.StatusOK, api.CreateRAMAccessKeyResponse{
+			RequestID: "req-ram-create-access-key",
+			AccessKey: api.RAMAccessKeySecret{
+				AccessKeyID:     key.AccessKeyID,
+				AccessKeySecret: key.AccessKeySecret,
+				Status:          key.Status,
+				CreateDate:      key.CreateDate,
+			},
+		}), nil
+	case "DeleteAccessKey":
+		userName := strings.TrimSpace(query.Get("UserName"))
+		if userName == "" {
+			userName = demoCallerUserName()
+		}
+		accessKeyID := strings.TrimSpace(query.Get("UserAccessKeyId"))
+		if accessKeyID == "" {
+			return rpcErrorResponse(req, http.StatusBadRequest, "InvalidParameter", "UserAccessKeyId required"), nil
+		}
+		if !t.deleteRAMAccessKey(userName, accessKeyID) {
+			return rpcErrorResponse(req, http.StatusNotFound, "EntityNotExist.User.AccessKey", "The specified AccessKey does not exist."), nil
+		}
+		return demoreplay.JSONResponse(req, http.StatusOK, api.DeleteRAMAccessKeyResponse{RequestID: "req-ram-delete-access-key"}), nil
 	case "CreateRole":
 		return demoreplay.JSONResponse(req, http.StatusOK, api.CreateRAMRoleResponse{RequestID: "req-ram-create-role"}), nil
 	case "AttachPolicyToRole":
@@ -417,6 +474,35 @@ func (t *transport) handleRAM(req *http.Request, action string) (*http.Response,
 		return demoreplay.JSONResponse(req, http.StatusOK, api.DeleteRAMRoleResponse{RequestID: "req-ram-delete-role"}), nil
 	}
 	return rpcErrorResponse(req, http.StatusNotFound, "InvalidAction.NotFound", fmt.Sprintf("Unsupported RAM replay action: %s", action)), nil
+}
+
+func (t *transport) mintRAMAccessKey(userName string) ramAccessKeyFixture {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.accessKeySeq++
+	id := fmt.Sprintf("LTAIRAMMINT%03d", t.accessKeySeq)
+	secret := fmt.Sprintf("EXAMPLEv2fRAMmintSecret%03d", t.accessKeySeq)
+	key := ramAccessKeyFixture{
+		AccessKeyID:     id,
+		AccessKeySecret: secret,
+		Status:          "Active",
+		CreateDate:      time.Now().UTC().Format(time.RFC3339),
+	}
+	t.accessKeys[userName] = append(t.accessKeys[userName], key)
+	return key
+}
+
+func (t *transport) deleteRAMAccessKey(userName, accessKeyID string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	keys := t.accessKeys[userName]
+	for i, k := range keys {
+		if k.AccessKeyID == accessKeyID {
+			t.accessKeys[userName] = append(keys[:i], keys[i+1:]...)
+			return true
+		}
+	}
+	return false
 }
 
 func (t *transport) handleRDS(req *http.Request, action string) (*http.Response, error) {

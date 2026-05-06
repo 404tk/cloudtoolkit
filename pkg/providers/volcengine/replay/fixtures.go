@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/api"
 	demoreplay "github.com/404tk/cloudtoolkit/pkg/providers/replay"
 )
 
@@ -124,6 +125,84 @@ var demoIAMUsers = []iamUserFixture{
 		LoginAllowed:  false,
 		LastLoginDate: "",
 	},
+}
+
+type volcengineAccessKeyFixture struct {
+	AccessKeyID     string
+	SecretAccessKey string
+	Status          string
+	CreateDate      string
+}
+
+func volcengineDemoCallerUserName() string {
+	return "admin"
+}
+
+func volcengineUserExists(name string) bool {
+	for _, user := range demoIAMUsers {
+		if user.UserName == name {
+			return true
+		}
+	}
+	return false
+}
+
+func seedVolcengineAccessKeys() map[string][]volcengineAccessKeyFixture {
+	out := make(map[string][]volcengineAccessKeyFixture, len(demoIAMUsers))
+	for _, user := range demoIAMUsers {
+		out[user.UserName] = []volcengineAccessKeyFixture{
+			{
+				AccessKeyID: fmt.Sprintf("AKLT%sCTKDEMO", strings.ToUpper(user.UserName)),
+				Status:      "Active",
+				CreateDate:  user.CreateDate,
+			},
+		}
+	}
+	return out
+}
+
+func demoVolcengineAuditEvents() []api.AuditEvent {
+	return []api.AuditEvent{
+		{
+			EventID:         "audit-evt-0001",
+			EventName:       "CreateAccessKey",
+			EventTime:       "2026-04-22T09:11:00Z",
+			EventSource:     "iam.volcengineapi.com",
+			UserIdentity:    "admin",
+			SourceIPAddress: "203.0.113.41",
+			Region:          "cn-beijing",
+			Status:          "Success",
+			AccessKeyID:     "AKLTCTKDEMOaudit01",
+			ResourceName:    "user/admin",
+			ResourceType:    "iam:User",
+		},
+		{
+			EventID:         "audit-evt-0002",
+			EventName:       "PutBucketAcl",
+			EventTime:       "2026-04-22T09:14:30Z",
+			EventSource:     "tos.cn-beijing.volcengineapi.com",
+			UserIdentity:    "admin",
+			SourceIPAddress: "203.0.113.41",
+			Region:          "cn-beijing",
+			Status:          "Success",
+			AccessKeyID:     "AKLTCTKDEMOaudit01",
+			ResourceName:    "volc-tos",
+			ResourceType:    "tos:Bucket",
+		},
+		{
+			EventID:         "audit-evt-0003",
+			EventName:       "DeleteUser",
+			EventTime:       "2026-04-22T09:18:42Z",
+			EventSource:     "iam.volcengineapi.com",
+			UserIdentity:    "admin",
+			SourceIPAddress: "203.0.113.41",
+			Region:          "cn-beijing",
+			Status:          "Failed",
+			AccessKeyID:     "AKLTCTKDEMOaudit01",
+			ResourceName:    "user/audit",
+			ResourceType:    "iam:User",
+		},
+	}
 }
 
 var demoBuckets = []bucketFixture{

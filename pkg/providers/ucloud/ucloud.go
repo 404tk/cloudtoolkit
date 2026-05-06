@@ -11,6 +11,7 @@ import (
 	ucloudauth "github.com/404tk/cloudtoolkit/pkg/providers/ucloud/auth"
 	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/billing"
 	_iam "github.com/404tk/cloudtoolkit/pkg/providers/ucloud/iam"
+	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/uact"
 	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/udb"
 	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/udns"
 	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/ufile"
@@ -343,6 +344,95 @@ func (p *Provider) RoleBinding(ctx context.Context, action, principal, role, sco
 		return result, nil
 	}
 	return result, fmt.Errorf("ucloud: unsupported role-binding action %q", action)
+}
+
+// IAMCredential implements schema.IAMCredentialManager for UCloud IAM. The
+// access-key actions follow the pattern-inferred `ListUserApiKeys` /
+// `CreateUserApiKey` / `DeleteUserApiKey` shape consistent with UCloud's
+// other `XForUser` IAM RPCs; verify against the upstream SDK before relying
+// on this in production.
+func (p *Provider) IAMCredential(ctx context.Context, action, principal, credentialID string) (schema.IAMCredentialResult, error) {
+	driver := &_iam.Driver{
+		Credential: p.credential,
+		Client:     p.newClient(),
+		ProjectID:  p.projectID,
+	}
+	result := schema.IAMCredentialResult{
+		Action:       action,
+		Principal:    principal,
+		CredentialID: credentialID,
+	}
+	switch action {
+	case "list":
+		creds, err := driver.ListAccessKeys(ctx, principal)
+		if err != nil {
+			return result, err
+		}
+		result.Credentials = creds
+		result.Message = fmt.Sprintf("%d access keys on %s", len(creds), principal)
+		return result, nil
+	case "create":
+		cred, secret, err := driver.CreateAccessKey(ctx, principal)
+		if err != nil {
+			return result, err
+		}
+		result.CredentialID = cred.CredentialID
+		result.CredentialData = secret
+		result.Message = fmt.Sprintf("minted access key %s for %s", cred.CredentialID, principal)
+		return result, nil
+	case "delete":
+		if err := driver.DeleteAccessKey(ctx, principal, credentialID); err != nil {
+			return result, err
+		}
+		result.Message = fmt.Sprintf("revoked access key %s on %s", credentialID, principal)
+		return result, nil
+	}
+	return result, fmt.Errorf("ucloud: unsupported iam-credential action %q", action)
+}
+
+// EventDump implements schema.EventReader for UCloud Action Trail (UACT).
+// Action `dump` lists recent operation events; `whitelist` is unsupported.
+func (p *Provider) EventDump(ctx context.Context, action, args string) (schema.EventActionResult, error) {
+	driver := &uact.Driver{
+		Credential: p.credential,
+		Client:     p.newClient(),
+		ProjectID:  p.projectID,
+	}
+	switch action {
+	case "dump":
+		events, err := driver.DumpEvents(ctx, args)
+		if err != nil {
+			return schema.EventActionResult{}, err
+		}
+		return schema.EventActionResult{
+			Action: "dump",
+			Scope:  args,
+			Events: events,
+		}, nil
+	case "whitelist":
+		return driver.HandleEvents(ctx, args)
+	default:
+		return schema.EventActionResult{}, fmt.Errorf("invalid action: %s (expected: dump, whitelist)", action)
+	}
+}
+
+// DBManagement implements schema.DBManager for UCloud UDB. `useradd` /
+// `userdel` use the `CreateUDBUser` / `DeleteUDBUser` actions.
+func (p *Provider) DBManagement(ctx context.Context, action, instanceID string) (schema.DatabaseActionResult, error) {
+	driver := &udb.Driver{
+		Credential: p.credential,
+		Client:     p.newClient(),
+		ProjectID:  p.projectID,
+		Regions:    []string{p.region},
+	}
+	switch action {
+	case "useradd":
+		return driver.CreateAccount(ctx, instanceID)
+	case "userdel":
+		return driver.DeleteAccount(ctx, instanceID)
+	default:
+		return schema.DatabaseActionResult{}, fmt.Errorf("invalid action: %s (expected: useradd, userdel)", action)
+	}
 }
 
 func normalizeRegion(region string) string {

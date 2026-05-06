@@ -8,6 +8,7 @@ import (
 
 	awsapi "github.com/404tk/cloudtoolkit/pkg/providers/aws/api"
 	"github.com/404tk/cloudtoolkit/pkg/providers/internal/credverify"
+	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/actiontrail"
 	_api "github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/api"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/asset"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/assistant"
@@ -15,6 +16,7 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/iam"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/lavm"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/oss"
+	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/rds"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/vm"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/vmexecspec"
@@ -208,6 +210,45 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([
 	}
 }
 
+// IAMCredential implements schema.IAMCredentialManager for JDCloud IAM. The
+// path family follows the same pattern-inferred convention as
+// `:describeAttachedPolicies` and `:attachSubUserPolicy`. Verify against the
+// upstream SDK before relying on this in production.
+func (p *Provider) IAMCredential(ctx context.Context, action, principal, credentialID string) (schema.IAMCredentialResult, error) {
+	driver := &iam.Driver{Client: p.apiClient, AccessKey: p.accessKey}
+	result := schema.IAMCredentialResult{
+		Action:       action,
+		Principal:    principal,
+		CredentialID: credentialID,
+	}
+	switch action {
+	case "list":
+		creds, err := driver.ListAccessKeys(ctx, principal)
+		if err != nil {
+			return result, err
+		}
+		result.Credentials = creds
+		result.Message = fmt.Sprintf("%d access keys on %s", len(creds), principal)
+		return result, nil
+	case "create":
+		cred, secret, err := driver.CreateAccessKey(ctx, principal)
+		if err != nil {
+			return result, err
+		}
+		result.CredentialID = cred.CredentialID
+		result.CredentialData = secret
+		result.Message = fmt.Sprintf("minted access key %s for %s", cred.CredentialID, principal)
+		return result, nil
+	case "delete":
+		if err := driver.DeleteAccessKey(ctx, principal, credentialID); err != nil {
+			return result, err
+		}
+		result.Message = fmt.Sprintf("revoked access key %s on %s", credentialID, principal)
+		return result, nil
+	}
+	return result, fmt.Errorf("jdcloud: unsupported iam-credential action %q", action)
+}
+
 // BucketACL implements schema.BucketACLManager for JDCloud OSS (S3-compatible
 // data plane). `level` accepts the canned S3-style ACL values (private,
 // public-read, public-read-write, authenticated-read) or friendly aliases
@@ -245,6 +286,45 @@ func (p *Provider) BucketACL(ctx context.Context, action, container, level strin
 		return result, nil
 	}
 	return result, fmt.Errorf("jdcloud: unsupported bucket-acl action %q", action)
+}
+
+// EventDump implements schema.EventReader for JDCloud ActionTrail. The
+// endpoint paths are pattern-inferred from JDCloud's regional REST family;
+// `whitelist` is unsupported because ActionTrail is read-only.
+func (p *Provider) EventDump(ctx context.Context, action, args string) (schema.EventActionResult, error) {
+	driver := &actiontrail.Driver{Client: p.apiClient, Region: p.region}
+	switch action {
+	case "dump":
+		events, err := driver.DumpEvents(ctx, args)
+		if err != nil {
+			return schema.EventActionResult{}, err
+		}
+		return schema.EventActionResult{
+			Action: "dump",
+			Scope:  args,
+			Events: events,
+		}, nil
+	case "whitelist":
+		return driver.HandleEvents(ctx, args)
+	default:
+		return schema.EventActionResult{}, fmt.Errorf("invalid action: %s (expected: dump, whitelist)", action)
+	}
+}
+
+// DBManagement implements schema.DBManager for JDCloud RDS. `useradd` /
+// `userdel` follow the pattern-inferred `/v1/regions/<region>/instances/<id>/accounts`
+// path. Verify against the upstream SDK before relying on this in
+// production.
+func (p *Provider) DBManagement(ctx context.Context, action, instanceID string) (schema.DatabaseActionResult, error) {
+	driver := &rds.Driver{Client: p.apiClient, Region: p.region}
+	switch action {
+	case "useradd":
+		return driver.CreateAccount(ctx, instanceID)
+	case "userdel":
+		return driver.DeleteAccount(ctx, instanceID)
+	default:
+		return schema.DatabaseActionResult{}, fmt.Errorf("invalid action: %s (expected: useradd, userdel)", action)
+	}
 }
 
 // ExecuteCloudVMCommand routes through JDCloud Cloud Assistant (assistant.jdcloud-api.com).

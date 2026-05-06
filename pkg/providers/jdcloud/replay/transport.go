@@ -14,16 +14,43 @@ import (
 )
 
 type transport struct {
-	mu        sync.Mutex
-	iam       *iamMutationState
-	bucketACL map[string]string
+	mu          sync.Mutex
+	iam         *iamMutationState
+	bucketACL   map[string]string
+	rdsAccounts map[string][]string
 }
 
 func newTransport() *transport {
 	return &transport{
-		iam:       newIAMState(),
-		bucketACL: seedBucketACL(),
+		iam:         newIAMState(),
+		bucketACL:   seedBucketACL(),
+		rdsAccounts: make(map[string][]string),
 	}
+}
+
+func (t *transport) addRDSAccount(instanceID, name string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.rdsAccounts[instanceID] = append(t.rdsAccounts[instanceID], name)
+}
+
+func (t *transport) removeRDSAccount(instanceID, name string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	accounts := t.rdsAccounts[instanceID]
+	for i, n := range accounts {
+		if n == name {
+			t.rdsAccounts[instanceID] = append(accounts[:i], accounts[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+func (t *transport) snapshotRDSAccounts(instanceID string) []string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return append([]string(nil), t.rdsAccounts[instanceID]...)
 }
 
 func seedBucketACL() map[string]string {
@@ -69,6 +96,10 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return t.handleOSS(req)
 	case "asset":
 		return t.handleAsset(req)
+	case "actiontrail":
+		return t.handleActionTrail(req)
+	case "rds":
+		return t.handleRDS(req, body)
 	}
 	return apiErrorResponse(req, http.StatusNotFound, "InvalidService",
 		fmt.Sprintf("unsupported replay service: %s", service)), nil

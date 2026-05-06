@@ -95,6 +95,21 @@ func (c Cloud) ResourceManagerEndpoint() string {
 	}
 }
 
+// MicrosoftGraphEndpoint returns the Microsoft Graph resource URL used as the
+// OAuth2 scope and base URL for Microsoft Graph requests in the given cloud.
+func (c Cloud) MicrosoftGraphEndpoint() string {
+	switch normalizeCloud(c) {
+	case CloudChina:
+		return "https://microsoftgraph.chinacloudapi.cn/"
+	case CloudUSGov:
+		return "https://graph.microsoft.us/"
+	case CloudGermany:
+		return "https://graph.microsoft.de/"
+	default:
+		return "https://graph.microsoft.com/"
+	}
+}
+
 func cloudFromVersion(version string) Cloud {
 	version = strings.ToLower(strings.TrimSpace(version))
 	switch version {

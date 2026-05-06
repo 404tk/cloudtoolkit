@@ -84,6 +84,18 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return t.handleDetachPolicies(req, params)
 	case "ListPoliciesForUser":
 		return t.handleListPoliciesForUser(req, params)
+	case "ListUserApiKeys":
+		return t.handleListUserApiKeys(req, params)
+	case "CreateUserApiKey":
+		return t.handleCreateUserApiKey(req, params)
+	case "DeleteUserApiKey":
+		return t.handleDeleteUserApiKey(req, params)
+	case "DescribeActionLogList":
+		return t.handleDescribeActionLogList(req, params)
+	case "CreateUDBUser":
+		return t.handleCreateUDBUser(req, params)
+	case "DeleteUDBUser":
+		return t.handleDeleteUDBUser(req, params)
 	}
 	return errorResponse(req, http.StatusNotFound, 1000,
 		fmt.Sprintf("unsupported replay action: %s", action)), nil

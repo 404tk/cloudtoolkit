@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -80,11 +79,11 @@ func TestPutBucketAclSendsCannedHeader(t *testing.T) {
 
 func TestNormalizeOSSACL(t *testing.T) {
 	cases := map[string]string{
-		"":                    OSSACLPrivate,
-		"public-read":         OSSACLPublicRead,
-		"PublicRead":          OSSACLPublicRead,
-		"writable":            OSSACLPublicReadWrite,
-		"authenticated-read":  OSSACLAuthenticatedRead,
+		"":                   OSSACLPrivate,
+		"public-read":        OSSACLPublicRead,
+		"PublicRead":         OSSACLPublicRead,
+		"writable":           OSSACLPublicReadWrite,
+		"authenticated-read": OSSACLAuthenticatedRead,
 	}
 	for in, want := range cases {
 		if got := NormalizeOSSACL(in); got != want {
@@ -107,5 +106,4 @@ func TestCannedACLFromGrants(t *testing.T) {
 	if got := CannedACLFromGrants(priv); got != OSSACLPrivate {
 		t.Errorf("expected private, got %q", got)
 	}
-	_ = strings.Repeat
 }

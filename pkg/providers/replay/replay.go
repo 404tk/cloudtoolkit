@@ -52,6 +52,7 @@ var providers = map[string]providerMeta{
 			"instance-cmd-check",
 			"role-binding-check",
 			"bucket-acl-check",
+			"iam-credential-check",
 		},
 	},
 	"volcengine": {
@@ -66,6 +67,9 @@ var providers = map[string]providerMeta{
 			"instance-cmd-check",
 			"role-binding-check",
 			"bucket-acl-check",
+			"iam-credential-check",
+			"event-check",
+			"rds-account-check",
 		},
 	},
 	"tencent": {
@@ -81,6 +85,8 @@ var providers = map[string]providerMeta{
 			"role-binding-check",
 			"bucket-acl-check",
 			"event-check",
+			"iam-credential-check",
+			"rds-account-check",
 		},
 	},
 	"aws": {
@@ -96,6 +102,8 @@ var providers = map[string]providerMeta{
 			"bucket-acl-check",
 			"instance-cmd-check",
 			"event-check",
+			"iam-credential-check",
+			"rds-account-check",
 		},
 	},
 	"huawei": {
@@ -110,6 +118,8 @@ var providers = map[string]providerMeta{
 			"role-binding-check",
 			"bucket-acl-check",
 			"event-check",
+			"iam-credential-check",
+			"rds-account-check",
 		},
 	},
 	"azure": {
@@ -127,6 +137,11 @@ var providers = map[string]providerMeta{
 			"cloudlist",
 			"role-binding-check",
 			"bucket-acl-check",
+			"iam-credential-check",
+			"event-check",
+			"rds-account-check",
+			"iam-user-check",
+			"instance-cmd-check",
 		},
 	},
 	"gcp": {
@@ -141,6 +156,11 @@ var providers = map[string]providerMeta{
 			"cloudlist",
 			"role-binding-check",
 			"iam-credential-check",
+			"event-check",
+			"rds-account-check",
+			"iam-user-check",
+			"bucket-check",
+			"bucket-acl-check",
 		},
 	},
 	"jdcloud": {
@@ -167,6 +187,8 @@ var providers = map[string]providerMeta{
 			"role-binding-check",
 			"bucket-check",
 			"bucket-acl-check",
+			"event-check",
+			"rds-account-check",
 		},
 	},
 }

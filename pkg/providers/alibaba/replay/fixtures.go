@@ -322,6 +322,32 @@ func findRAMUser(userName string) (ramUserFixture, bool) {
 	return ramUserFixture{}, false
 }
 
+type ramAccessKeyFixture struct {
+	AccessKeyID     string
+	AccessKeySecret string
+	Status          string
+	CreateDate      string
+}
+
+func seedRAMAccessKeys() map[string][]ramAccessKeyFixture {
+	out := make(map[string][]ramAccessKeyFixture, len(demoRAMUsers))
+	for _, user := range demoRAMUsers {
+		suffix := user.UserID[len(user.UserID)-3:]
+		out[user.UserName] = []ramAccessKeyFixture{
+			{
+				AccessKeyID: "LTAI4tRAM" + suffix + "EXAMPLE",
+				Status:      "Active",
+				CreateDate:  user.CreateDate,
+			},
+		}
+	}
+	return out
+}
+
+func demoCallerUserName() string {
+	return "demo"
+}
+
 func findBucket(name string) (bucketFixture, bool) {
 	for _, bucket := range demoBuckets {
 		if bucket.Name == strings.TrimSpace(name) {

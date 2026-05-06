@@ -27,11 +27,21 @@ type TokenSource struct {
 	clock   func() time.Time
 	mu      sync.Mutex
 	current Token
+	scope   string
 
 	tokenURL string
 }
 
+// NewTokenSource returns a TokenSource bound to the ARM resource scope of the
+// credential's cloud.
 func NewTokenSource(cred Credential, httpClient *http.Client) *TokenSource {
+	return NewTokenSourceForScope(cred, httpClient, cred.Cloud.ResourceManagerEndpoint()+".default")
+}
+
+// NewTokenSourceForScope returns a TokenSource that mints tokens for an
+// explicit OAuth2 scope (e.g. Microsoft Graph). Use the resource-suffixed
+// `.default` form (e.g. "https://graph.microsoft.com/.default").
+func NewTokenSourceForScope(cred Credential, httpClient *http.Client, scope string) *TokenSource {
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 60 * time.Second}
 	}
@@ -39,6 +49,7 @@ func NewTokenSource(cred Credential, httpClient *http.Client) *TokenSource {
 		cred:  cred,
 		http:  httpClient,
 		clock: time.Now,
+		scope: scope,
 	}
 }
 
@@ -91,7 +102,11 @@ func (s *TokenSource) fetch(ctx context.Context, now time.Time) (Token, error) {
 	form.Set("grant_type", "client_credentials")
 	form.Set("client_id", s.cred.ClientID)
 	form.Set("client_secret", s.cred.ClientSecret)
-	form.Set("scope", s.cred.Cloud.ResourceManagerEndpoint()+".default")
+	scope := strings.TrimSpace(s.scope)
+	if scope == "" {
+		scope = s.cred.Cloud.ResourceManagerEndpoint() + ".default"
+	}
+	form.Set("scope", scope)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.endpoint(), strings.NewReader(form.Encode()))
 	if err != nil {
@@ -155,4 +170,15 @@ func (s *TokenSource) now() time.Time {
 		return s.clock()
 	}
 	return time.Now()
+}
+
+// SetCachedToken seeds a TokenSource with a pre-baked Token. Tests use it to
+// bypass the OAuth2 round trip when only the downstream API matters.
+func SetCachedToken(s *TokenSource, token Token) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.current = token
 }

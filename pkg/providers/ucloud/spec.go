@@ -25,6 +25,8 @@ func init() {
 			{Text: "th-bkk", Description: "Bangkok"},
 			{Text: "ge-fra", Description: "Frankfurt"},
 		},
-		Capabilities: []string{"cloudlist", "iam", "iam-role", "bucket", "bucket-acl"},
+		// TODO: re-advertise iam-credential after the UCloud SDK confirms the
+		// intended credential lifecycle API and semantics.
+		Capabilities: []string{"cloudlist", "iam", "iam-role", "bucket", "bucket-acl", "event", "database"},
 	})
 }

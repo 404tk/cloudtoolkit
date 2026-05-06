@@ -261,6 +261,46 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([
 	}
 }
 
+// IAMCredential implements schema.IAMCredentialManager for huawei IAM
+// permanent access keys. `principal` is the IAM user name (required for
+// create; optional for list — empty resolves to the calling principal).
+// `credentialID` is the access key string for delete.
+func (p *Provider) IAMCredential(ctx context.Context, action, principal, credentialID string) (schema.IAMCredentialResult, error) {
+	cred := p.iamCredential()
+	driver := &_iam.Driver{Cred: cred, DomainID: p.domainID, Client: p.newAPIClient(cred)}
+	result := schema.IAMCredentialResult{
+		Action:       action,
+		Principal:    principal,
+		CredentialID: credentialID,
+	}
+	switch action {
+	case "list":
+		creds, err := driver.ListAccessKeys(ctx, principal)
+		if err != nil {
+			return result, err
+		}
+		result.Credentials = creds
+		result.Message = fmt.Sprintf("%d access keys on %s", len(creds), principal)
+		return result, nil
+	case "create":
+		cred, secret, err := driver.CreateAccessKey(ctx, principal)
+		if err != nil {
+			return result, err
+		}
+		result.CredentialID = cred.CredentialID
+		result.CredentialData = secret
+		result.Message = fmt.Sprintf("minted access key %s for %s", cred.CredentialID, principal)
+		return result, nil
+	case "delete":
+		if err := driver.DeleteAccessKey(ctx, principal, credentialID); err != nil {
+			return result, err
+		}
+		result.Message = fmt.Sprintf("revoked access key %s on %s", credentialID, principal)
+		return result, nil
+	}
+	return result, fmt.Errorf("huawei: unsupported iam-credential action %q", action)
+}
+
 // BucketACL implements schema.BucketACLManager for huawei OBS. `level`
 // accepts canned OBS ACL values (private / public-read / public-read-write
 // + the *-delivered variants) or friendly aliases resolved by
@@ -327,6 +367,22 @@ func (p *Provider) EventDump(ctx context.Context, action, args string) (schema.E
 		return driver.HandleEvents(ctx, args)
 	default:
 		return schema.EventActionResult{}, fmt.Errorf("invalid action: %s (expected: dump, whitelist)", action)
+	}
+}
+
+// DBManagement implements schema.DBManager for Huawei RDS. `useradd` provisions
+// a database account on the named instance using the `rds-account-check`
+// config; `userdel` removes it.
+func (p *Provider) DBManagement(ctx context.Context, action, instanceID string) (schema.DatabaseActionResult, error) {
+	cred := p.iamCredential()
+	driver := &_rds.Driver{Cred: cred, Regions: p.regions, DomainID: p.domainID, Client: p.newAPIClient(cred)}
+	switch action {
+	case "useradd":
+		return driver.CreateAccount(ctx, cred.Region, instanceID)
+	case "userdel":
+		return driver.DeleteAccount(ctx, cred.Region, instanceID)
+	default:
+		return schema.DatabaseActionResult{}, fmt.Errorf("invalid action: %s (expected: useradd, userdel)", action)
 	}
 }
 

@@ -3,14 +3,14 @@ package replay
 import "strings"
 
 type vmFixture struct {
-	Name           string
-	ResourceGroup  string
-	Location       string
-	State          string
-	NICName        string
-	PrivateIP      string
-	PublicIPName   string
-	PublicIP       string
+	Name          string
+	ResourceGroup string
+	Location      string
+	State         string
+	NICName       string
+	PrivateIP     string
+	PublicIPName  string
+	PublicIP      string
 }
 
 var demoVMs = []vmFixture{
@@ -218,4 +218,80 @@ func vmByPublicIPName(publicIPName string) (vmFixture, bool) {
 // the PATCH/GET handlers.
 func containerACLKey(group, account, container string) string {
 	return group + "/" + account + "/" + container
+}
+
+type graphApplicationFixture struct {
+	ID          string
+	AppID       string
+	DisplayName string
+}
+
+type graphPasswordFixture struct {
+	KeyID         string
+	DisplayName   string
+	StartDateTime string
+	EndDateTime   string
+	SecretText    string
+	Hint          string
+}
+
+type graphUserFixture struct {
+	ID                 string
+	DisplayName        string
+	UserPrincipalName  string
+	AccountEnabled     bool
+	CreatedDateTime    string
+	LastSignInDateTime string
+}
+
+var demoGraphApplications = []graphApplicationFixture{
+	{
+		ID:          "11111111-2222-3333-4444-555555555555",
+		AppID:       "11111111-2222-3333-4444-555555555555",
+		DisplayName: "ctk-demo-app",
+	},
+}
+
+var demoGraphUsers = []graphUserFixture{
+	{
+		ID:                 "user-1111-2222-3333-444455556666",
+		DisplayName:        "ctk demo operator",
+		UserPrincipalName:  "ctk-demo-operator@example.onmicrosoft.com",
+		AccountEnabled:     true,
+		CreatedDateTime:    "2026-04-20T08:00:00Z",
+		LastSignInDateTime: "2026-04-30T09:00:00Z",
+	},
+	{
+		ID:                "user-2222-3333-4444-555566667777",
+		DisplayName:       "ctk readonly",
+		UserPrincipalName: "ctk-readonly@example.onmicrosoft.com",
+		AccountEnabled:    false,
+		CreatedDateTime:   "2026-04-21T08:00:00Z",
+	},
+}
+
+func findGraphApplicationByID(id string) (graphApplicationFixture, bool) {
+	id = strings.TrimSpace(id)
+	for _, app := range demoGraphApplications {
+		if app.ID == id || app.AppID == id {
+			return app, true
+		}
+	}
+	return graphApplicationFixture{}, false
+}
+
+func seedAzureAppPasswords() map[string][]graphPasswordFixture {
+	out := make(map[string][]graphPasswordFixture, len(demoGraphApplications))
+	for _, app := range demoGraphApplications {
+		out[app.ID] = []graphPasswordFixture{
+			{
+				KeyID:         "aaaaaaaa-1111-2222-3333-444444444444",
+				DisplayName:   "ctk-demo-baseline",
+				StartDateTime: "2026-04-20T08:00:00Z",
+				EndDateTime:   "2027-04-20T08:00:00Z",
+				Hint:          "Az~",
+			},
+		}
+	}
+	return out
 }

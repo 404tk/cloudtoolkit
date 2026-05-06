@@ -127,6 +127,71 @@ func (c *Client) DescribeRDSSQLServerInstances(ctx context.Context, region strin
 	return out, err
 }
 
+type RDSDBAccount struct {
+	AccountName     string `json:"AccountName"`
+	AccountStatus   string `json:"AccountStatus"`
+	AccountType     string `json:"AccountType"`
+	AccountPrivileges string `json:"AccountPrivileges,omitempty"`
+}
+
+type DescribeRDSAccountsResponse struct {
+	ResponseMetadata ResponseMetadata `json:"ResponseMetadata"`
+	Result           struct {
+		Accounts []RDSDBAccount `json:"Accounts"`
+		Total    int32          `json:"Total"`
+	} `json:"Result"`
+}
+
+type CreateRDSAccountInput struct {
+	InstanceID      string `json:"InstanceId"`
+	AccountName     string `json:"AccountName"`
+	AccountPassword string `json:"AccountPassword"`
+	AccountType     string `json:"AccountType,omitempty"`
+}
+
+type CreateRDSAccountResponse struct {
+	ResponseMetadata ResponseMetadata `json:"ResponseMetadata"`
+}
+
+type DeleteRDSAccountInput struct {
+	InstanceID  string `json:"InstanceId"`
+	AccountName string `json:"AccountName"`
+}
+
+type DeleteRDSAccountResponse struct {
+	ResponseMetadata ResponseMetadata `json:"ResponseMetadata"`
+}
+
+type describeRDSAccountsInput struct {
+	InstanceID string `json:"InstanceId"`
+}
+
+func (c *Client) DescribeRDSDBAccounts(ctx context.Context, service, region, instanceID string) (DescribeRDSAccountsResponse, error) {
+	var out DescribeRDSAccountsResponse
+	err := c.doRDSAction(ctx, service, "DescribeDBAccounts", region, describeRDSAccountsInput{InstanceID: instanceID}, &out)
+	return out, err
+}
+
+func (c *Client) CreateRDSDBAccount(ctx context.Context, service, region, instanceID, name, password string) (CreateRDSAccountResponse, error) {
+	var out CreateRDSAccountResponse
+	err := c.doRDSAction(ctx, service, "CreateDBAccount", region, CreateRDSAccountInput{
+		InstanceID:      instanceID,
+		AccountName:     name,
+		AccountPassword: password,
+		AccountType:     "Normal",
+	}, &out)
+	return out, err
+}
+
+func (c *Client) DeleteRDSDBAccount(ctx context.Context, service, region, instanceID, name string) (DeleteRDSAccountResponse, error) {
+	var out DeleteRDSAccountResponse
+	err := c.doRDSAction(ctx, service, "DeleteDBAccount", region, DeleteRDSAccountInput{
+		InstanceID:  instanceID,
+		AccountName: name,
+	}, &out)
+	return out, err
+}
+
 func (c *Client) doRDSAction(ctx context.Context, service, action, region string, payload any, out any) error {
 	body, err := json.Marshal(payload)
 	if err != nil {

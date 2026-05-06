@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	azapi "github.com/404tk/cloudtoolkit/pkg/providers/azure/api"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
@@ -15,6 +16,8 @@ import (
 type Driver struct {
 	Client          *azapi.Client
 	SubscriptionIDs []string
+	LROPollDelay    time.Duration
+	LROMaxPolls     int
 }
 
 // GetResource returns all the resources in the store for a provider.
@@ -92,9 +95,9 @@ func fetchResourceGroups(ctx context.Context, sess *Driver) (map[string][]string
 	resGroups := make(map[string][]string, len(sess.SubscriptionIDs))
 	for _, subscription := range sess.SubscriptionIDs {
 		pager := azapi.NewPager[azapi.ResourceGroup](sess.Client, azapi.Request{
-			Method: http.MethodGet,
-			Path:   fmt.Sprintf("/subscriptions/%s/resourceGroups", subscription),
-			Query:  url.Values{"api-version": {azapi.ResourcesAPIVersion}},
+			Method:     http.MethodGet,
+			Path:       fmt.Sprintf("/subscriptions/%s/resourceGroups", subscription),
+			Query:      url.Values{"api-version": {azapi.ResourcesAPIVersion}},
 			Idempotent: true,
 		})
 		items, err := pager.All(ctx)
@@ -112,9 +115,9 @@ func fetchResourceGroups(ctx context.Context, sess *Driver) (map[string][]string
 
 func fetchVMList(ctx context.Context, group, subscription string, client *azapi.Client) ([]azapi.VirtualMachine, error) {
 	pager := azapi.NewPager[azapi.VirtualMachine](client, azapi.Request{
-		Method: http.MethodGet,
-		Path:   fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/virtualMachines", subscription, group),
-		Query:  url.Values{"api-version": {azapi.ComputeAPIVersion}},
+		Method:     http.MethodGet,
+		Path:       fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Compute/virtualMachines", subscription, group),
+		Query:      url.Values{"api-version": {azapi.ComputeAPIVersion}},
 		Idempotent: true,
 	})
 	return pager.All(ctx)

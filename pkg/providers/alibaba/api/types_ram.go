@@ -396,3 +396,87 @@ func (c *Client) DeleteRAMRole(ctx context.Context, region, roleName string) (De
 	}, &resp)
 	return resp, err
 }
+
+type RAMAccessKey struct {
+	AccessKeyID string `json:"AccessKeyId"`
+	Status      string `json:"Status"`
+	CreateDate  string `json:"CreateDate"`
+}
+
+type RAMAccessKeySecret struct {
+	AccessKeyID     string `json:"AccessKeyId"`
+	AccessKeySecret string `json:"AccessKeySecret"`
+	Status          string `json:"Status"`
+	CreateDate      string `json:"CreateDate"`
+}
+
+type ListRAMAccessKeysResponse struct {
+	RequestID  string           `json:"RequestId"`
+	AccessKeys RAMAccessKeyList `json:"AccessKeys"`
+}
+
+type RAMAccessKeyList struct {
+	AccessKey []RAMAccessKey `json:"AccessKey"`
+}
+
+type CreateRAMAccessKeyResponse struct {
+	RequestID string             `json:"RequestId"`
+	AccessKey RAMAccessKeySecret `json:"AccessKey"`
+}
+
+type DeleteRAMAccessKeyResponse struct {
+	RequestID string `json:"RequestId"`
+}
+
+func (c *Client) ListRAMAccessKeys(ctx context.Context, region, userName string) (ListRAMAccessKeysResponse, error) {
+	query := url.Values{}
+	if userName != "" {
+		query.Set("UserName", userName)
+	}
+	var resp ListRAMAccessKeysResponse
+	err := c.Do(ctx, Request{
+		Product:    "Ram",
+		Version:    "2015-05-01",
+		Action:     "ListAccessKeys",
+		Region:     region,
+		Method:     http.MethodPost,
+		Query:      query,
+		Idempotent: true,
+	}, &resp)
+	return resp, err
+}
+
+func (c *Client) CreateRAMAccessKey(ctx context.Context, region, userName string) (CreateRAMAccessKeyResponse, error) {
+	query := url.Values{}
+	if userName != "" {
+		query.Set("UserName", userName)
+	}
+	var resp CreateRAMAccessKeyResponse
+	err := c.Do(ctx, Request{
+		Product: "Ram",
+		Version: "2015-05-01",
+		Action:  "CreateAccessKey",
+		Region:  region,
+		Method:  http.MethodPost,
+		Query:   query,
+	}, &resp)
+	return resp, err
+}
+
+func (c *Client) DeleteRAMAccessKey(ctx context.Context, region, userName, accessKeyID string) (DeleteRAMAccessKeyResponse, error) {
+	query := url.Values{}
+	if userName != "" {
+		query.Set("UserName", userName)
+	}
+	query.Set("UserAccessKeyId", accessKeyID)
+	var resp DeleteRAMAccessKeyResponse
+	err := c.Do(ctx, Request{
+		Product: "Ram",
+		Version: "2015-05-01",
+		Action:  "DeleteAccessKey",
+		Region:  region,
+		Method:  http.MethodPost,
+		Query:   query,
+	}, &resp)
+	return resp, err
+}

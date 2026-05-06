@@ -1,6 +1,7 @@
 package replay
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -355,5 +356,127 @@ func (t *transport) handleListPoliciesForUser(req *http.Request, params map[stri
 		})
 	}
 	resp.TotalCount = len(resp.Policies)
+	return successResponse(req, resp), nil
+}
+
+func (t *transport) handleListUserApiKeys(req *http.Request, params map[string]string) (*http.Response, error) {
+	user := strings.TrimSpace(params["UserName"])
+	if !t.iam.userExists(user) {
+		return errorResponse(req, http.StatusNotFound, 1011, fmt.Sprintf("user %s not found", user)), nil
+	}
+	keys := t.iam.snapshotAccessKeys(user)
+	resp := api.IAMListUserApiKeysResponse{BaseResponse: newBase("ListUserApiKeysResponse")}
+	for _, k := range keys {
+		resp.ApiKeys = append(resp.ApiKeys, api.IAMUserApiKey{
+			AccessKeyID: k.AccessKey,
+			Status:      k.Status,
+			CreatedAt:   k.CreatedAt,
+		})
+	}
+	resp.TotalCount = len(resp.ApiKeys)
+	return successResponse(req, resp), nil
+}
+
+func (t *transport) handleCreateUserApiKey(req *http.Request, params map[string]string) (*http.Response, error) {
+	user := strings.TrimSpace(params["UserName"])
+	if !t.iam.userExists(user) {
+		return errorResponse(req, http.StatusNotFound, 1011, fmt.Sprintf("user %s not found", user)), nil
+	}
+	key := t.iam.mintAccessKey(user)
+	resp := api.IAMCreateUserApiKeyResponse{
+		BaseResponse:    newBase("CreateUserApiKeyResponse"),
+		AccessKeyID:     key.AccessKey,
+		AccessKeySecret: key.AccessKeySecret,
+		Status:          key.Status,
+		CreatedAt:       key.CreatedAt,
+	}
+	return successResponse(req, resp), nil
+}
+
+func (t *transport) handleDeleteUserApiKey(req *http.Request, params map[string]string) (*http.Response, error) {
+	user := strings.TrimSpace(params["UserName"])
+	accessKey := strings.TrimSpace(params["AccessKeyID"])
+	if accessKey == "" {
+		return errorResponse(req, http.StatusBadRequest, 1003, "AccessKeyID required"), nil
+	}
+	if !t.iam.deleteAccessKey(user, accessKey) {
+		return errorResponse(req, http.StatusNotFound, 1011, fmt.Sprintf("access key %s not found", accessKey)), nil
+	}
+	resp := api.IAMDeleteUserApiKeyResponse{BaseResponse: newBase("DeleteUserApiKeyResponse")}
+	return successResponse(req, resp), nil
+}
+
+func (t *transport) handleDescribeActionLogList(req *http.Request, params map[string]string) (*http.Response, error) {
+	resp := api.DescribeActionLogListResponse{BaseResponse: newBase("DescribeActionLogListResponse")}
+	resp.Events = demoUCloudActionLogs()
+	resp.TotalCount = len(resp.Events)
+	return successResponse(req, resp), nil
+}
+
+func demoUCloudActionLogs() []api.UActEvent {
+	return []api.UActEvent{
+		{
+			EventID:         "uact-evt-0001",
+			EventName:       "CreateUser",
+			EventTime:       "2026-04-22T09:11:00Z",
+			EventSource:     "iam.ucloud.cn",
+			UserName:        "admin",
+			SourceIPAddress: "203.0.113.71",
+			Region:          "cn-bj2",
+			Status:          "Success",
+			AccessKey:       "ucloudpubkey-CTKDEMOaudit",
+			ResourceName:    "user/admin",
+			ResourceType:    "iam:User",
+		},
+		{
+			EventID:         "uact-evt-0002",
+			EventName:       "UpdateBucket",
+			EventTime:       "2026-04-22T09:14:00Z",
+			EventSource:     "ufile.ucloud.cn",
+			UserName:        "admin",
+			SourceIPAddress: "203.0.113.71",
+			Region:          "cn-bj2",
+			Status:          "Success",
+			AccessKey:       "ucloudpubkey-CTKDEMOaudit",
+			ResourceName:    "ctk-validation-public",
+			ResourceType:    "ufile:Bucket",
+		},
+		{
+			EventID:         "uact-evt-0003",
+			EventName:       "DeleteAccessKey",
+			EventTime:       "2026-04-22T09:18:00Z",
+			EventSource:     "iam.ucloud.cn",
+			UserName:        "admin",
+			SourceIPAddress: "203.0.113.71",
+			Region:          "cn-bj2",
+			Status:          "Failed",
+			AccessKey:       "ucloudpubkey-CTKDEMOaudit",
+			ResourceName:    "user/admin",
+			ResourceType:    "iam:AccessKey",
+		},
+	}
+}
+
+func (t *transport) handleCreateUDBUser(req *http.Request, params map[string]string) (*http.Response, error) {
+	dbID := strings.TrimSpace(params["DBId"])
+	user := strings.TrimSpace(params["UserName"])
+	if dbID == "" || user == "" {
+		return errorResponse(req, http.StatusBadRequest, 1003, "DBId and UserName required"), nil
+	}
+	t.iam.addUDBUser(dbID, user)
+	resp := api.CreateUDBUserResponse{BaseResponse: newBase("CreateUDBUserResponse")}
+	return successResponse(req, resp), nil
+}
+
+func (t *transport) handleDeleteUDBUser(req *http.Request, params map[string]string) (*http.Response, error) {
+	dbID := strings.TrimSpace(params["DBId"])
+	user := strings.TrimSpace(params["UserName"])
+	if dbID == "" || user == "" {
+		return errorResponse(req, http.StatusBadRequest, 1003, "DBId and UserName required"), nil
+	}
+	if !t.iam.removeUDBUser(dbID, user) {
+		return errorResponse(req, http.StatusNotFound, 1011, fmt.Sprintf("user %s not found", user)), nil
+	}
+	resp := api.DeleteUDBUserResponse{BaseResponse: newBase("DeleteUDBUserResponse")}
 	return successResponse(req, resp), nil
 }

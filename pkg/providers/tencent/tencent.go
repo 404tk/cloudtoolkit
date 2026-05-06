@@ -261,6 +261,60 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([
 	}
 }
 
+// IAMCredential implements schema.IAMCredentialManager for tencent CAM
+// AccessKey lifecycle. `principal` is the CAM user name (required for create
+// and delete; optional for list). `credentialID` is the AccessKeyId.
+func (p *Provider) IAMCredential(ctx context.Context, action, principal, credentialID string) (schema.IAMCredentialResult, error) {
+	driver := &iam.Driver{Credential: p.apiCredential}
+	driver.SetClientOptions(p.clientOptions...)
+	result := schema.IAMCredentialResult{
+		Action:       action,
+		Principal:    principal,
+		CredentialID: credentialID,
+	}
+	switch action {
+	case "list":
+		creds, err := driver.ListAccessKeys(ctx, principal)
+		if err != nil {
+			return result, err
+		}
+		result.Credentials = creds
+		result.Message = fmt.Sprintf("%d access keys on %s", len(creds), principal)
+		return result, nil
+	case "create":
+		cred, secret, err := driver.CreateAccessKey(ctx, principal)
+		if err != nil {
+			return result, err
+		}
+		result.CredentialID = cred.CredentialID
+		result.CredentialData = secret
+		result.Message = fmt.Sprintf("minted access key %s for %s", cred.CredentialID, principal)
+		return result, nil
+	case "delete":
+		if err := driver.DeleteAccessKey(ctx, principal, credentialID); err != nil {
+			return result, err
+		}
+		result.Message = fmt.Sprintf("revoked access key %s on %s", credentialID, principal)
+		return result, nil
+	}
+	return result, fmt.Errorf("tencent: unsupported iam-credential action %q", action)
+}
+
+// DBManagement implements schema.DBManager for Tencent CDB. `useradd` provisions
+// an account from the `rds-account-check` config; `userdel` removes it.
+func (p *Provider) DBManagement(ctx context.Context, action, instanceID string) (schema.DatabaseActionResult, error) {
+	cdbprovider := &cdb.Driver{Credential: p.apiCredential, Region: p.region}
+	cdbprovider.SetClientOptions(p.clientOptions...)
+	switch action {
+	case "useradd":
+		return cdbprovider.CreateAccount(ctx, instanceID)
+	case "userdel":
+		return cdbprovider.DeleteAccount(ctx, instanceID)
+	default:
+		return schema.DatabaseActionResult{}, fmt.Errorf("invalid action: %s (expected: useradd, userdel)", action)
+	}
+}
+
 // BucketACL implements schema.BucketACLManager for tencent COS. `level`
 // accepts canned COS ACL values (private / public-read / public-read-write
 // / authenticated-read) or friendly aliases resolved by cos.NormalizeCOSACL.

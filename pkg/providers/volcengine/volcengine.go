@@ -8,6 +8,7 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/internal/credverify"
 	_api "github.com/404tk/cloudtoolkit/pkg/providers/volcengine/api"
+	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/audit"
 	_auth "github.com/404tk/cloudtoolkit/pkg/providers/volcengine/auth"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/billing"
 	_dns "github.com/404tk/cloudtoolkit/pkg/providers/volcengine/dns"
@@ -193,6 +194,67 @@ func (p *Provider) RoleBinding(ctx context.Context, action, principal, role, sco
 	return result, fmt.Errorf("volcengine: unsupported role-binding action %q", action)
 }
 
+// IAMCredential implements schema.IAMCredentialManager for volcengine IAM
+// AccessKey lifecycle. `principal` is the IAM user name (required for create
+// and delete; optional for list).
+func (p *Provider) IAMCredential(ctx context.Context, action, principal, credentialID string) (schema.IAMCredentialResult, error) {
+	driver := &iam.Driver{Client: p.apiClient, Region: p.region}
+	result := schema.IAMCredentialResult{
+		Action:       action,
+		Principal:    principal,
+		CredentialID: credentialID,
+	}
+	switch action {
+	case "list":
+		creds, err := driver.ListAccessKeys(ctx, principal)
+		if err != nil {
+			return result, err
+		}
+		result.Credentials = creds
+		result.Message = fmt.Sprintf("%d access keys on %s", len(creds), principal)
+		return result, nil
+	case "create":
+		cred, secret, err := driver.CreateAccessKey(ctx, principal)
+		if err != nil {
+			return result, err
+		}
+		result.CredentialID = cred.CredentialID
+		result.CredentialData = secret
+		result.Message = fmt.Sprintf("minted access key %s for %s", cred.CredentialID, principal)
+		return result, nil
+	case "delete":
+		if err := driver.DeleteAccessKey(ctx, principal, credentialID); err != nil {
+			return result, err
+		}
+		result.Message = fmt.Sprintf("revoked access key %s on %s", credentialID, principal)
+		return result, nil
+	}
+	return result, fmt.Errorf("volcengine: unsupported iam-credential action %q", action)
+}
+
+// EventDump implements schema.EventReader for Volcengine Audit. Action
+// `dump` lists recent operation events; `whitelist` is unsupported (Audit is
+// read-only).
+func (p *Provider) EventDump(ctx context.Context, action, args string) (schema.EventActionResult, error) {
+	driver := &audit.Driver{Client: p.apiClient, Region: p.region}
+	switch action {
+	case "dump":
+		events, err := driver.DumpEvents(ctx, args)
+		if err != nil {
+			return schema.EventActionResult{}, err
+		}
+		return schema.EventActionResult{
+			Action: "dump",
+			Scope:  args,
+			Events: events,
+		}, nil
+	case "whitelist":
+		return driver.HandleEvents(ctx, args)
+	default:
+		return schema.EventActionResult{}, fmt.Errorf("invalid action: %s (expected: dump, whitelist)", action)
+	}
+}
+
 func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([]schema.BucketResult, error) {
 	driver := p.newTOSDriver(p.region)
 	infos, err := p.bucketInfos(context.Background(), driver, bucketName)
@@ -246,6 +308,21 @@ func (p *Provider) BucketACL(ctx context.Context, action, container, level strin
 		return result, nil
 	}
 	return result, fmt.Errorf("volcengine: unsupported bucket-acl action %q", action)
+}
+
+// DBManagement implements schema.DBManager for Volcengine RDS. The driver
+// auto-detects the sub-service (mysql / postgres / mssql) from the instanceID
+// prefix; username/password come from the `rds-account-check` config.
+func (p *Provider) DBManagement(ctx context.Context, action, instanceID string) (schema.DatabaseActionResult, error) {
+	driver := &rds.Driver{Client: p.apiClient, Region: p.region}
+	switch action {
+	case "useradd":
+		return driver.CreateAccount(ctx, instanceID)
+	case "userdel":
+		return driver.DeleteAccount(ctx, instanceID)
+	default:
+		return schema.DatabaseActionResult{}, fmt.Errorf("invalid action: %s (expected: useradd, userdel)", action)
+	}
 }
 
 func (p *Provider) ExecuteCloudVMCommand(ctx context.Context, instanceID, cmd string) (schema.CommandResult, error) {

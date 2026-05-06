@@ -115,6 +115,70 @@ type createUserResult struct {
 	User iamUserWire `xml:"User"`
 }
 
+type IAMAccessKey struct {
+	AccessKeyID string
+	UserName    string
+	Status      string
+	CreateDate  *time.Time
+}
+
+type IAMAccessKeySecret struct {
+	AccessKeyID     string
+	SecretAccessKey string
+	UserName        string
+	Status          string
+	CreateDate      *time.Time
+}
+
+type ListAccessKeysOutput struct {
+	AccessKeys  []IAMAccessKey
+	Marker      string
+	IsTruncated bool
+	RequestID   string
+}
+
+type CreateAccessKeyOutput struct {
+	AccessKey IAMAccessKeySecret
+	RequestID string
+}
+
+type accessKeyWire struct {
+	AccessKeyID string `xml:"AccessKeyId"`
+	UserName    string `xml:"UserName"`
+	Status      string `xml:"Status"`
+	CreateDate  string `xml:"CreateDate"`
+}
+
+type accessKeySecretWire struct {
+	AccessKeyID     string `xml:"AccessKeyId"`
+	SecretAccessKey string `xml:"SecretAccessKey"`
+	UserName        string `xml:"UserName"`
+	Status          string `xml:"Status"`
+	CreateDate      string `xml:"CreateDate"`
+}
+
+type listAccessKeysResponse struct {
+	XMLName              xml.Name             `xml:"ListAccessKeysResponse"`
+	ListAccessKeysResult listAccessKeysResult `xml:"ListAccessKeysResult"`
+	Metadata             iamResponseMetadata  `xml:"ResponseMetadata"`
+}
+
+type listAccessKeysResult struct {
+	AccessKeys  []accessKeyWire `xml:"AccessKeyMetadata>member"`
+	IsTruncated bool            `xml:"IsTruncated"`
+	Marker      string          `xml:"Marker"`
+}
+
+type createAccessKeyResponse struct {
+	XMLName               xml.Name              `xml:"CreateAccessKeyResponse"`
+	CreateAccessKeyResult createAccessKeyResult `xml:"CreateAccessKeyResult"`
+	Metadata              iamResponseMetadata   `xml:"ResponseMetadata"`
+}
+
+type createAccessKeyResult struct {
+	AccessKey accessKeySecretWire `xml:"AccessKey"`
+}
+
 func (c *Client) ListUsers(ctx context.Context, region, marker string) (ListUsersOutput, error) {
 	query := url.Values{}
 	if marker = strings.TrimSpace(marker); marker != "" {
@@ -311,6 +375,93 @@ func (c *Client) DeleteUser(ctx context.Context, region, userName string) error 
 		Service: "iam",
 		Region:  region,
 		Action:  "DeleteUser",
+		Version: iamAPIVersion,
+		Method:  http.MethodPost,
+		Path:    "/",
+		Query:   query,
+	}, nil)
+}
+
+func (c *Client) ListAccessKeys(ctx context.Context, region, userName, marker string) (ListAccessKeysOutput, error) {
+	query := url.Values{}
+	if userName = strings.TrimSpace(userName); userName != "" {
+		query.Set("UserName", userName)
+	}
+	if marker = strings.TrimSpace(marker); marker != "" {
+		query.Set("Marker", marker)
+	}
+	var wire listAccessKeysResponse
+	err := c.DoXML(ctx, Request{
+		Service:    "iam",
+		Region:     region,
+		Action:     "ListAccessKeys",
+		Version:    iamAPIVersion,
+		Method:     http.MethodPost,
+		Path:       "/",
+		Query:      query,
+		Idempotent: true,
+	}, &wire)
+	if err != nil {
+		return ListAccessKeysOutput{}, err
+	}
+	out := ListAccessKeysOutput{
+		AccessKeys:  make([]IAMAccessKey, 0, len(wire.ListAccessKeysResult.AccessKeys)),
+		Marker:      strings.TrimSpace(wire.ListAccessKeysResult.Marker),
+		IsTruncated: wire.ListAccessKeysResult.IsTruncated,
+		RequestID:   strings.TrimSpace(wire.Metadata.RequestID),
+	}
+	for _, key := range wire.ListAccessKeysResult.AccessKeys {
+		out.AccessKeys = append(out.AccessKeys, IAMAccessKey{
+			AccessKeyID: strings.TrimSpace(key.AccessKeyID),
+			UserName:    strings.TrimSpace(key.UserName),
+			Status:      strings.TrimSpace(key.Status),
+			CreateDate:  parseAWSTime(key.CreateDate),
+		})
+	}
+	return out, nil
+}
+
+func (c *Client) CreateAccessKey(ctx context.Context, region, userName string) (CreateAccessKeyOutput, error) {
+	query := url.Values{}
+	if userName = strings.TrimSpace(userName); userName != "" {
+		query.Set("UserName", userName)
+	}
+	var wire createAccessKeyResponse
+	err := c.DoXML(ctx, Request{
+		Service: "iam",
+		Region:  region,
+		Action:  "CreateAccessKey",
+		Version: iamAPIVersion,
+		Method:  http.MethodPost,
+		Path:    "/",
+		Query:   query,
+	}, &wire)
+	if err != nil {
+		return CreateAccessKeyOutput{}, err
+	}
+	key := wire.CreateAccessKeyResult.AccessKey
+	return CreateAccessKeyOutput{
+		AccessKey: IAMAccessKeySecret{
+			AccessKeyID:     strings.TrimSpace(key.AccessKeyID),
+			SecretAccessKey: strings.TrimSpace(key.SecretAccessKey),
+			UserName:        strings.TrimSpace(key.UserName),
+			Status:          strings.TrimSpace(key.Status),
+			CreateDate:      parseAWSTime(key.CreateDate),
+		},
+		RequestID: strings.TrimSpace(wire.Metadata.RequestID),
+	}, nil
+}
+
+func (c *Client) DeleteAccessKey(ctx context.Context, region, userName, accessKeyID string) error {
+	query := url.Values{}
+	if userName = strings.TrimSpace(userName); userName != "" {
+		query.Set("UserName", userName)
+	}
+	setTrimmedQueryValue(query, "AccessKeyId", accessKeyID)
+	return c.DoXML(ctx, Request{
+		Service: "iam",
+		Region:  region,
+		Action:  "DeleteAccessKey",
 		Version: iamAPIVersion,
 		Method:  http.MethodPost,
 		Path:    "/",

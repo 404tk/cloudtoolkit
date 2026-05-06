@@ -16,6 +16,9 @@ type transport struct {
 	createdAssignments    map[string]roleAssignmentFixture
 	deletedAssignments    map[string]bool
 	containerACLOverrides map[string]string
+	appPasswords          map[string][]graphPasswordFixture
+	appPasswordSeq        int
+	graphUsers            map[string]bool
 }
 
 func newTransport() *transport {
@@ -23,6 +26,8 @@ func newTransport() *transport {
 		createdAssignments:    make(map[string]roleAssignmentFixture),
 		deletedAssignments:    make(map[string]bool),
 		containerACLOverrides: make(map[string]string),
+		appPasswords:          seedAzureAppPasswords(),
+		graphUsers:            make(map[string]bool),
 	}
 }
 
@@ -41,9 +46,23 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 				"The access token is invalid."), nil
 		}
 		return t.handleARM(req)
+	case isGraphHost(host):
+		if !verifyBearerToken(req) {
+			return graphErrorResponse(req, http.StatusUnauthorized, "InvalidAuthenticationToken",
+				"The access token is invalid."), nil
+		}
+		return t.handleGraph(req, body)
 	}
 	return armErrorResponse(req, http.StatusNotFound, "InvalidEndpoint",
 		fmt.Sprintf("unsupported replay host: %s", host)), nil
+}
+
+func isGraphHost(host string) bool {
+	host = normalizeHost(host)
+	return host == "graph.microsoft.com" ||
+		host == "microsoftgraph.chinacloudapi.cn" ||
+		host == "graph.microsoft.us" ||
+		host == "graph.microsoft.de"
 }
 
 func isLoginHost(host string) bool {
@@ -146,10 +165,65 @@ func armErrorResponse(req *http.Request, statusCode int, code, message string) *
 	return resp
 }
 
+func graphErrorResponse(req *http.Request, statusCode int, code, message string) *http.Response {
+	payload := armErrorBody{Error: armError{
+		Code:    strings.TrimSpace(code),
+		Message: strings.TrimSpace(message),
+	}}
+	resp := demoreplay.JSONResponse(req, statusCode, payload)
+	resp.Header.Set("request-id", "req-replay-graph")
+	return resp
+}
+
 // jsonResponse returns a JSON 200 response and stamps a fake request ID.
 func jsonResponse(req *http.Request, payload any) *http.Response {
 	body, _ := json.Marshal(payload)
 	resp := demoreplay.Response(req, http.StatusOK, "application/json", body)
 	resp.Header.Set("x-ms-request-id", "req-replay-azure")
 	return resp
+}
+
+func (t *transport) mintAzureAppPassword(appID, displayName string) graphPasswordFixture {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.appPasswordSeq++
+	pc := graphPasswordFixture{
+		KeyID:         fmt.Sprintf("ctkmint-%04d-1111-2222-333344445555", t.appPasswordSeq),
+		DisplayName:   displayName,
+		StartDateTime: "2026-04-30T09:00:00Z",
+		EndDateTime:   "2027-04-30T09:00:00Z",
+		SecretText:    fmt.Sprintf("AzCTKMINT-secret-%04d-EXAMPLE", t.appPasswordSeq),
+		Hint:          "Az~",
+	}
+	t.appPasswords[appID] = append(t.appPasswords[appID], pc)
+	return pc
+}
+
+func (t *transport) deleteAzureAppPassword(appID, keyID string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	creds := t.appPasswords[appID]
+	for i, c := range creds {
+		if c.KeyID == keyID {
+			t.appPasswords[appID] = append(creds[:i], creds[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+func (t *transport) addGraphUser(upn string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.graphUsers[upn] = true
+}
+
+func (t *transport) removeGraphUser(upn string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if !t.graphUsers[upn] {
+		return false
+	}
+	delete(t.graphUsers, upn)
+	return true
 }

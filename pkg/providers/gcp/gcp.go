@@ -13,6 +13,9 @@ import (
 	_compute "github.com/404tk/cloudtoolkit/pkg/providers/gcp/compute"
 	_dns "github.com/404tk/cloudtoolkit/pkg/providers/gcp/dns"
 	_iam "github.com/404tk/cloudtoolkit/pkg/providers/gcp/iam"
+	_logging "github.com/404tk/cloudtoolkit/pkg/providers/gcp/logging"
+	_sqladmin "github.com/404tk/cloudtoolkit/pkg/providers/gcp/sqladmin"
+	_storage "github.com/404tk/cloudtoolkit/pkg/providers/gcp/storage"
 	"github.com/404tk/cloudtoolkit/pkg/providers/internal/credverify"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
@@ -113,9 +116,96 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			users, err := saProvider.ListUsers(ctx)
 			schema.AppendAssets(list, users)
 			list.AddError("account", err)
+		}).
+		Register("bucket", func(ctx context.Context, list *schema.Resources) {
+			storageProvider := &_storage.Driver{Projects: p.projects, Client: p.apiClient}
+			storages, err := storageProvider.GetBuckets(ctx)
+			schema.AppendAssets(list, storages)
+			list.AddError("bucket", err)
 		})
 
 	return collector.Collect(ctx, env.From(ctx).Cloudlist)
+}
+
+// BucketDump implements schema.BucketManager for GCP via GCS object listing.
+func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([]schema.BucketResult, error) {
+	driver := &_storage.Driver{Projects: p.projects, Client: p.apiClient}
+	infos := make(map[string]string)
+	if bucketName == "all" {
+		buckets, err := driver.GetBuckets(context.Background())
+		if err != nil {
+			return nil, fmt.Errorf("list buckets: %w", err)
+		}
+		for _, b := range buckets {
+			infos[b.BucketName] = b.Region
+		}
+	} else {
+		infos[bucketName] = ""
+	}
+	switch action {
+	case "list":
+		return driver.ListObjects(ctx, infos)
+	// case "total":
+	// return driver.TotalObjects(ctx, infos)
+	default:
+		return nil, fmt.Errorf("invalid action: %s (expected: list, total)", action)
+	}
+}
+
+// BucketACL implements schema.BucketACLManager for GCP. The GCS analogue of
+// "public" / "private" is the bucket IAM policy granting `allUsers` the
+// objectViewer role.
+func (p *Provider) BucketACL(ctx context.Context, action, container, level string) (schema.BucketACLResult, error) {
+	driver := &_storage.Driver{Projects: p.projects, Client: p.apiClient}
+	result := schema.BucketACLResult{
+		Action:    action,
+		Container: container,
+		Level:     level,
+	}
+	switch action {
+	case "audit":
+		entries, err := driver.AuditBucketACL(ctx, container)
+		if err != nil {
+			return result, err
+		}
+		result.Containers = entries
+		result.Message = fmt.Sprintf("%d buckets audited", len(entries))
+		return result, nil
+	case "expose":
+		applied, err := driver.ExposeBucket(ctx, container, level)
+		if err != nil {
+			return result, err
+		}
+		result.Level = applied
+		result.Message = fmt.Sprintf("bucket %s set to %s", container, applied)
+		return result, nil
+	case "unexpose":
+		if err := driver.UnexposeBucket(ctx, container); err != nil {
+			return result, err
+		}
+		result.Level = "Private"
+		result.Message = fmt.Sprintf("bucket %s reverted to private", container)
+		return result, nil
+	}
+	return result, fmt.Errorf("gcp: unsupported bucket-acl action %q", action)
+}
+
+// UserManagement implements schema.IAMManager for GCP. Cloud Identity user
+// lifecycle requires a paid Google Workspace tenant; the practical
+// CSPM-detectable lever for non-Workspace projects is service account
+// enable/disable. `username` is the SA email (or short name), `password` is
+// ignored (SA accounts have no password).
+func (p *Provider) UserManagement(action, username, _ string) (schema.IAMResult, error) {
+	driver := &_iam.Driver{Projects: p.projects, Client: p.apiClient}
+	ctx := context.Background()
+	switch action {
+	case "add":
+		return driver.AddUser(ctx, username)
+	case "del":
+		return driver.DelUser(ctx, username)
+	default:
+		return schema.IAMResult{}, fmt.Errorf("invalid action: %s (expected: add, del)", action)
+	}
 }
 
 // RoleBinding implements schema.RoleBindingManager for GCP project-level IAM
@@ -218,4 +308,42 @@ func (p *Provider) IAMCredential(ctx context.Context, action, principal, credent
 		return result, nil
 	}
 	return result, fmt.Errorf("gcp: unsupported iam-credential action %q", action)
+}
+
+// EventDump implements schema.EventReader for GCP Cloud Audit Logs via Cloud
+// Logging `entries:list`. Action `dump` lists recent audit entries scoped to
+// the provider's project; `whitelist` is unsupported because Cloud Audit
+// Logs are read-only.
+func (p *Provider) EventDump(ctx context.Context, action, args string) (schema.EventActionResult, error) {
+	driver := &_logging.Driver{Client: p.apiClient, Projects: p.projects}
+	switch action {
+	case "dump":
+		events, err := driver.DumpEvents(ctx, args)
+		if err != nil {
+			return schema.EventActionResult{}, err
+		}
+		return schema.EventActionResult{
+			Action: "dump",
+			Scope:  args,
+			Events: events,
+		}, nil
+	case "whitelist":
+		return driver.HandleEvents(ctx, args)
+	default:
+		return schema.EventActionResult{}, fmt.Errorf("invalid action: %s (expected: dump, whitelist)", action)
+	}
+}
+
+// DBManagement implements schema.DBManager for GCP Cloud SQL. `useradd` /
+// `userdel` invoke the Cloud SQL Admin user APIs.
+func (p *Provider) DBManagement(ctx context.Context, action, instanceID string) (schema.DatabaseActionResult, error) {
+	driver := &_sqladmin.Driver{Client: p.apiClient, Projects: p.projects}
+	switch action {
+	case "useradd":
+		return driver.CreateAccount(ctx, instanceID)
+	case "userdel":
+		return driver.DeleteAccount(ctx, instanceID)
+	default:
+		return schema.DatabaseActionResult{}, fmt.Errorf("invalid action: %s (expected: useradd, userdel)", action)
+	}
 }

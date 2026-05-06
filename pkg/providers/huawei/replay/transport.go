@@ -14,16 +14,37 @@ import (
 )
 
 type transport struct {
-	iam       *iamMutationState
-	mu        sync.Mutex
-	bucketACL map[string]string
+	iam         *iamMutationState
+	mu          sync.Mutex
+	bucketACL   map[string]string
+	rdsAccounts map[string][]string
 }
 
 func newTransport() *transport {
 	return &transport{
-		iam:       newIAMMutationState(),
-		bucketACL: seedHuaweiBucketACL(),
+		iam:         newIAMMutationState(),
+		bucketACL:   seedHuaweiBucketACL(),
+		rdsAccounts: make(map[string][]string),
 	}
+}
+
+func (t *transport) addHuaweiRDSAccount(instanceID, name string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.rdsAccounts[instanceID] = append(t.rdsAccounts[instanceID], name)
+}
+
+func (t *transport) removeHuaweiRDSAccount(instanceID, name string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	accounts := t.rdsAccounts[instanceID]
+	for i, n := range accounts {
+		if n == name {
+			t.rdsAccounts[instanceID] = append(accounts[:i], accounts[i+1:]...)
+			return true
+		}
+	}
+	return false
 }
 
 // seedHuaweiBucketACL gives every demo OBS bucket a starting "private" canned

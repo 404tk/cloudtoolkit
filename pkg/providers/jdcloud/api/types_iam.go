@@ -118,3 +118,47 @@ type DescribeUserPinResponse struct {
 		Pin string `json:"pin"`
 	} `json:"result"`
 }
+
+// IAMSubUserAccessKey models the persistent fields of a JDCloud sub-user
+// access key. The endpoint paths under /subUser/<name>:<action> follow the
+// same convention as :attachSubUserPolicy, and the response shape is
+// pattern-inferred — verify against the upstream SDK before relying on this
+// in production.
+type IAMSubUserAccessKey struct {
+	AccessKey  string `json:"accessKey"`
+	Status     string `json:"status,omitempty"`
+	CreateTime string `json:"createTime,omitempty"`
+}
+
+type IAMSubUserAccessKeySecret struct {
+	AccessKey  string `json:"accessKey"`
+	SecretKey  string `json:"secretKey"`
+	Status     string `json:"status,omitempty"`
+	CreateTime string `json:"createTime,omitempty"`
+}
+
+type DescribeAccessKeysResponse struct {
+	RequestID string        `json:"requestId"`
+	Error     *APIErrorBody `json:"error,omitempty"`
+	Result    struct {
+		AccessKeys []IAMSubUserAccessKey `json:"accessKeys"`
+	} `json:"result"`
+}
+
+type CreateAccessKeyRequest struct {
+	SubUser string `json:"subUser"`
+}
+
+type CreateAccessKeyResponse struct {
+	RequestID string        `json:"requestId"`
+	Error     *APIErrorBody `json:"error,omitempty"`
+	Result    struct {
+		AccessKey IAMSubUserAccessKeySecret `json:"accessKey"`
+	} `json:"result"`
+}
+
+type DeleteAccessKeyResponse struct {
+	RequestID string        `json:"requestId"`
+	Error     *APIErrorBody `json:"error,omitempty"`
+	Result    struct{}      `json:"result"`
+}

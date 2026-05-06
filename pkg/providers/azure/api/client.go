@@ -22,6 +22,12 @@ type Request struct {
 	Idempotent bool
 }
 
+type ResponseMetadata struct {
+	StatusCode int
+	Header     http.Header
+	RequestID  string
+}
+
 type Option func(*Client)
 
 type Client struct {
@@ -71,15 +77,20 @@ func WithBaseURL(raw string) Option {
 }
 
 func (c *Client) Do(ctx context.Context, req Request, out any) error {
+	_, err := c.DoWithResponse(ctx, req, out)
+	return err
+}
+
+func (c *Client) DoWithResponse(ctx context.Context, req Request, out any) (ResponseMetadata, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if c.tokenSource == nil {
-		return fmt.Errorf("azure client: nil token source")
+		return ResponseMetadata{}, fmt.Errorf("azure client: nil token source")
 	}
 	token, err := c.tokenSource.Token(ctx)
 	if err != nil {
-		return err
+		return ResponseMetadata{}, err
 	}
 
 	method := strings.ToUpper(strings.TrimSpace(req.Method))
@@ -88,7 +99,7 @@ func (c *Client) Do(ctx context.Context, req Request, out any) error {
 	}
 	requestURL, err := c.resolveURL(req.Path, req.Query)
 	if err != nil {
-		return err
+		return ResponseMetadata{}, err
 	}
 
 	headers := httpclient.CloneHeader(req.Headers)
@@ -99,18 +110,24 @@ func (c *Client) Do(ctx context.Context, req Request, out any) error {
 
 	httpReq, err := http.NewRequestWithContext(ctx, method, requestURL.String(), bytes.NewReader(req.Body))
 	if err != nil {
-		return err
+		return ResponseMetadata{}, err
 	}
 	httpReq.Header = headers.Clone()
 
 	httpResp, body, err := httpclient.Execute(ctx, c.httpClient, c.retryPolicy, httpReq, req.Idempotent)
 	if err != nil {
-		return err
+		return ResponseMetadata{}, err
 	}
-	if err := withRequestID(DecodeError(httpResp.StatusCode, body), httpResp.Header.Get("x-ms-request-id")); err != nil {
-		return err
+	meta := ResponseMetadata{}
+	if httpResp != nil {
+		meta.StatusCode = httpResp.StatusCode
+		meta.Header = httpclient.CloneHeader(httpResp.Header)
+		meta.RequestID = httpResp.Header.Get("x-ms-request-id")
 	}
-	return httpclient.DecodeJSON(httpResp, body, "azure", out)
+	if err := withRequestID(DecodeError(meta.StatusCode, body), meta.RequestID); err != nil {
+		return meta, err
+	}
+	return meta, httpclient.DecodeJSON(httpResp, body, "azure", out)
 }
 
 func (c *Client) resolveURL(path string, query url.Values) (*url.URL, error) {

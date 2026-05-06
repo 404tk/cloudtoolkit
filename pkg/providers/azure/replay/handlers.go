@@ -96,6 +96,9 @@ func (t *transport) handleResourceGroupProvider(req *http.Request, subscription,
 		if len(rest) == 1 {
 			return t.handleListVMs(req, subscription, group)
 		}
+		if len(rest) >= 3 && rest[2] == "runCommand" {
+			return t.handleVMRunCommand(req, subscription, group, rest[1])
+		}
 		return armErrorResponse(req, http.StatusNotFound, "InvalidPath",
 			fmt.Sprintf("unsupported VM subpath: %v", rest)), nil
 	case strings.EqualFold(provider, "Microsoft.Network") && len(rest) >= 2 && rest[0] == "networkInterfaces":
@@ -104,9 +107,47 @@ func (t *transport) handleResourceGroupProvider(req *http.Request, subscription,
 		return t.handleShowPublicIP(req, subscription, group, rest[1])
 	case strings.EqualFold(provider, "Microsoft.Storage") && len(rest) >= 2 && rest[0] == "storageAccounts":
 		return t.handleStorageScoped(req, subscription, group, rest[1:])
+	case strings.EqualFold(provider, "Microsoft.Sql") && len(rest) >= 2 && rest[0] == "servers":
+		return t.handleSQLServer(req, subscription, group, rest[1])
 	}
 	return armErrorResponse(req, http.StatusNotFound, "InvalidPath",
 		fmt.Sprintf("unsupported provider path: %s/%v", provider, rest)), nil
+}
+
+func (t *transport) handleSQLServer(req *http.Request, subscription, group, server string) (*http.Response, error) {
+	switch req.Method {
+	case http.MethodPatch:
+		// PATCH succeeds with the server resource shape; ARM normally returns
+		// 200 + updated body or 202 + Location for async.
+		resp := azapi.SQLServer{
+			ID:       fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Sql/servers/%s", subscription, group, server),
+			Name:     server,
+			Location: demoLocation,
+			Properties: azapi.SQLServerProperties{
+				AdministratorLogin:       "ctkadmin",
+				FullyQualifiedDomainName: server + ".database.windows.net",
+				State:                    "Ready",
+				Version:                  "12.0",
+			},
+		}
+		return jsonResponse(req, resp), nil
+	}
+	return armErrorResponse(req, http.StatusMethodNotAllowed, "MethodNotAllowed",
+		"unsupported sql server method"), nil
+}
+
+func (t *transport) handleVMRunCommand(req *http.Request, subscription, group, vmName string) (*http.Response, error) {
+	if req.Method != http.MethodPost {
+		return armErrorResponse(req, http.StatusMethodNotAllowed, "MethodNotAllowed",
+			"unsupported runCommand method"), nil
+	}
+	resp := azapi.RunCommandResult{Value: []azapi.RunCommandInstanceView{{
+		Code:          "ProvisioningState/succeeded",
+		Level:         "Info",
+		DisplayStatus: "Provisioning succeeded",
+		Message:       fmt.Sprintf("[stdout]\nctk-demo-vm-output: subscription=%s rg=%s vm=%s\n[stderr]\n", subscription, group, vmName),
+	}}}
+	return jsonResponse(req, resp), nil
 }
 
 func (t *transport) handleSubscriptionProvider(req *http.Request, subscription string, parts []string) (*http.Response, error) {
@@ -123,9 +164,82 @@ func (t *transport) handleSubscriptionProvider(req *http.Request, subscription s
 		return t.handleRoleAssignments(req, subscription, rest[1:])
 	case strings.EqualFold(provider, "Microsoft.Authorization") && len(rest) >= 1 && rest[0] == "roleDefinitions":
 		return t.handleRoleDefinitions(req, subscription, rest[1:])
+	case strings.EqualFold(provider, "Microsoft.Insights") && len(rest) >= 3 && rest[0] == "eventtypes" && rest[1] == "management" && rest[2] == "values":
+		return t.handleActivityLog(req, subscription)
 	}
 	return armErrorResponse(req, http.StatusNotFound, "InvalidPath",
 		fmt.Sprintf("unsupported subscription provider: %s/%v", provider, rest)), nil
+}
+
+func (t *transport) handleActivityLog(req *http.Request, subscription string) (*http.Response, error) {
+	resp := azapi.ActivityLogResponse{}
+	resp.Value = demoAzureActivityEvents(subscription)
+	return jsonResponse(req, resp), nil
+}
+
+func demoAzureActivityEvents(subscription string) []azapi.ActivityLogEvent {
+	groups := resourceGroupsFor(subscription)
+	group := "ctk-demo-rg"
+	if len(groups) > 0 {
+		group = groups[0]
+	}
+	resourceID := func(provider, name string) string {
+		return fmt.Sprintf("/subscriptions/%s/resourceGroups/%s/providers/%s/%s", subscription, group, provider, name)
+	}
+	mk := func(id, op, opLocal, ts, caller, ip, status, scope, rt string) azapi.ActivityLogEvent {
+		ev := azapi.ActivityLogEvent{
+			EventDataID:         id,
+			EventTimestamp:      ts,
+			Caller:              caller,
+			ResourceID:          scope,
+			SubmissionTimestamp: ts,
+		}
+		ev.OperationName.Value = op
+		ev.OperationName.LocalizedValue = opLocal
+		ev.HTTPRequest.ClientIPAddress = ip
+		ev.Status.Value = status
+		ev.Status.LocalizedValue = status
+		ev.Authorization.Action = op
+		ev.Authorization.Scope = scope
+		ev.ResourceType.Value = rt
+		ev.ResourceType.LocalizedValue = rt
+		return ev
+	}
+	return []azapi.ActivityLogEvent{
+		mk(
+			"evt-azure-0001",
+			"Microsoft.Authorization/roleAssignments/write",
+			"Create role assignment",
+			"2026-04-22T09:11:00.0000000Z",
+			"ctk-demo-app",
+			"203.0.113.81",
+			"Succeeded",
+			resourceID("Microsoft.Authorization", "roleAssignments/00000000-0000-0000-0000-000000000001"),
+			"Microsoft.Authorization/roleAssignments",
+		),
+		mk(
+			"evt-azure-0002",
+			"Microsoft.Storage/storageAccounts/blobServices/containers/write",
+			"Update blob container",
+			"2026-04-22T09:14:30.0000000Z",
+			"ctk-demo-app",
+			"203.0.113.81",
+			"Succeeded",
+			resourceID("Microsoft.Storage", "storageAccounts/ctkdemoblobs/blobServices/default/containers/public-export"),
+			"Microsoft.Storage/storageAccounts/blobServices/containers",
+		),
+		mk(
+			"evt-azure-0003",
+			"Microsoft.Compute/virtualMachines/runCommand/action",
+			"Run command on VM",
+			"2026-04-22T09:18:42.0000000Z",
+			"ctk-demo-app",
+			"203.0.113.81",
+			"Failed",
+			resourceID("Microsoft.Compute", "virtualMachines/ctk-demo-vm-01"),
+			"Microsoft.Compute/virtualMachines",
+		),
+	}
 }
 
 func (t *transport) handleListVMs(req *http.Request, subscription, group string) (*http.Response, error) {
@@ -537,6 +651,204 @@ func parseEqFilter(filter, field string) string {
 		return ""
 	}
 	prefix := field + " eq '"
+	idx := strings.Index(filter, prefix)
+	if idx < 0 {
+		return ""
+	}
+	rest := filter[idx+len(prefix):]
+	end := strings.Index(rest, "'")
+	if end < 0 {
+		return ""
+	}
+	return rest[:end]
+}
+
+// handleGraph routes Microsoft Graph requests for the demo replay. The
+// supported surface covers user inventory/lifecycle and application password
+// credentials used by defensive validation payloads.
+func (t *transport) handleGraph(req *http.Request, body []byte) (*http.Response, error) {
+	path := strings.Trim(req.URL.Path, "/")
+	parts := strings.Split(path, "/")
+	if len(parts) < 2 || parts[0] != "v1.0" {
+		return graphErrorResponse(req, http.StatusNotFound, "InvalidGraphPath",
+			"unsupported graph path: "+req.URL.Path), nil
+	}
+	parts = parts[1:]
+	switch {
+	case len(parts) == 1 && parts[0] == "applications":
+		return t.handleGraphListApplications(req)
+	case len(parts) == 2 && parts[0] == "applications":
+		return t.handleGraphGetApplication(req, parts[1])
+	case len(parts) == 3 && parts[0] == "applications" && parts[2] == "addPassword":
+		return t.handleGraphAddPassword(req, parts[1], body)
+	case len(parts) == 3 && parts[0] == "applications" && parts[2] == "removePassword":
+		return t.handleGraphRemovePassword(req, parts[1], body)
+	case len(parts) == 1 && parts[0] == "users" && req.Method == http.MethodGet:
+		return t.handleGraphListUsers(req)
+	case len(parts) == 1 && parts[0] == "users" && req.Method == http.MethodPost:
+		return t.handleGraphCreateUser(req, body)
+	case len(parts) == 2 && parts[0] == "users" && req.Method == http.MethodDelete:
+		return t.handleGraphDeleteUser(req, parts[1])
+	}
+	return graphErrorResponse(req, http.StatusNotFound, "InvalidGraphPath",
+		"unsupported graph path: "+req.URL.Path), nil
+}
+
+func (t *transport) handleGraphCreateUser(req *http.Request, body []byte) (*http.Response, error) {
+	var user struct {
+		AccountEnabled    bool   `json:"accountEnabled"`
+		DisplayName       string `json:"displayName"`
+		MailNickname      string `json:"mailNickname"`
+		UserPrincipalName string `json:"userPrincipalName"`
+	}
+	_ = json.Unmarshal(body, &user)
+	if strings.TrimSpace(user.UserPrincipalName) == "" {
+		return graphErrorResponse(req, http.StatusBadRequest, "Request_BadRequest",
+			"userPrincipalName required"), nil
+	}
+	t.addGraphUser(user.UserPrincipalName)
+	return jsonResponse(req, map[string]any{
+		"id":                "ctk-graph-user-001",
+		"accountEnabled":    user.AccountEnabled,
+		"displayName":       user.DisplayName,
+		"mailNickname":      user.MailNickname,
+		"userPrincipalName": user.UserPrincipalName,
+	}), nil
+}
+
+func (t *transport) handleGraphListUsers(req *http.Request) (*http.Response, error) {
+	users := make([]map[string]any, 0, len(demoGraphUsers))
+	for _, user := range demoGraphUsers {
+		users = append(users, buildGraphUser(user))
+	}
+	t.mu.Lock()
+	for upn := range t.graphUsers {
+		users = append(users, buildGraphUser(graphUserFixture{
+			ID:                "ctk-created-" + upn,
+			DisplayName:       upn,
+			UserPrincipalName: upn,
+			AccountEnabled:    true,
+			CreatedDateTime:   "2026-05-06T00:00:00Z",
+		}))
+	}
+	t.mu.Unlock()
+	return jsonResponse(req, map[string]any{"value": users}), nil
+}
+
+func (t *transport) handleGraphDeleteUser(req *http.Request, idOrUPN string) (*http.Response, error) {
+	// Lenient: removeGraphUser returns false if the user wasn't seen in this
+	// session, but we still want to surface a 204 because demo flows might
+	// run `del` against a baseline UPN.
+	t.removeGraphUser(idOrUPN)
+	resp := demoreplay.Response(req, http.StatusNoContent, "application/json", nil)
+	resp.Header.Set("request-id", "req-replay-graph")
+	return resp, nil
+}
+
+func (t *transport) handleGraphListApplications(req *http.Request) (*http.Response, error) {
+	filter := req.URL.Query().Get("$filter")
+	wantAppID := extractGraphFilterValue(filter, "appId eq '")
+	apps := make([]map[string]any, 0)
+	for _, app := range demoGraphApplications {
+		if wantAppID != "" && app.AppID != wantAppID {
+			continue
+		}
+		apps = append(apps, t.buildGraphApplication(app))
+	}
+	return jsonResponse(req, map[string]any{"value": apps}), nil
+}
+
+func (t *transport) handleGraphGetApplication(req *http.Request, id string) (*http.Response, error) {
+	app, ok := findGraphApplicationByID(id)
+	if !ok {
+		return graphErrorResponse(req, http.StatusNotFound, "Request_ResourceNotFound",
+			"application not found"), nil
+	}
+	return jsonResponse(req, t.buildGraphApplication(app)), nil
+}
+
+func buildGraphUser(user graphUserFixture) map[string]any {
+	out := map[string]any{
+		"id":                user.ID,
+		"accountEnabled":    user.AccountEnabled,
+		"displayName":       user.DisplayName,
+		"userPrincipalName": user.UserPrincipalName,
+		"createdDateTime":   user.CreatedDateTime,
+	}
+	if strings.TrimSpace(user.LastSignInDateTime) != "" {
+		out["signInActivity"] = map[string]any{
+			"lastSignInDateTime": user.LastSignInDateTime,
+		}
+	}
+	return out
+}
+
+func (t *transport) handleGraphAddPassword(req *http.Request, id string, body []byte) (*http.Response, error) {
+	app, ok := findGraphApplicationByID(id)
+	if !ok {
+		return graphErrorResponse(req, http.StatusNotFound, "Request_ResourceNotFound",
+			"application not found"), nil
+	}
+	var payload struct {
+		PasswordCredential struct {
+			DisplayName string `json:"displayName"`
+		} `json:"passwordCredential"`
+	}
+	_ = json.Unmarshal(body, &payload)
+	pc := t.mintAzureAppPassword(app.ID, payload.PasswordCredential.DisplayName)
+	return jsonResponse(req, map[string]any{
+		"keyId":         pc.KeyID,
+		"displayName":   pc.DisplayName,
+		"startDateTime": pc.StartDateTime,
+		"endDateTime":   pc.EndDateTime,
+		"secretText":    pc.SecretText,
+		"hint":          pc.Hint,
+	}), nil
+}
+
+func (t *transport) handleGraphRemovePassword(req *http.Request, id string, body []byte) (*http.Response, error) {
+	app, ok := findGraphApplicationByID(id)
+	if !ok {
+		return graphErrorResponse(req, http.StatusNotFound, "Request_ResourceNotFound",
+			"application not found"), nil
+	}
+	var payload struct {
+		KeyID string `json:"keyId"`
+	}
+	_ = json.Unmarshal(body, &payload)
+	if !t.deleteAzureAppPassword(app.ID, payload.KeyID) {
+		return graphErrorResponse(req, http.StatusNotFound, "Request_ResourceNotFound",
+			"password credential not found"), nil
+	}
+	resp := demoreplay.Response(req, http.StatusNoContent, "application/json", nil)
+	resp.Header.Set("request-id", "req-replay-graph")
+	return resp, nil
+}
+
+func (t *transport) buildGraphApplication(app graphApplicationFixture) map[string]any {
+	t.mu.Lock()
+	creds := append([]graphPasswordFixture(nil), t.appPasswords[app.ID]...)
+	t.mu.Unlock()
+	out := []map[string]any{}
+	for _, c := range creds {
+		out = append(out, map[string]any{
+			"keyId":         c.KeyID,
+			"displayName":   c.DisplayName,
+			"startDateTime": c.StartDateTime,
+			"endDateTime":   c.EndDateTime,
+		})
+	}
+	return map[string]any{
+		"id":                  app.ID,
+		"appId":               app.AppID,
+		"displayName":         app.DisplayName,
+		"passwordCredentials": out,
+	}
+}
+
+// extractGraphFilterValue parses simple `eq '...'` clauses out of a Graph
+// $filter query parameter. Returns "" if the prefix isn't found.
+func extractGraphFilterValue(filter, prefix string) string {
 	idx := strings.Index(filter, prefix)
 	if idx < 0 {
 		return ""

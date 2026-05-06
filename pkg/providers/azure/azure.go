@@ -2,6 +2,7 @@ package azure
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
@@ -12,9 +13,13 @@ import (
 	azauth "github.com/404tk/cloudtoolkit/pkg/providers/azure/auth"
 	azcloud "github.com/404tk/cloudtoolkit/pkg/providers/azure/cloud"
 	"github.com/404tk/cloudtoolkit/pkg/providers/azure/compute"
+	"github.com/404tk/cloudtoolkit/pkg/providers/azure/graph"
+	"github.com/404tk/cloudtoolkit/pkg/providers/azure/insights"
 	"github.com/404tk/cloudtoolkit/pkg/providers/azure/rbac"
+	"github.com/404tk/cloudtoolkit/pkg/providers/azure/sqldb"
 	"github.com/404tk/cloudtoolkit/pkg/providers/azure/storage"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
+	"github.com/404tk/cloudtoolkit/pkg/runtime/vmexecspec"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/cache"
@@ -23,11 +28,13 @@ import (
 
 // Provider is a data provider for Azure ARM APIs.
 type Provider struct {
-	cred            azauth.Credential
-	endpoints       azcloud.Endpoints
-	tokenSource     *azauth.TokenSource
-	apiClient       *azapi.Client
-	subscriptionIDs []string
+	cred             azauth.Credential
+	endpoints        azcloud.Endpoints
+	tokenSource      *azauth.TokenSource
+	apiClient        *azapi.Client
+	graphTokenSource *azauth.TokenSource
+	graphHTTPClient  *http.Client
+	subscriptionIDs  []string
 }
 
 // ClientConfig allows callers (e.g. demo replay) to inject a custom HTTP
@@ -62,11 +69,15 @@ func NewWithConfig(options schema.Options, cfg ClientConfig) (*Provider, error) 
 	}
 	tokenSource := azauth.NewTokenSource(cred, httpClient)
 	client := azapi.NewClient(tokenSource, endpoints, azapi.WithHTTPClient(httpClient))
+	graphScope := cred.Cloud.MicrosoftGraphEndpoint() + ".default"
+	graphTokenSource := azauth.NewTokenSourceForScope(cred, httpClient, graphScope)
 	provider := &Provider{
-		cred:        cred,
-		endpoints:   endpoints,
-		tokenSource: tokenSource,
-		apiClient:   client,
+		cred:             cred,
+		endpoints:        endpoints,
+		tokenSource:      tokenSource,
+		apiClient:        client,
+		graphTokenSource: graphTokenSource,
+		graphHTTPClient:  httpClient,
 	}
 
 	subscriptionIDs := make([]string, 0, 1)
@@ -134,9 +145,68 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			storages, err := storageProvider.GetStorages(ctx)
 			schema.AppendAssets(list, storages)
 			list.AddError("bucket", err)
+		}).
+		Register("account", func(ctx context.Context, list *schema.Resources) {
+			graphClient := graph.NewClient(p.graphTokenSource, p.graphHTTPClient, p.cred.Cloud.MicrosoftGraphEndpoint())
+			users, err := graphClient.ListUsers(ctx)
+			accounts := make([]schema.User, 0, len(users))
+			for _, user := range users {
+				userName := firstNonEmpty(user.UserPrincipalName, user.DisplayName, user.ID)
+				if userName == "" {
+					continue
+				}
+				account := schema.User{
+					UserName:    userName,
+					UserId:      user.ID,
+					EnableLogin: user.AccountEnabled,
+					CreateTime:  user.CreatedDateTime,
+				}
+				if user.SignInActivity != nil {
+					account.LastLogin = user.SignInActivity.LastSignInDateTime
+				}
+				accounts = append(accounts, account)
+			}
+			schema.AppendAssets(list, accounts)
+			list.AddError("account", err)
 		})
 
 	return collector.Collect(ctx, env.From(ctx).Cloudlist)
+}
+
+// UserManagement implements schema.IAMManager for Azure via Microsoft Graph
+// `users` POST/DELETE. Action `add` provisions an Azure AD user with the
+// supplied initial password; `del` revokes it.
+func (p *Provider) UserManagement(action, username, password string) (schema.IAMResult, error) {
+	graphClient := graph.NewClient(p.graphTokenSource, p.graphHTTPClient, p.cred.Cloud.MicrosoftGraphEndpoint())
+	ctx := context.Background()
+	upn := strings.TrimSpace(username)
+	if !strings.Contains(upn, "@") {
+		return schema.IAMResult{}, fmt.Errorf("azure: username must be a full userPrincipalName (for example user@example.com)")
+	}
+	switch action {
+	case "add":
+		user, err := graphClient.CreateUser(ctx, upn, upn, password)
+		if err != nil {
+			return schema.IAMResult{}, err
+		}
+		return schema.IAMResult{
+			Action:   "add",
+			Username: user.UserPrincipalName,
+			Password: password,
+			LoginURL: "https://portal.azure.com",
+			Message:  "Azure AD user created",
+		}, nil
+	case "del":
+		if err := graphClient.DeleteUser(ctx, upn); err != nil {
+			return schema.IAMResult{}, err
+		}
+		return schema.IAMResult{
+			Action:   "del",
+			Username: upn,
+			Message:  upn + " user delete completed.",
+		}, nil
+	}
+	return schema.IAMResult{}, fmt.Errorf("invalid action: %s (expected: add, del)", action)
 }
 
 // RoleBinding implements schema.RoleBindingManager. It dispatches list / add /
@@ -245,6 +315,116 @@ func (p *Provider) BucketACL(ctx context.Context, action, container, level strin
 		return result, nil
 	}
 	return result, fmt.Errorf("azure: unsupported bucket-acl action %q", action)
+}
+
+// IAMCredential implements schema.IAMCredentialManager for Azure. The capability
+// maps to Microsoft Graph application password credential lifecycle: list /
+// addPassword / removePassword. `principal` is the Azure AD application ID
+// (objectId or appId); `credentialID` is the password keyId for delete.
+func (p *Provider) IAMCredential(ctx context.Context, action, principal, credentialID string) (schema.IAMCredentialResult, error) {
+	graphClient := graph.NewClient(p.graphTokenSource, p.graphHTTPClient, p.cred.Cloud.MicrosoftGraphEndpoint())
+	result := schema.IAMCredentialResult{
+		Action:       action,
+		Principal:    principal,
+		CredentialID: credentialID,
+	}
+	switch action {
+	case "list":
+		app, err := graphClient.ListPasswordCredentials(ctx, principal)
+		if err != nil {
+			return result, err
+		}
+		for _, pc := range app.PasswordCredentials {
+			result.Credentials = append(result.Credentials, schema.IAMCredential{
+				CredentialID: pc.KeyID,
+				ValidAfter:   pc.StartDateTime,
+				ValidBefore:  pc.EndDateTime,
+			})
+		}
+		result.Message = fmt.Sprintf("%d password credentials on application %s", len(result.Credentials), app.DisplayName)
+		return result, nil
+	case "create":
+		pc, err := graphClient.AddPassword(ctx, principal, "ctk validation secret")
+		if err != nil {
+			return result, err
+		}
+		result.CredentialID = pc.KeyID
+		result.CredentialData = pc.SecretText
+		result.Message = fmt.Sprintf("minted password %s on application %s", pc.KeyID, principal)
+		return result, nil
+	case "delete":
+		if err := graphClient.RemovePassword(ctx, principal, credentialID); err != nil {
+			return result, err
+		}
+		result.Message = fmt.Sprintf("revoked password %s on application %s", credentialID, principal)
+		return result, nil
+	}
+	return result, fmt.Errorf("azure: unsupported iam-credential action %q", action)
+}
+
+// EventDump implements schema.EventReader for Azure Activity Log. The `dump`
+// action lists recent management-plane events; `whitelist` is unsupported
+// because Activity Log is read-only.
+func (p *Provider) EventDump(ctx context.Context, action, args string) (schema.EventActionResult, error) {
+	driver := &insights.Driver{Client: p.apiClient, SubscriptionIDs: p.subscriptionIDs}
+	switch action {
+	case "dump":
+		events, err := driver.DumpEvents(ctx, args)
+		if err != nil {
+			return schema.EventActionResult{}, err
+		}
+		return schema.EventActionResult{
+			Action: "dump",
+			Scope:  args,
+			Events: events,
+		}, nil
+	case "whitelist":
+		return driver.HandleEvents(ctx, args)
+	default:
+		return schema.EventActionResult{}, fmt.Errorf("invalid action: %s (expected: dump, whitelist)", action)
+	}
+}
+
+// DBManagement implements schema.DBManager for Azure SQL by rotating the
+// server administratorLoginPassword. Azure SQL has no native "user" API at
+// ARM (T-SQL is required); rotating the admin password is the closest
+// CSPM-detectable management-plane signal. instanceID is parsed as
+// `<resourceGroup>/<serverName>`.
+func (p *Provider) DBManagement(ctx context.Context, action, instanceID string) (schema.DatabaseActionResult, error) {
+	driver := &sqldb.Driver{Client: p.apiClient, SubscriptionIDs: p.subscriptionIDs}
+	switch action {
+	case "useradd":
+		return driver.CreateAccount(ctx, instanceID)
+	case "userdel":
+		return driver.DeleteAccount(ctx, instanceID)
+	default:
+		return schema.DatabaseActionResult{}, fmt.Errorf("invalid action: %s (expected: useradd, userdel)", action)
+	}
+}
+
+// ExecuteCloudVMCommand routes through Microsoft.Compute virtualMachines/runCommand.
+// instanceID may be a full ARM VM ID, `<subscription>/<resourceGroup>/<vmName>`,
+// or the legacy `<resourceGroup>/<vmName>` shorthand. Headless `shell -t/-l`
+// paths pre-encode the script; the bare `cmd` (base64) path arrives via the
+// REPL shell loop.
+func (p *Provider) ExecuteCloudVMCommand(ctx context.Context, instanceID, cmd string) (schema.CommandResult, error) {
+	driver := &compute.Driver{Client: p.apiClient, SubscriptionIDs: p.subscriptionIDs}
+	if osType, command, ok := vmexecspec.Parse(cmd); ok {
+		out, err := driver.RunCommand(ctx, instanceID, osType, command)
+		if err != nil {
+			return schema.CommandResult{}, err
+		}
+		return schema.CommandResult{Output: out}, nil
+	}
+	command, err := base64.StdEncoding.DecodeString(cmd)
+	if err != nil {
+		return schema.CommandResult{}, err
+	}
+	out, err := driver.RunCommand(ctx, instanceID, "linux", strings.TrimSpace(string(command)))
+	if err != nil {
+		return schema.CommandResult{}, err
+	}
+	return schema.CommandResult{Output: out}, nil
 }
 
 // azureRoleNameFromDefinitionID extracts the role-definition GUID from a

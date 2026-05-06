@@ -17,17 +17,67 @@ import (
 )
 
 type transport struct {
-	mu       sync.Mutex
-	bindings []bindingFixture
-	policyEt int64
-	saKeys   map[string][]saKeyFixture
+	mu         sync.Mutex
+	bindings   []bindingFixture
+	policyEt   int64
+	saKeys     map[string][]saKeyFixture
+	sqlUsers   map[string][]string
+	gcsPolicy  map[string]api.GCSPolicy
 }
 
 func newTransport() *transport {
 	return &transport{
-		bindings: seedBindings(),
-		saKeys:   seedSAKeys(),
+		bindings:  seedBindings(),
+		saKeys:    seedSAKeys(),
+		sqlUsers:  make(map[string][]string),
+		gcsPolicy: make(map[string]api.GCSPolicy),
 	}
+}
+
+func (t *transport) snapshotGCSPolicy(bucket string) api.GCSPolicy {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if p, ok := t.gcsPolicy[bucket]; ok {
+		return p
+	}
+	return api.GCSPolicy{
+		Version: 1,
+		Etag:    "BwYAAAAAAA=",
+		Bindings: []api.GCSPolicyBind{
+			{Role: "roles/storage.legacyBucketOwner", Members: []string{"projectOwner:ctk-demo-project"}},
+		},
+	}
+}
+
+func (t *transport) setGCSPolicy(bucket string, policy api.GCSPolicy) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.gcsPolicy[bucket] = policy
+}
+
+func (t *transport) addSQLUser(instanceID, name string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.sqlUsers[instanceID] = append(t.sqlUsers[instanceID], name)
+}
+
+func (t *transport) removeSQLUser(instanceID, name string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	users := t.sqlUsers[instanceID]
+	for i, u := range users {
+		if u == name {
+			t.sqlUsers[instanceID] = append(users[:i], users[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
+func (t *transport) snapshotSQLUsers(instanceID string) []string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return append([]string(nil), t.sqlUsers[instanceID]...)
 }
 
 func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
@@ -63,6 +113,24 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 				"Request had invalid authentication credentials."), nil
 		}
 		return t.handleResourceManager(req, body)
+	case "logging.googleapis.com":
+		if !verifyBearer(req) {
+			return apiErrorResponse(req, http.StatusUnauthorized, "UNAUTHENTICATED",
+				"Request had invalid authentication credentials."), nil
+		}
+		return t.handleLogging(req, body)
+	case "sqladmin.googleapis.com":
+		if !verifyBearer(req) {
+			return apiErrorResponse(req, http.StatusUnauthorized, "UNAUTHENTICATED",
+				"Request had invalid authentication credentials."), nil
+		}
+		return t.handleSQLAdmin(req, body)
+	case "storage.googleapis.com":
+		if !verifyBearer(req) {
+			return apiErrorResponse(req, http.StatusUnauthorized, "UNAUTHENTICATED",
+				"Request had invalid authentication credentials."), nil
+		}
+		return t.handleStorage(req, body)
 	}
 	return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
 		fmt.Sprintf("unsupported replay host: %s", host)), nil
@@ -214,6 +282,7 @@ func (t *transport) handleIAM(req *http.Request, body []byte) (*http.Response, e
 	parts := strings.Split(path, "/")
 	// expected:
 	//   v1/projects/{p}/serviceAccounts                      (list)
+	//   v1/projects/{p}/serviceAccounts/{sa}                 (get / enable / disable)
 	//   v1/projects/{p}/serviceAccounts/{sa}/keys            (list / create)
 	//   v1/projects/{p}/serviceAccounts/{sa}/keys/{keyId}    (delete)
 	if len(parts) < 4 || parts[0] != "v1" || parts[1] != "projects" || parts[3] != "serviceAccounts" {
@@ -223,6 +292,10 @@ func (t *transport) handleIAM(req *http.Request, body []byte) (*http.Response, e
 	if parts[2] != demoProjectID {
 		return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
 			fmt.Sprintf("project %s not visible to current credentials", parts[2])), nil
+	}
+	if len(parts) == 5 && (strings.HasSuffix(parts[4], ":enable") || strings.HasSuffix(parts[4], ":disable")) {
+		// :enable / :disable verbs return an empty 200 body on success.
+		return demoreplay.JSONResponse(req, http.StatusOK, struct{}{}), nil
 	}
 	switch len(parts) {
 	case 4:
@@ -505,4 +578,175 @@ func (t *transport) handleDNS(req *http.Request) (*http.Response, error) {
 	}
 	return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
 		fmt.Sprintf("unsupported dns path: %s", path)), nil
+}
+
+func (t *transport) handleLogging(req *http.Request, _ []byte) (*http.Response, error) {
+	if req.Method != http.MethodPost || !strings.HasSuffix(req.URL.Path, "/v2/entries:list") {
+		return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
+			fmt.Sprintf("unsupported logging path: %s %s", req.Method, req.URL.Path)), nil
+	}
+	resp := api.ListLogEntriesResponse{Entries: demoCloudAuditLogEntries()}
+	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+}
+
+func (t *transport) handleSQLAdmin(req *http.Request, _ []byte) (*http.Response, error) {
+	path := strings.TrimSuffix(req.URL.Path, "/")
+	if !strings.Contains(path, "/users") {
+		return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
+			"unsupported sqladmin path: "+path), nil
+	}
+	parts := strings.Split(strings.TrimPrefix(path, "/sql/v1beta4/"), "/")
+	if len(parts) < 4 || parts[0] != "projects" || parts[2] != "instances" {
+		return apiErrorResponse(req, http.StatusBadRequest, "INVALID_ARGUMENT",
+			"malformed sqladmin path"), nil
+	}
+	instanceID := parts[3]
+	switch req.Method {
+	case http.MethodPost:
+		t.addSQLUser(instanceID, "ctkuser")
+		return demoreplay.JSONResponse(req, http.StatusOK, api.SQLOperation{Name: "operation-1", Status: "DONE", OperationType: "CREATE_USER"}), nil
+	case http.MethodDelete:
+		name := strings.TrimSpace(req.URL.Query().Get("name"))
+		if name == "" {
+			return apiErrorResponse(req, http.StatusBadRequest, "INVALID_ARGUMENT", "name parameter required"), nil
+		}
+		if !t.removeSQLUser(instanceID, name) {
+			return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
+				fmt.Sprintf("user %s not found", name)), nil
+		}
+		return demoreplay.JSONResponse(req, http.StatusOK, api.SQLOperation{Name: "operation-2", Status: "DONE", OperationType: "DELETE_USER"}), nil
+	case http.MethodGet:
+		users := t.snapshotSQLUsers(instanceID)
+		resp := api.SQLUsersListResponse{Kind: "sql#usersList"}
+		for _, u := range users {
+			resp.Items = append(resp.Items, api.SQLUser{Name: u, Instance: instanceID})
+		}
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+	}
+	return apiErrorResponse(req, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED",
+		"unsupported sqladmin method"), nil
+}
+
+func demoCloudAuditLogEntries() []api.LogEntry {
+	return []api.LogEntry{
+		buildAuditEntry(
+			"audit-evt-0001",
+			"google.iam.admin.v1.CreateServiceAccountKey",
+			"projects/ctk-demo-project/serviceAccounts/ctk-demo@ctk-demo-project.iam.gserviceaccount.com",
+			"2026-04-22T09:11:00.000000Z",
+			"ctk-demo@ctk-demo-project.iam.gserviceaccount.com",
+			"203.0.113.91",
+			0,
+		),
+		buildAuditEntry(
+			"audit-evt-0002",
+			"storage.buckets.update",
+			"projects/_/buckets/ctk-demo-public",
+			"2026-04-22T09:14:30.000000Z",
+			"ctk-demo@ctk-demo-project.iam.gserviceaccount.com",
+			"203.0.113.91",
+			0,
+		),
+		buildAuditEntry(
+			"audit-evt-0003",
+			"google.iam.admin.v1.DeleteServiceAccountKey",
+			"projects/ctk-demo-project/serviceAccounts/ctk-demo@ctk-demo-project.iam.gserviceaccount.com/keys/zzz",
+			"2026-04-22T09:18:42.000000Z",
+			"ctk-demo@ctk-demo-project.iam.gserviceaccount.com",
+			"203.0.113.91",
+			7,
+		),
+	}
+}
+
+func buildAuditEntry(insertID, methodName, resourceName, ts, principal, ip string, statusCode int) api.LogEntry {
+	return api.LogEntry{
+		InsertID:  insertID,
+		LogName:   "projects/ctk-demo-project/logs/cloudaudit.googleapis.com%2Factivity",
+		Timestamp: ts,
+		Severity:  "NOTICE",
+		Resource: api.LogEntryResource{
+			Type:   "service_account",
+			Labels: map[string]string{"project_id": "ctk-demo-project"},
+		},
+		ProtoPayload: api.LogProtoPayload{
+			Type:         "type.googleapis.com/google.cloud.audit.AuditLog",
+			ServiceName:  "iam.googleapis.com",
+			MethodName:   methodName,
+			ResourceName: resourceName,
+			AuthInfo:     api.LogProtoAuthInfo{PrincipalEmail: principal},
+			RequestMeta:  api.LogProtoRequestMeta{CallerIP: ip, CallerSuppliedUserAgent: "ctk/validation"},
+			Status:       api.LogProtoStatus{Code: statusCode},
+		},
+	}
+}
+
+func (t *transport) handleStorage(req *http.Request, _ []byte) (*http.Response, error) {
+	path := strings.TrimPrefix(strings.Trim(req.URL.Path, "/"), "storage/v1/")
+	parts := strings.Split(path, "/")
+	switch {
+	case len(parts) == 1 && parts[0] == "b" && req.Method == http.MethodGet:
+		resp := api.GCSBucketsListResponse{Items: demoGCSBuckets()}
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+	case len(parts) == 3 && parts[0] == "b" && parts[2] == "o" && req.Method == http.MethodGet:
+		resp := api.GCSObjectsListResponse{Items: demoGCSObjects(parts[1])}
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+	case len(parts) == 3 && parts[0] == "b" && parts[2] == "iam" && req.Method == http.MethodGet:
+		policy := t.snapshotGCSPolicy(parts[1])
+		return demoreplay.JSONResponse(req, http.StatusOK, policy), nil
+	case len(parts) == 3 && parts[0] == "b" && parts[2] == "iam" && req.Method == http.MethodPut:
+		body, _ := demoreplay.ReadRequestBody(req)
+		var policy api.GCSPolicy
+		_ = json.Unmarshal(body, &policy)
+		t.setGCSPolicy(parts[1], policy)
+		return demoreplay.JSONResponse(req, http.StatusOK, policy), nil
+	}
+	return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
+		fmt.Sprintf("unsupported storage path: %s %s", req.Method, req.URL.Path)), nil
+}
+
+func demoGCSBuckets() []api.GCSBucket {
+	return []api.GCSBucket{
+		{
+			Kind:         "storage#bucket",
+			ID:           "ctk-demo-public",
+			Name:         "ctk-demo-public",
+			StorageClass: "STANDARD",
+			Location:     "US",
+			TimeCreated:  "2026-04-01T08:00:00Z",
+		},
+		{
+			Kind:         "storage#bucket",
+			ID:           "ctk-demo-archive",
+			Name:         "ctk-demo-archive",
+			StorageClass: "COLDLINE",
+			Location:     "US-CENTRAL1",
+			TimeCreated:  "2026-04-02T08:00:00Z",
+		},
+	}
+}
+
+func demoGCSObjects(bucket string) []api.GCSObject {
+	return []api.GCSObject{
+		{
+			Kind:         "storage#object",
+			ID:           bucket + "/audit/2026-04-22.log",
+			Name:         "audit/2026-04-22.log",
+			Bucket:       bucket,
+			StorageClass: "STANDARD",
+			Size:         "12480",
+			Updated:      "2026-04-22T23:59:00.000Z",
+			TimeCreated:  "2026-04-22T23:59:00.000Z",
+		},
+		{
+			Kind:         "storage#object",
+			ID:           bucket + "/exports/inventory.csv",
+			Name:         "exports/inventory.csv",
+			Bucket:       bucket,
+			StorageClass: "STANDARD",
+			Size:         "1069548",
+			Updated:      "2026-04-15T18:30:00.000Z",
+			TimeCreated:  "2026-04-15T18:30:00.000Z",
+		},
+	}
 }

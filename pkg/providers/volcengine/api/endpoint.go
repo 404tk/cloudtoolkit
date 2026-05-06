@@ -11,6 +11,7 @@ var globalServices = map[string]struct{}{
 	"billing": {},
 	"dns":     {},
 	"iam":     {},
+	"audit":   {},
 }
 
 var regionalServiceHostAliases = map[string]string{

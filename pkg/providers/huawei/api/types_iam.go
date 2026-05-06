@@ -15,6 +15,32 @@ type ShowPermanentAccessKeyResponse struct {
 	ErrorMsg string `json:"error_msg"`
 }
 
+type IAMPermanentCredential struct {
+	Access      string `json:"access"`
+	Secret      string `json:"secret,omitempty"`
+	UserID      string `json:"user_id"`
+	CreateTime  string `json:"create_time"`
+	Status      string `json:"status"`
+	Description string `json:"description,omitempty"`
+}
+
+type ListPermanentAccessKeysResponse struct {
+	Credentials []IAMPermanentCredential `json:"credentials"`
+}
+
+type CreatePermanentAccessKeyRequest struct {
+	Credential CreatePermanentAccessKeyOption `json:"credential"`
+}
+
+type CreatePermanentAccessKeyOption struct {
+	UserID      string `json:"user_id"`
+	Description string `json:"description,omitempty"`
+}
+
+type CreatePermanentAccessKeyResponse struct {
+	Credential IAMPermanentCredential `json:"credential"`
+}
+
 type ShowUserResponse struct {
 	User struct {
 		ID       string `json:"id"`

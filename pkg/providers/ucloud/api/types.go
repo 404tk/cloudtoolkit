@@ -236,6 +236,52 @@ type IAMRemoveUserFromProjectResponse struct {
 	BaseResponse
 }
 
+// IAMUserApiKey models the persistent fields of a UCloud IAM user API key.
+// Field names follow the casing of UCloud's other IAM responses; verify
+// against the upstream SDK before relying on this in production.
+type IAMUserApiKey struct {
+	AccessKeyID string `json:"AccessKeyID"`
+	Status      string `json:"Status,omitempty"`
+	CreatedAt   string `json:"CreatedAt,omitempty"`
+}
+
+type IAMListUserApiKeysResponse struct {
+	BaseResponse
+	TotalCount int             `json:"TotalCount"`
+	ApiKeys    []IAMUserApiKey `json:"ApiKeys"`
+}
+
+type IAMCreateUserApiKeyResponse struct {
+	BaseResponse
+	AccessKeyID     string `json:"AccessKeyID"`
+	AccessKeySecret string `json:"AccessKeySecret"`
+	Status          string `json:"Status,omitempty"`
+	CreatedAt       string `json:"CreatedAt,omitempty"`
+}
+
+type IAMDeleteUserApiKeyResponse struct {
+	BaseResponse
+}
+
+// UDBUser models a user account on a UCloud UDB instance.
+type UDBUser struct {
+	UserName string `json:"UserName"`
+	IsLock   string `json:"IsLock,omitempty"`
+}
+
+type CreateUDBUserResponse struct {
+	BaseResponse
+}
+
+type DeleteUDBUserResponse struct {
+	BaseResponse
+}
+
+type DescribeUDBUserResponse struct {
+	BaseResponse
+	DataSet []UDBUser `json:"DataSet"`
+}
+
 type DescribeMemberListResponse struct {
 	BaseResponse
 	MemberSet  []MemberInfo `json:"MemberSet"`

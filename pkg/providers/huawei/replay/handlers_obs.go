@@ -200,7 +200,7 @@ func obsErrorResponse(req *http.Request, statusCode int, code, message string) *
 	return resp
 }
 
-func verifyOBSAuth(req *http.Request, body []byte) demoreplay.AuthFailureKind {
+func verifyOBSAuth(req *http.Request, _ []byte) demoreplay.AuthFailureKind {
 	header := strings.TrimSpace(req.Header.Get("Authorization"))
 	if header == "" {
 		return demoreplay.AuthInvalidSignature
@@ -234,7 +234,6 @@ func verifyOBSAuth(req *http.Request, body []byte) demoreplay.AuthFailureKind {
 	if demoreplay.SubtleEqual(strings.TrimSpace(expected), header) {
 		return demoreplay.AuthOK
 	}
-	_ = body
 	return demoreplay.AuthInvalidSignature
 }
 

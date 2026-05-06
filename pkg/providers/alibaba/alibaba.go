@@ -272,6 +272,44 @@ func (p *Provider) BucketACL(ctx context.Context, action, container, level strin
 	return result, fmt.Errorf("alibaba: unsupported bucket-acl action %q", action)
 }
 
+// IAMCredential implements schema.IAMCredentialManager for alibaba RAM
+// AccessKey lifecycle. `principal` is the RAM user name (required for create
+// and delete; optional for list — empty falls back to the calling principal).
+func (p *Provider) IAMCredential(ctx context.Context, action, principal, credentialID string) (schema.IAMCredentialResult, error) {
+	driver := p.newIAMDriver(p.region)
+	result := schema.IAMCredentialResult{
+		Action:       action,
+		Principal:    principal,
+		CredentialID: credentialID,
+	}
+	switch action {
+	case "list":
+		creds, err := driver.ListAccessKeys(ctx, principal)
+		if err != nil {
+			return result, err
+		}
+		result.Credentials = creds
+		result.Message = fmt.Sprintf("%d access keys on %s", len(creds), principal)
+		return result, nil
+	case "create":
+		cred, secret, err := driver.CreateAccessKey(ctx, principal)
+		if err != nil {
+			return result, err
+		}
+		result.CredentialID = cred.CredentialID
+		result.CredentialData = secret
+		result.Message = fmt.Sprintf("minted access key %s for %s", cred.CredentialID, principal)
+		return result, nil
+	case "delete":
+		if err := driver.DeleteAccessKey(ctx, principal, credentialID); err != nil {
+			return result, err
+		}
+		result.Message = fmt.Sprintf("revoked access key %s on %s", credentialID, principal)
+		return result, nil
+	}
+	return result, fmt.Errorf("alibaba: unsupported iam-credential action %q", action)
+}
+
 func (p *Provider) EventDump(ctx context.Context, action, args string) (schema.EventActionResult, error) {
 	d := p.newSASDriver()
 	switch action {

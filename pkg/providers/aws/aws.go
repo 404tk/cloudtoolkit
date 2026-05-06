@@ -11,6 +11,7 @@ import (
 	_cloudtrail "github.com/404tk/cloudtoolkit/pkg/providers/aws/cloudtrail"
 	_ec2 "github.com/404tk/cloudtoolkit/pkg/providers/aws/ec2"
 	_iam "github.com/404tk/cloudtoolkit/pkg/providers/aws/iam"
+	_rds "github.com/404tk/cloudtoolkit/pkg/providers/aws/rds"
 	_s3 "github.com/404tk/cloudtoolkit/pkg/providers/aws/s3"
 	_ssm "github.com/404tk/cloudtoolkit/pkg/providers/aws/ssm"
 	"github.com/404tk/cloudtoolkit/pkg/providers/internal/credverify"
@@ -255,6 +256,49 @@ func (p *Provider) BucketACL(ctx context.Context, action, container, level strin
 	return result, fmt.Errorf("aws: unsupported bucket-acl action %q", action)
 }
 
+// IAMCredential implements schema.IAMCredentialManager for AWS IAM access
+// keys. `principal` is the IAM user name (required for create / delete); `list`
+// without a principal falls back to the calling identity. `credentialID` is
+// the AccessKeyId for delete.
+func (p *Provider) IAMCredential(ctx context.Context, action, principal, credentialID string) (schema.IAMCredentialResult, error) {
+	driver := &_iam.Driver{
+		Client:        p.apiClient,
+		Region:        p.region,
+		DefaultRegion: p.defaultRegion,
+	}
+	result := schema.IAMCredentialResult{
+		Action:       action,
+		Principal:    principal,
+		CredentialID: credentialID,
+	}
+	switch action {
+	case "list":
+		creds, err := driver.ListAccessKeys(ctx, principal)
+		if err != nil {
+			return result, err
+		}
+		result.Credentials = creds
+		result.Message = fmt.Sprintf("%d access keys on %s", len(creds), principal)
+		return result, nil
+	case "create":
+		cred, secret, err := driver.CreateAccessKey(ctx, principal)
+		if err != nil {
+			return result, err
+		}
+		result.CredentialID = cred.CredentialID
+		result.CredentialData = secret
+		result.Message = fmt.Sprintf("minted access key %s for %s", cred.CredentialID, principal)
+		return result, nil
+	case "delete":
+		if err := driver.DeleteAccessKey(ctx, principal, credentialID); err != nil {
+			return result, err
+		}
+		result.Message = fmt.Sprintf("revoked access key %s on %s", credentialID, principal)
+		return result, nil
+	}
+	return result, fmt.Errorf("aws: unsupported iam-credential action %q", action)
+}
+
 // EventDump implements schema.EventReader for AWS CloudTrail. The `dump`
 // action lists recent management-event records via `LookupEvents`. CloudTrail
 // is read-only — `whitelist` returns a clear unsupported error.
@@ -279,6 +323,22 @@ func (p *Provider) EventDump(ctx context.Context, action, args string) (schema.E
 		return driver.HandleEvents(ctx, args)
 	default:
 		return schema.EventActionResult{}, fmt.Errorf("invalid action: %s (expected: dump, whitelist)", action)
+	}
+}
+
+// DBManagement implements schema.DBManager for AWS RDS by rotating the
+// instance master password. AWS RDS doesn't expose per-user create/delete
+// via API; rotating MasterUserPassword is the closest CSPM-detectable
+// management-plane signal (captured via CloudTrail).
+func (p *Provider) DBManagement(ctx context.Context, action, instanceID string) (schema.DatabaseActionResult, error) {
+	driver := &_rds.Driver{Client: p.apiClient, Region: p.region, DefaultRegion: p.defaultRegion}
+	switch action {
+	case "useradd":
+		return driver.CreateAccount(ctx, instanceID)
+	case "userdel":
+		return driver.DeleteAccount(ctx, instanceID)
+	default:
+		return schema.DatabaseActionResult{}, fmt.Errorf("invalid action: %s (expected: useradd, userdel)", action)
 	}
 }
 

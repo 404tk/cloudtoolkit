@@ -34,6 +34,9 @@ type transport struct {
 	invocations  map[string]invocationResult
 	userPolicies map[string][]api.IAMAttachedPolicy
 	bucketACL    map[string]string
+	accessKeys   map[string][]volcengineAccessKeyFixture
+	accessKeySeq int
+	rdsAccounts  map[string][]string
 }
 
 func newTransport() *transport {
@@ -42,7 +45,34 @@ func newTransport() *transport {
 		invocations:  make(map[string]invocationResult),
 		userPolicies: seedVolcengineUserPolicies(),
 		bucketACL:    seedVolcengineBucketACL(),
+		accessKeys:   seedVolcengineAccessKeys(),
+		rdsAccounts:  make(map[string][]string),
 	}
+}
+
+func (t *transport) snapshotVolcRDSAccounts(instanceID string) []string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return append([]string(nil), t.rdsAccounts[instanceID]...)
+}
+
+func (t *transport) addVolcRDSAccount(instanceID, name string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.rdsAccounts[instanceID] = append(t.rdsAccounts[instanceID], name)
+}
+
+func (t *transport) removeVolcRDSAccount(instanceID, name string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	accounts := t.rdsAccounts[instanceID]
+	for i, n := range accounts {
+		if n == name {
+			t.rdsAccounts[instanceID] = append(accounts[:i], accounts[i+1:]...)
+			return true
+		}
+	}
+	return false
 }
 
 // seedVolcengineUserPolicies gives each demo IAM user the AdministratorAccess
@@ -96,6 +126,8 @@ func (t *transport) handleOpenAPI(req *http.Request, body []byte) (*http.Respons
 		return t.handleBilling(req, action)
 	case "iam":
 		return t.handleIAM(req, action, body)
+	case "audit":
+		return t.handleAudit(req, action)
 	case "dns":
 		return t.handleDNS(req, action, body)
 	case "ecs":
@@ -118,6 +150,16 @@ func (t *transport) handleBilling(req *http.Request, action string) (*http.Respo
 	resp := api.QueryBalanceAcctResponse{}
 	resp.ResponseMetadata.RequestID = "req-billing-balance"
 	resp.Result.AvailableBalance = "1024.88"
+	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+}
+
+func (t *transport) handleAudit(req *http.Request, action string) (*http.Response, error) {
+	if action != "DescribeEvents" {
+		return openAPIErrorResponse(req, http.StatusNotFound, "InvalidAction", fmt.Sprintf("unsupported audit action: %s", action)), nil
+	}
+	resp := api.DescribeEventsResponse{}
+	resp.ResponseMetadata.RequestID = "req-audit-describe-events"
+	resp.Result.Events = append(resp.Result.Events, demoVolcengineAuditEvents()...)
 	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 }
 
@@ -269,6 +311,57 @@ func (t *transport) handleIAM(req *http.Request, action string, body []byte) (*h
 	case "DeleteUser":
 		resp := api.DeleteUserResponse{}
 		resp.ResponseMetadata.RequestID = "req-iam-delete-user"
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+	case "ListAccessKeys":
+		userName := strings.TrimSpace(query.Get("UserName"))
+		if userName == "" {
+			userName = volcengineDemoCallerUserName()
+		}
+		if !volcengineUserExists(userName) {
+			return openAPIErrorResponse(req, http.StatusNotFound, "ResourceNotFound.User", fmt.Sprintf("user %s not found", userName)), nil
+		}
+		t.mu.Lock()
+		keys := append([]volcengineAccessKeyFixture(nil), t.accessKeys[userName]...)
+		t.mu.Unlock()
+		resp := api.ListAccessKeysResponse{}
+		for _, k := range keys {
+			resp.Result.AccessKeyMetadata = append(resp.Result.AccessKeyMetadata, api.IAMAccessKey{
+				AccessKeyID: k.AccessKeyID,
+				Status:      k.Status,
+				CreateDate:  k.CreateDate,
+			})
+		}
+		resp.ResponseMetadata.RequestID = "req-iam-list-access-keys"
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+	case "CreateAccessKey":
+		userName := strings.TrimSpace(query.Get("UserName"))
+		if userName == "" {
+			userName = volcengineDemoCallerUserName()
+		}
+		if !volcengineUserExists(userName) {
+			return openAPIErrorResponse(req, http.StatusNotFound, "ResourceNotFound.User", fmt.Sprintf("user %s not found", userName)), nil
+		}
+		key := t.mintVolcengineAccessKey(userName)
+		resp := api.CreateAccessKeyResponse{}
+		resp.Result.AccessKey = api.IAMAccessKeySecret{
+			AccessKeyID:     key.AccessKeyID,
+			SecretAccessKey: key.SecretAccessKey,
+			Status:          key.Status,
+			CreateDate:      key.CreateDate,
+		}
+		resp.ResponseMetadata.RequestID = "req-iam-create-access-key"
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+	case "DeleteAccessKey":
+		userName := strings.TrimSpace(query.Get("UserName"))
+		accessKeyID := strings.TrimSpace(query.Get("AccessKeyId"))
+		if userName == "" || accessKeyID == "" {
+			return openAPIErrorResponse(req, http.StatusBadRequest, "InvalidParameter", "UserName and AccessKeyId required"), nil
+		}
+		if !t.deleteVolcengineAccessKey(userName, accessKeyID) {
+			return openAPIErrorResponse(req, http.StatusNotFound, "ResourceNotFound.AccessKey", fmt.Sprintf("access key %s not found for %s", accessKeyID, userName)), nil
+		}
+		resp := api.DeleteAccessKeyResponse{}
+		resp.ResponseMetadata.RequestID = "req-iam-delete-access-key"
 		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	default:
 		return openAPIErrorResponse(req, http.StatusNotFound, "InvalidAction", fmt.Sprintf("unsupported iam action: %s", action)), nil
@@ -518,6 +611,43 @@ func (t *transport) handleRDS(req *http.Request, action string, body []byte, ser
 			resp.Result.Total = int32(len(resp.Result.InstancesInfo))
 			return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 		}
+	case "DescribeDBAccounts":
+		var payload api.CreateRDSAccountInput
+		_ = json.Unmarshal(body, &payload)
+		accounts := t.snapshotVolcRDSAccounts(payload.InstanceID)
+		resp := api.DescribeRDSAccountsResponse{}
+		resp.ResponseMetadata.RequestID = "req-rds-describe-accounts"
+		for _, acc := range accounts {
+			resp.Result.Accounts = append(resp.Result.Accounts, api.RDSDBAccount{
+				AccountName:   acc,
+				AccountStatus: "Available",
+				AccountType:   "Normal",
+			})
+		}
+		resp.Result.Total = int32(len(resp.Result.Accounts))
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+	case "CreateDBAccount":
+		var payload api.CreateRDSAccountInput
+		_ = json.Unmarshal(body, &payload)
+		if payload.InstanceID == "" || payload.AccountName == "" {
+			return openAPIErrorResponse(req, http.StatusBadRequest, "InvalidParameter", "InstanceId and AccountName required"), nil
+		}
+		t.addVolcRDSAccount(payload.InstanceID, payload.AccountName)
+		resp := api.CreateRDSAccountResponse{}
+		resp.ResponseMetadata.RequestID = "req-rds-create-account"
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+	case "DeleteDBAccount":
+		var payload api.DeleteRDSAccountInput
+		_ = json.Unmarshal(body, &payload)
+		if payload.InstanceID == "" || payload.AccountName == "" {
+			return openAPIErrorResponse(req, http.StatusBadRequest, "InvalidParameter", "InstanceId and AccountName required"), nil
+		}
+		if !t.removeVolcRDSAccount(payload.InstanceID, payload.AccountName) {
+			return openAPIErrorResponse(req, http.StatusNotFound, "ResourceNotFound.Account", "account not found"), nil
+		}
+		resp := api.DeleteRDSAccountResponse{}
+		resp.ResponseMetadata.RequestID = "req-rds-delete-account"
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	}
 	return openAPIErrorResponse(req, http.StatusNotFound, "InvalidAction", fmt.Sprintf("unsupported rds action: %s", action)), nil
 }
@@ -1048,4 +1178,33 @@ func (t *transport) nextID(prefix string) string {
 func (t *transport) nextIDLocked(prefix string) string {
 	t.sequence++
 	return fmt.Sprintf("%s-%06d", prefix, t.sequence)
+}
+
+func (t *transport) mintVolcengineAccessKey(userName string) volcengineAccessKeyFixture {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.accessKeySeq++
+	id := fmt.Sprintf("AKLTVOLCMINT%06d", t.accessKeySeq)
+	secret := fmt.Sprintf("VOLCMINTsecret%06d", t.accessKeySeq)
+	key := volcengineAccessKeyFixture{
+		AccessKeyID:     id,
+		SecretAccessKey: secret,
+		Status:          "Active",
+		CreateDate:      time.Now().UTC().Format("20060102T150405Z"),
+	}
+	t.accessKeys[userName] = append(t.accessKeys[userName], key)
+	return key
+}
+
+func (t *transport) deleteVolcengineAccessKey(userName, accessKeyID string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	keys := t.accessKeys[userName]
+	for i, k := range keys {
+		if k.AccessKeyID == accessKeyID {
+			t.accessKeys[userName] = append(keys[:i], keys[i+1:]...)
+			return true
+		}
+	}
+	return false
 }

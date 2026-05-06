@@ -393,6 +393,84 @@ func (c *Client) DeleteRole(ctx context.Context, roleName string) (DeleteRoleRes
 	return resp, err
 }
 
+type CAMAccessKey struct {
+	AccessKeyID *string `json:"AccessKeyId"`
+	Status      *string `json:"Status"`
+	CreateTime  *string `json:"CreateTime"`
+}
+
+type CAMAccessKeySecret struct {
+	AccessKeyID     *string `json:"AccessKeyId"`
+	SecretAccessKey *string `json:"SecretAccessKey"`
+	Status          *string `json:"Status"`
+	CreateTime      *string `json:"CreateTime"`
+}
+
+type ListAccessKeysRequest struct {
+	TargetUin *uint64 `json:"TargetUin,omitempty"`
+}
+
+type ListAccessKeysResponse struct {
+	Response struct {
+		AccessKeys []CAMAccessKey `json:"AccessKeys"`
+		RequestID  string         `json:"RequestId"`
+	} `json:"Response"`
+}
+
+type CreateAccessKeyRequest struct {
+	TargetUin *uint64 `json:"TargetUin,omitempty"`
+}
+
+type CreateAccessKeyResponse struct {
+	Response struct {
+		AccessKey CAMAccessKeySecret `json:"AccessKey"`
+		RequestID string             `json:"RequestId"`
+	} `json:"Response"`
+}
+
+type DeleteAccessKeyRequest struct {
+	AccessKeyID *string `json:"AccessKeyId,omitempty"`
+	TargetUin   *uint64 `json:"TargetUin,omitempty"`
+}
+
+type DeleteAccessKeyResponse struct {
+	Response struct {
+		RequestID string `json:"RequestId"`
+	} `json:"Response"`
+}
+
+func (c *Client) ListAccessKeys(ctx context.Context, targetUin uint64) (ListAccessKeysResponse, error) {
+	req := ListAccessKeysRequest{}
+	if targetUin > 0 {
+		req.TargetUin = uint64Ptr(targetUin)
+	}
+	var resp ListAccessKeysResponse
+	err := c.DoJSON(ctx, "cam", camVersion, "ListAccessKeys", "", req, &resp)
+	return resp, err
+}
+
+func (c *Client) CreateAccessKey(ctx context.Context, targetUin uint64) (CreateAccessKeyResponse, error) {
+	req := CreateAccessKeyRequest{}
+	if targetUin > 0 {
+		req.TargetUin = uint64Ptr(targetUin)
+	}
+	var resp CreateAccessKeyResponse
+	err := c.DoJSON(ctx, "cam", camVersion, "CreateAccessKey", "", req, &resp)
+	return resp, err
+}
+
+func (c *Client) DeleteAccessKey(ctx context.Context, targetUin uint64, accessKeyID string) (DeleteAccessKeyResponse, error) {
+	req := DeleteAccessKeyRequest{
+		AccessKeyID: stringPtr(accessKeyID),
+	}
+	if targetUin > 0 {
+		req.TargetUin = uint64Ptr(targetUin)
+	}
+	var resp DeleteAccessKeyResponse
+	err := c.DoJSON(ctx, "cam", camVersion, "DeleteAccessKey", "", req, &resp)
+	return resp, err
+}
+
 func stringPtr(v string) *string {
 	return &v
 }

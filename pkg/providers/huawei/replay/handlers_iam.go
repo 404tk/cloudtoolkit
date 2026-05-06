@@ -16,6 +16,12 @@ func (t *transport) handleIAM(req *http.Request, _ string, body []byte) (*http.R
 	switch {
 	case method == http.MethodGet && strings.HasPrefix(path, "/v3.0/OS-CREDENTIAL/credentials/"):
 		return t.handleShowPermanentAccessKey(req, path)
+	case method == http.MethodGet && path == "/v3.0/OS-CREDENTIAL/credentials":
+		return t.handleListPermanentAccessKeys(req)
+	case method == http.MethodPost && path == "/v3.0/OS-CREDENTIAL/credentials":
+		return t.handleCreatePermanentAccessKey(req, body)
+	case method == http.MethodDelete && strings.HasPrefix(path, "/v3.0/OS-CREDENTIAL/credentials/"):
+		return t.handleDeletePermanentAccessKey(req, path)
 	case method == http.MethodGet && strings.HasPrefix(path, "/v3/users/") && strings.HasSuffix(path, "/groups"):
 		return t.handleListGroupsForUser(req, path)
 	case method == http.MethodGet && strings.HasPrefix(path, "/v3/users/") && !strings.Contains(strings.TrimPrefix(path, "/v3/users/"), "/"):
@@ -41,6 +47,64 @@ func (t *transport) handleIAM(req *http.Request, _ string, body []byte) (*http.R
 	}
 	return apiErrorResponse(req, http.StatusNotFound, "IAM.0001",
 		fmt.Sprintf("unsupported iam path: %s %s", method, path)), nil
+}
+
+func (t *transport) handleListPermanentAccessKeys(req *http.Request) (*http.Response, error) {
+	userID := strings.TrimSpace(req.URL.Query().Get("user_id"))
+	if userID == "" {
+		return apiErrorResponse(req, http.StatusBadRequest, "IAM.0002", "user_id is required"), nil
+	}
+	if _, ok := t.iam.findByID(userID); !ok && userID != demoUserID {
+		return apiErrorResponse(req, http.StatusNotFound, "IAM.0009",
+			fmt.Sprintf("user %s not found", userID)), nil
+	}
+	keys := t.iam.snapshotAccessKeys(userID)
+	resp := api.ListPermanentAccessKeysResponse{}
+	for _, k := range keys {
+		resp.Credentials = append(resp.Credentials, api.IAMPermanentCredential{
+			Access:     k.Access,
+			UserID:     k.UserID,
+			CreateTime: k.CreateTime,
+			Status:     k.Status,
+		})
+	}
+	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+}
+
+func (t *transport) handleCreatePermanentAccessKey(req *http.Request, body []byte) (*http.Response, error) {
+	var payload api.CreatePermanentAccessKeyRequest
+	_ = json.Unmarshal(body, &payload)
+	userID := strings.TrimSpace(payload.Credential.UserID)
+	if userID == "" {
+		return apiErrorResponse(req, http.StatusBadRequest, "IAM.0002", "user_id is required"), nil
+	}
+	if _, ok := t.iam.findByID(userID); !ok && userID != demoUserID {
+		return apiErrorResponse(req, http.StatusNotFound, "IAM.0009",
+			fmt.Sprintf("user %s not found", userID)), nil
+	}
+	key := t.iam.mintAccessKey(userID)
+	resp := api.CreatePermanentAccessKeyResponse{}
+	resp.Credential = api.IAMPermanentCredential{
+		Access:     key.Access,
+		Secret:     key.Secret,
+		UserID:     key.UserID,
+		CreateTime: key.CreateTime,
+		Status:     key.Status,
+	}
+	return demoreplay.JSONResponse(req, http.StatusCreated, resp), nil
+}
+
+func (t *transport) handleDeletePermanentAccessKey(req *http.Request, path string) (*http.Response, error) {
+	ak := strings.TrimSpace(strings.TrimPrefix(path, "/v3.0/OS-CREDENTIAL/credentials/"))
+	if ak == demoCredentials.AccessKey {
+		return apiErrorResponse(req, http.StatusForbidden, "IAM.0011",
+			"cannot revoke the active demo session credential"), nil
+	}
+	if !t.iam.deleteAccessKey(ak) {
+		return apiErrorResponse(req, http.StatusNotFound, "IAM.0007",
+			fmt.Sprintf("access key %s not found", ak)), nil
+	}
+	return demoreplay.JSONResponse(req, http.StatusNoContent, struct{}{}), nil
 }
 
 func (t *transport) handleShowPermanentAccessKey(req *http.Request, path string) (*http.Response, error) {

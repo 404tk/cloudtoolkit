@@ -31,9 +31,7 @@ func TestDumpEventsMapsResponse(t *testing.T) {
 		if got := r.Header.Get("X-TC-Action"); got != "LookUpEvents" {
 			t.Fatalf("unexpected action: %s", got)
 		}
-		listOver := true
 		_, _ = w.Write([]byte(`{"Response":{"ListOver":true,"Events":[{"EventId":"e1","EventName":"CreateUser","EventNameCn":"创建子用户","EventTime":"2026-04-22 09:10:11","EventRegion":"ap-guangzhou","Username":"alice","SourceIPAddress":"203.0.113.10","ResourceName":"ctk-demo-bot","Status":0,"SecretId":"AKID","ApiVersion":"2019-01-16"}],"RequestId":"r1"}}`))
-		_ = listOver
 	}))
 	defer server.Close()
 

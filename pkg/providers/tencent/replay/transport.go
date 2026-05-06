@@ -36,6 +36,9 @@ type transport struct {
 	bucketACL    map[string]string
 	invocations  map[string]invocationResult
 	tasks        map[string]invocationResult
+	accessKeys   map[uint64][]camAccessKeyFixture
+	accessKeySeq int
+	cdbAccounts  map[string][]cdbAccountFixture
 }
 
 func newTransport() *transport {
@@ -45,7 +48,39 @@ func newTransport() *transport {
 		bucketACL:    seedTencentBucketACL(),
 		invocations:  make(map[string]invocationResult),
 		tasks:        make(map[string]invocationResult),
+		accessKeys:   seedTencentAccessKeys(),
+		cdbAccounts:  make(map[string][]cdbAccountFixture),
 	}
+}
+
+type cdbAccountFixture struct {
+	User string
+	Host string
+}
+
+func (t *transport) snapshotCDBAccounts(instanceID string) []cdbAccountFixture {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return append([]cdbAccountFixture(nil), t.cdbAccounts[instanceID]...)
+}
+
+func (t *transport) addCDBAccount(instanceID, user, host string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.cdbAccounts[instanceID] = append(t.cdbAccounts[instanceID], cdbAccountFixture{User: user, Host: host})
+}
+
+func (t *transport) removeCDBAccount(instanceID, user, host string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	accounts := t.cdbAccounts[instanceID]
+	for i, a := range accounts {
+		if a.User == user && a.Host == host {
+			t.cdbAccounts[instanceID] = append(accounts[:i], accounts[i+1:]...)
+			return true
+		}
+	}
+	return false
 }
 
 // seedUserPolicies copies fixture policy attachments out of demoCAMUsers so
@@ -305,6 +340,66 @@ func (t *transport) handleCAM(req *http.Request, action string, body []byte) (*h
 		resp := api.DeleteUserResponse{}
 		resp.Response.RequestID = "req-replay-cam-delete-user"
 		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+	case "ListAccessKeys":
+		var payload api.ListAccessKeysRequest
+		_ = json.Unmarshal(body, &payload)
+		uin := derefUint64(payload.TargetUin)
+		if uin == 0 {
+			uin = demoOwnerUIN64()
+		}
+		if !t.uinExists(uin) {
+			return openAPIErrorResponse(req, http.StatusNotFound, "ResourceNotFound.User", "The specified user does not exist."), nil
+		}
+		t.mu.Lock()
+		keys := append([]camAccessKeyFixture(nil), t.accessKeys[uin]...)
+		t.mu.Unlock()
+		resp := api.ListAccessKeysResponse{}
+		for _, k := range keys {
+			resp.Response.AccessKeys = append(resp.Response.AccessKeys, api.CAMAccessKey{
+				AccessKeyID: stringPtr(k.AccessKeyID),
+				Status:      stringPtr(k.Status),
+				CreateTime:  stringPtr(k.CreateTime),
+			})
+		}
+		resp.Response.RequestID = "req-replay-cam-list-access-keys"
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+	case "CreateAccessKey":
+		var payload api.CreateAccessKeyRequest
+		_ = json.Unmarshal(body, &payload)
+		uin := derefUint64(payload.TargetUin)
+		if uin == 0 {
+			uin = demoOwnerUIN64()
+		}
+		if !t.uinExists(uin) {
+			return openAPIErrorResponse(req, http.StatusNotFound, "ResourceNotFound.User", "The specified user does not exist."), nil
+		}
+		key := t.mintCAMAccessKey(uin)
+		resp := api.CreateAccessKeyResponse{}
+		resp.Response.AccessKey = api.CAMAccessKeySecret{
+			AccessKeyID:     stringPtr(key.AccessKeyID),
+			SecretAccessKey: stringPtr(key.SecretAccessKey),
+			Status:          stringPtr(key.Status),
+			CreateTime:      stringPtr(key.CreateTime),
+		}
+		resp.Response.RequestID = "req-replay-cam-create-access-key"
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+	case "DeleteAccessKey":
+		var payload api.DeleteAccessKeyRequest
+		_ = json.Unmarshal(body, &payload)
+		uin := derefUint64(payload.TargetUin)
+		if uin == 0 {
+			uin = demoOwnerUIN64()
+		}
+		accessKeyID := strings.TrimSpace(derefString(payload.AccessKeyID))
+		if accessKeyID == "" {
+			return openAPIErrorResponse(req, http.StatusBadRequest, "InvalidParameter", "AccessKeyId required"), nil
+		}
+		if !t.deleteCAMAccessKey(uin, accessKeyID) {
+			return openAPIErrorResponse(req, http.StatusNotFound, "ResourceNotFound.AccessKey", "The specified AccessKey does not exist."), nil
+		}
+		resp := api.DeleteAccessKeyResponse{}
+		resp.Response.RequestID = "req-replay-cam-delete-access-key"
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case "CreateRole":
 		resp := api.CreateRoleResponse{}
 		resp.Response.RoleID = stringPtr("qcs::cam::roleName/ctk-demo-role")
@@ -507,6 +602,50 @@ func (t *transport) handleCDB(req *http.Request, action string) (*http.Response,
 			}
 			resp.Response.Items = append(resp.Response.Items, instance)
 		}
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+	case "DescribeAccounts":
+		var payload api.DescribeCDBAccountsRequest
+		_ = json.Unmarshal(readReplayBody(req), &payload)
+		instanceID := derefString(payload.InstanceID)
+		accounts := t.snapshotCDBAccounts(instanceID)
+		resp := api.DescribeCDBAccountsResponse{}
+		total := int64(len(accounts))
+		resp.Response.TotalCount = &total
+		for _, acc := range accounts {
+			user := acc.User
+			host := acc.Host
+			resp.Response.Items = append(resp.Response.Items, api.CDBAccount{
+				User: &user,
+				Host: &host,
+			})
+		}
+		resp.Response.RequestID = "req-replay-cdb-describe-accounts"
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+	case "CreateAccounts":
+		var payload api.CreateCDBAccountsRequest
+		_ = json.Unmarshal(readReplayBody(req), &payload)
+		instanceID := derefString(payload.InstanceID)
+		if instanceID == "" || len(payload.Accounts) == 0 {
+			return openAPIErrorResponse(req, http.StatusBadRequest, "InvalidParameter", "InstanceId and Accounts required"), nil
+		}
+		account := payload.Accounts[0]
+		t.addCDBAccount(instanceID, derefString(account.User), derefString(account.Host))
+		resp := api.CreateCDBAccountsResponse{}
+		resp.Response.RequestID = "req-replay-cdb-create-accounts"
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+	case "DeleteAccounts":
+		var payload api.DeleteCDBAccountsRequest
+		_ = json.Unmarshal(readReplayBody(req), &payload)
+		instanceID := derefString(payload.InstanceID)
+		if instanceID == "" || len(payload.Accounts) == 0 {
+			return openAPIErrorResponse(req, http.StatusBadRequest, "InvalidParameter", "InstanceId and Accounts required"), nil
+		}
+		account := payload.Accounts[0]
+		if !t.removeCDBAccount(instanceID, derefString(account.User), derefString(account.Host)) {
+			return openAPIErrorResponse(req, http.StatusNotFound, "ResourceNotFound.Account", "account not found"), nil
+		}
+		resp := api.DeleteCDBAccountsResponse{}
+		resp.Response.RequestID = "req-replay-cdb-delete-accounts"
 		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	default:
 		return openAPIErrorResponse(req, http.StatusNotFound, "InvalidAction.NotFound", fmt.Sprintf("Unsupported replay action: %s", action)), nil
@@ -1115,6 +1254,57 @@ func (t *transport) deleteUser(name string) {
 	delete(t.createdUsers, name)
 }
 
+func (t *transport) uinExists(uin uint64) bool {
+	if uin == 0 {
+		return false
+	}
+	if uin == demoOwnerUIN64() {
+		return true
+	}
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for _, user := range t.createdUsers {
+		if user.UIN == uin {
+			return true
+		}
+	}
+	for _, user := range demoCAMUsers {
+		if user.UIN == uin {
+			return true
+		}
+	}
+	return false
+}
+
+func (t *transport) mintCAMAccessKey(uin uint64) camAccessKeyFixture {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.accessKeySeq++
+	id := fmt.Sprintf("AKIDz8krbsJ5yKBZQpn74CTKMINT%03d", t.accessKeySeq)
+	secret := fmt.Sprintf("Gu5t9xGARNpq86cd98joCTKMINT%03d", t.accessKeySeq)
+	key := camAccessKeyFixture{
+		AccessKeyID:     id,
+		SecretAccessKey: secret,
+		Status:          "Active",
+		CreateTime:      time.Now().UTC().Format("2006-01-02 15:04:05"),
+	}
+	t.accessKeys[uin] = append(t.accessKeys[uin], key)
+	return key
+}
+
+func (t *transport) deleteCAMAccessKey(uin uint64, accessKeyID string) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	keys := t.accessKeys[uin]
+	for i, k := range keys {
+		if k.AccessKeyID == accessKeyID {
+			t.accessKeys[uin] = append(keys[:i], keys[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
 func (t *transport) findUserByName(name string) (camUserFixture, bool) {
 	name = strings.TrimSpace(name)
 	t.mu.Lock()
@@ -1242,4 +1432,13 @@ func int64Ptr(v int64) *int64 {
 
 func uint64Ptr(v uint64) *uint64 {
 	return &v
+}
+
+// readReplayBody re-buffers the request body so per-handler unmarshal calls
+// don't have to thread the body through every handler signature. Safe because
+// `demoreplay.ReadRequestBody` already wraps the request body in a NopCloser
+// over a bytes.Reader at the top of RoundTrip.
+func readReplayBody(req *http.Request) []byte {
+	body, _ := demoreplay.ReadRequestBody(req)
+	return body
 }

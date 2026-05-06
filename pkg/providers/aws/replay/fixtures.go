@@ -99,6 +99,40 @@ type iamUserFixture struct {
 	AttachedPolicy []iamPolicyFixture
 }
 
+type iamAccessKeyFixture struct {
+	AccessKeyID     string
+	SecretAccessKey string
+	UserName        string
+	Status          string
+	CreateDate      string
+}
+
+func seedAWSAccessKeys() map[string][]iamAccessKeyFixture {
+	out := make(map[string][]iamAccessKeyFixture, len(demoIAMUsers))
+	for _, user := range demoIAMUsers {
+		if !user.HasLogin {
+			out[user.UserName] = []iamAccessKeyFixture{
+				{
+					AccessKeyID: "AKIAIOSFODNN7EXAMPLE" + user.UserID[len(user.UserID)-3:],
+					UserName:    user.UserName,
+					Status:      "Active",
+					CreateDate:  user.CreateDate,
+				},
+			}
+			continue
+		}
+		out[user.UserName] = []iamAccessKeyFixture{
+			{
+				AccessKeyID: "AKIAIOSFODNN7EXAMPLE" + user.UserID[len(user.UserID)-3:],
+				UserName:    user.UserName,
+				Status:      "Active",
+				CreateDate:  user.CreateDate,
+			},
+		}
+	}
+	return out
+}
+
 var demoIAMUsers = []iamUserFixture{
 	{
 		UserName:      "ctk-demo-admin",
@@ -207,6 +241,10 @@ func ec2HostsForRegion(region string) []ec2HostFixture {
 
 func demoCallerArn() string {
 	return "arn:aws:iam::" + demoAccountID + ":user/ctk-demo-admin"
+}
+
+func demoCallerUserName() string {
+	return "ctk-demo-admin"
 }
 
 func demoCallerUserID() string {
