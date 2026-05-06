@@ -1,6 +1,6 @@
 # CloudToolKit
 
-<strong>English</strong> | <a href="./README.zh-CN.md">简体中文</a>
+<strong>English</strong> | <a href="./docs/README.zh-CN.md">简体中文</a>
 
 > Multi-cloud defensive validation toolkit for CSPM / CNAPP detection, telemetry, and investigation workflows in authorized environments.
 
@@ -35,42 +35,43 @@ Validation payload coverage:
     <th align="center">cred</th>
   </tr>
   <tr>
-    <td align="left" width="170"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" role="img" aria-label="AWS"><rect width="24" height="24" rx="5" fill="#232F3E"/><text x="12" y="11" text-anchor="middle" font-family="Arial, sans-serif" font-size="7" font-weight="700" fill="#fff">aws</text><path d="M6 15c3 2.5 9 2.5 12 0" fill="none" stroke="#FF9900" stroke-width="1.8" stroke-linecap="round"/></svg>&nbsp;<strong>AWS</strong></td>
+    <td align="left" width="210"><img src="docs/icons/aws.svg" width="28" height="28" alt="AWS icon">&nbsp;<strong>AWS</strong></td>
     <td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td>
   </tr>
   <tr>
-    <td align="left" width="170"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" role="img" aria-label="Azure"><rect width="24" height="24" rx="5" fill="#F8FAFC" stroke="#DCE5F0"/><path d="M7 18 11 5h4l-3 7-2 6H7z" fill="#0078D4"/><path d="M15 5 19 18h-7l-2-4 3-4-1 2z" fill="#50A7F8"/></svg>&nbsp;<strong>Azure</strong></td>
+    <td align="left" width="210"><img src="docs/icons/azure.svg" width="28" height="28" alt="Azure icon">&nbsp;<strong>Azure</strong></td>
     <td align="center">✓</td><td align="center">—</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td>
   </tr>
   <tr>
-    <td align="left" width="170"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" role="img" aria-label="GCP"><rect width="24" height="24" rx="5" fill="#fff" stroke="#DCE5F0"/><path d="M7 15h10" stroke="#4285F4" stroke-width="2.2" stroke-linecap="round"/><path d="M7 15a5 5 0 0 1 2-9" stroke="#34A853" stroke-width="2.2" stroke-linecap="round" fill="none"/><path d="M9 6a6 6 0 0 1 7 1" stroke="#FBBC04" stroke-width="2.2" stroke-linecap="round" fill="none"/><path d="M16 7a5 5 0 0 1 1 8" stroke="#EA4335" stroke-width="2.2" stroke-linecap="round" fill="none"/></svg>&nbsp;<strong>GCP</strong></td>
+    <td align="left" width="210"><img src="docs/icons/gcp.svg" width="28" height="28" alt="GCP icon">&nbsp;<strong>GCP</strong></td>
     <td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td>
   </tr>
   <tr>
-    <td align="left" width="170"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" role="img" aria-label="Alibaba"><rect width="24" height="24" rx="5" fill="#F8FAFC" stroke="#DCE5F0"/><g fill="none" stroke="#FF6A00" stroke-width="2" stroke-linecap="round"><path d="M8 7h3M8 7v10M8 17h3M16 7h-3M16 7v10M16 17h-3M10 12h4"/></g></svg>&nbsp;<strong>Alibaba</strong></td>
+    <td align="left" width="210"><img src="docs/icons/alibaba.svg" width="28" height="28" alt="Alibaba icon">&nbsp;<strong>Alibaba</strong></td>
     <td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td>
   </tr>
   <tr>
-    <td align="left" width="170"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" role="img" aria-label="Tencent"><rect width="24" height="24" rx="5" fill="#F8FAFC" stroke="#DCE5F0"/><path d="M7 16h10a4 4 0 0 0 0-8h-1a6 6 0 0 0-11 3 4 4 0 0 0 2 5z" fill="none" stroke="#1E9BFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>&nbsp;<strong>Tencent</strong></td>
+    <td align="left" width="210"><img src="docs/icons/tencent.svg" width="28" height="28" alt="Tencent icon">&nbsp;<strong>Tencent</strong></td>
     <td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td>
   </tr>
   <tr>
-    <td align="left" width="170"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" role="img" aria-label="Huawei"><rect width="24" height="24" rx="5" fill="#F8FAFC" stroke="#DCE5F0"/><g fill="#E53935" transform="translate(12 10)"><ellipse rx="1.4" ry="4.5" transform="rotate(-55) translate(0 -2.5)"/><ellipse rx="1.4" ry="4.5" transform="rotate(-30) translate(0 -2.5)"/><ellipse rx="1.4" ry="4.5" transform="rotate(0) translate(0 -2.5)"/><ellipse rx="1.4" ry="4.5" transform="rotate(30) translate(0 -2.5)"/><ellipse rx="1.4" ry="4.5" transform="rotate(55) translate(0 -2.5)"/></g><path d="M8 16c2 1.8 6 1.8 8 0" fill="none" stroke="#E53935" stroke-width="1.8" stroke-linecap="round"/></svg>&nbsp;<strong>Huawei</strong></td>
+    <td align="left" width="210"><img src="docs/icons/huawei.svg" width="28" height="28" alt="Huawei icon">&nbsp;<strong>Huawei</strong></td>
     <td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td>
   </tr>
   <tr>
-    <td align="left" width="170"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" role="img" aria-label="Volcengine"><rect width="24" height="24" rx="5" fill="#F8FAFC" stroke="#DCE5F0"/><path d="M5 17 10 6l3 7 3-4 4 8h-4l-3-4-2 4z" fill="#2B6CFF"/></svg>&nbsp;<strong>Volcengine</strong></td>
+    <td align="left" width="210"><img src="docs/icons/volcengine.svg" width="28" height="28" alt="Volcengine icon">&nbsp;<strong>Volcengine</strong></td>
     <td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td>
   </tr>
   <tr>
-    <td align="left" width="170"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" role="img" aria-label="JDCloud"><rect width="24" height="24" rx="5" fill="#F8FAFC" stroke="#DCE5F0"/><path d="M7 16h10a4 4 0 0 0 0-8h-1a6 6 0 0 0-11 3 4 4 0 0 0 2 5z" fill="none" stroke="#F44336" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M11 14c0 3-1.5 4.5-4 4.5" fill="none" stroke="#F44336" stroke-width="1.8" stroke-linecap="round"/></svg>&nbsp;<strong>JDCloud</strong></td>
+    <td align="left" width="210"><img src="docs/icons/jdcloud.svg" width="28" height="28" alt="JDCloud icon">&nbsp;<strong>JDCloud</strong></td>
     <td align="center">✓</td><td align="center">✓</td><td align="center">—</td><td align="center">✓</td><td align="center">—</td><td align="center">✓</td><td align="center">✓</td><td align="center">—</td>
   </tr>
   <tr>
-    <td align="left" width="170"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" role="img" aria-label="UCloud"><rect width="24" height="24" rx="5" fill="#F8FAFC" stroke="#DCE5F0"/><path d="M7 6v8c0 3 2 5 5 5s5-2 5-5V6" fill="none" stroke="#2B6CFF" stroke-width="2.5" stroke-linecap="round"/><circle cx="17" cy="7" r="1.6" fill="#2B6CFF"/></svg>&nbsp;<strong>UCloud</strong></td>
+    <td align="left" width="210"><img src="docs/icons/ucloud.svg" width="28" height="28" alt="UCloud icon">&nbsp;<strong>UCloud</strong></td>
     <td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">—</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">—</td>
   </tr>
 </table>
+
 
 Legend: `iam` = user lifecycle · `bucket` = object visibility · `event` = audit log review · `cmd` = instance command telemetry · `rds` = database account lifecycle · `role` = privilege binding change · `acl` = storage exposure · `cred` = long-lived credential lifecycle. `—` = no native equivalent or pending validation.
 
