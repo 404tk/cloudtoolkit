@@ -1,30 +1,30 @@
 # CloudToolKit
 
-<strong>English</strong> | <a href="./README.zh-CN.md">简体中文</a>
+<a href="./README.md">English</a> | <strong>简体中文</strong>
 
-> Multi-cloud defensive validation toolkit for CSPM / CNAPP detection, telemetry, and investigation workflows in authorized environments.
+> 面向授权环境的多云防御验证工具包，用于验证 CSPM / CNAPP 检测、遥测和调查流程。
 
-CloudToolKit gives security teams a practical way to verify whether cloud controls are discoverable, detectable, alertable, and investigable before those gaps matter in production.
+CloudToolKit 帮助安全团队在真实差距影响生产环境之前，验证云上控制面和数据面信号是否可发现、可检测、可告警、可关联、可调查。
 
-## Why CloudToolKit
+## 为什么使用 CloudToolKit
 
-| Advantage | What it gives defenders |
+| 优势 | 给防御团队带来的价值 |
 |---|---|
-| 9-cloud coverage | One workflow across major global and China cloud providers. |
-| Asset-first inventory | Hosts, databases, buckets, domains, accounts, logs, SMS assets, and billing-plane signals where supported. |
-| Validation payloads | Focused checks for identity lifecycle, credential lifecycle, role bindings, storage exposure, audit events, instance command telemetry, and database account changes. |
-| Replay mode | `demo` drives providers against in-memory replay fixtures, so detection logic can be tested without live cloud calls. |
-| Conservative claims | Capabilities are advertised only when drivers, replay paths, and focused tests are in place. |
+| 9 家云覆盖 | 用一套工作流覆盖主流国际云与国内云环境。 |
+| 资产优先 | 盘点主机、数据库、存储桶、域名、账号、日志、短信资产和账单侧信号。 |
+| 验证载荷 | 聚焦身份生命周期、长期凭证、角色绑定、存储暴露、审计事件、实例命令遥测和数据库账号变更。 |
+| Replay 模式 | REPL 中的 `demo` 使用内存 replay fixture，无需真实云调用即可验证检测逻辑。 |
+| 保守声明 | 只有 driver、replay 路径和聚焦测试齐备的能力才会在矩阵中声明。 |
 
-## Capability Matrix
+## 能力矩阵
 
-Every provider supports `cloudlist` asset enumeration. Asset categories include host / database / bucket / domain / account / log / sms / balance where the cloud has a native equivalent.
+每个 provider 都支持 `cloudlist` 资产枚举。资产类目包括 host / database / bucket / domain / account / log / sms / balance，按各云原生能力适配。
 
-Validation payload coverage:
+验证载荷覆盖：
 
 <table>
   <tr>
-    <th align="left" width="170">Cloud</th>
+    <th align="left" width="170">云厂商</th>
     <th align="center">iam</th>
     <th align="center">bucket</th>
     <th align="center">event</th>
@@ -72,27 +72,27 @@ Validation payload coverage:
   </tr>
 </table>
 
-Legend: `iam` = user lifecycle · `bucket` = object visibility · `event` = audit log review · `cmd` = instance command telemetry · `rds` = database account lifecycle · `role` = privilege binding change · `acl` = storage exposure · `cred` = long-lived credential lifecycle. `—` = no native equivalent or pending validation.
+说明：`iam` = IAM 用户生命周期验证；`bucket` = 对象可见性验证；`event` = 审计日志回溯验证；`cmd` = 实例命令执行遥测验证；`rds` = 数据库账号生命周期验证；`role` = 权限绑定变更验证；`acl` = 存储公开访问验证；`cred` = 长期凭证生命周期验证。`—` 表示无原生等价能力或仍待验证。
 
-## Quick Start
+## 快速开始
 
 ```bash
 go build --ldflags "-s -w" -trimpath -o ctk cmd/main.go
-./ctk                                    # interactive REPL
-./ctk <provider> <action> [args] [flags] # headless one-shot
+./ctk                                    # 交互式 REPL
+./ctk <provider> <action> [args] [flags] # 单次 headless 执行
 ```
 
-Try `demo` inside the REPL to drive any provider against an in-memory replay (no live cloud calls).
+在 REPL 中执行 `demo`，可让任意 provider 走内存 replay，不发起真实云调用。
 
-## Responsible Use
+## 使用边界
 
-Use only on owned, lab, internal, or explicitly authorized customer environments to verify detection coverage, telemetry quality, investigation workflow, and control effectiveness. CloudToolKit is not a stealth, bypass, or unauthorized intrusion utility and must not be used against third-party environments without permission.
+CloudToolKit 仅用于自有、实验室、内部或明确授权的客户环境，用来验证检测覆盖、遥测质量、调查流程和控制有效性。它不是隐蔽、绕过或未授权入侵工具，也不得用于未获授权的第三方环境。
 
-## Documentation
+## 文档
 
-- [Wiki](https://github.com/404tk/cloudtoolkit/wiki) — usage, payload references, replay walkthroughs
+- [Wiki](https://github.com/404tk/cloudtoolkit/wiki) - 使用方式、payload 参考、replay walkthrough
 
-## Acknowledgements
+## 致谢
 
 - [c-bata/go-prompt](https://github.com/c-bata/go-prompt)
 - [projectdiscovery/cloudlist](https://github.com/projectdiscovery/cloudlist)
