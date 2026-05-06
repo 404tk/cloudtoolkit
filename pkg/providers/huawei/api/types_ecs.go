@@ -6,6 +6,7 @@ type ListECSServersDetailsResponse struct {
 }
 
 type ECSServerDetail struct {
+	ID        string                        `json:"id"`
 	Status    string                        `json:"status"`
 	Name      string                        `json:"name"`
 	Addresses map[string][]ECSServerAddress `json:"addresses"`

@@ -106,6 +106,7 @@ func (d *Driver) listRegion(ctx context.Context, region string) ([]schema.Host, 
 		for _, instance := range resp.Servers {
 			ipv4, privateIPv4 := mapHostIPs(instance.Addresses)
 			items = append(items, schema.Host{
+				ID:          instance.ID,
 				State:       instance.Status,
 				HostName:    instance.Name,
 				PublicIPv4:  ipv4,

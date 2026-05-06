@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/gcp/api"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
@@ -32,9 +33,16 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 				return list, err
 			}
 			for _, i := range instances {
+				zoneShort := shortResourceName(i.Zone)
+				instanceName := strings.TrimSpace(i.Name)
+				hostName := strings.TrimSpace(i.Hostname)
+				if hostName == "" {
+					hostName = instanceName
+				}
 				_host := schema.Host{
-					HostName: i.Hostname,
-					Region:   i.Zone,
+					HostName: hostName,
+					ID:       composeInstanceID(zoneShort, instanceName),
+					Region:   zoneShort,
 				}
 				foundPublic := false
 				for _, n := range i.NetworkInterfaces {
@@ -57,6 +65,30 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		}
 	}
 	return list, nil
+}
+
+// shortResourceName trims a Compute Engine self-link down to the trailing
+// resource name. Zone fields can come back either short ("us-central1-a") or
+// fully-qualified ("https://www.googleapis.com/compute/v1/projects/p/zones/us-central1-a").
+func shortResourceName(s string) string {
+	s = strings.TrimSpace(s)
+	if idx := strings.LastIndex(s, "/"); idx >= 0 {
+		return s[idx+1:]
+	}
+	return s
+}
+
+// composeInstanceID returns the cloudlist Host.ID form expected by vmexec:
+// `<zone>/<instance>` so REPL `shell <id>` and headless `--target` round-trip
+// through `vmexec.resolveTarget` deterministically.
+func composeInstanceID(zone, instance string) string {
+	if instance == "" {
+		return ""
+	}
+	if zone == "" {
+		return instance
+	}
+	return zone + "/" + instance
 }
 
 func (d *Driver) listZones(ctx context.Context, project string) ([]api.Zone, error) {

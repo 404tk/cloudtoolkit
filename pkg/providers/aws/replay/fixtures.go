@@ -250,3 +250,69 @@ func demoCallerUserName() string {
 func demoCallerUserID() string {
 	return "AIDAIOSFODNN7EXAMPLE000"
 }
+
+var demoRDSInstances = []describeDBInstanceWire{
+	{
+		DBInstanceIdentifier: "ctk-demo-db-prod",
+		Engine:               "mysql",
+		EngineVersion:        "8.0.35",
+		DBName:               "appdata",
+		DBInstanceStatus:     "available",
+		PubliclyAccessible:   false,
+		Endpoint: describeDBInstanceEndpointWire{
+			Address: "ctk-demo-db-prod.cluster-example.us-east-1.rds.amazonaws.com",
+			Port:    3306,
+		},
+		AvailabilityZone: "us-east-1a",
+	},
+	{
+		DBInstanceIdentifier: "ctk-demo-db-public",
+		Engine:               "postgres",
+		EngineVersion:        "16.1",
+		DBName:               "metrics",
+		DBInstanceStatus:     "available",
+		PubliclyAccessible:   true,
+		Endpoint: describeDBInstanceEndpointWire{
+			Address: "ctk-demo-db-public.example.us-west-2.rds.amazonaws.com",
+			Port:    5432,
+		},
+		AvailabilityZone: "us-west-2b",
+	},
+}
+
+func rdsInstancesForRegion(region string) []describeDBInstanceWire {
+	region = strings.TrimSpace(region)
+	out := make([]describeDBInstanceWire, 0, len(demoRDSInstances))
+	for _, db := range demoRDSInstances {
+		if strings.HasPrefix(db.AvailabilityZone, region) {
+			out = append(out, db)
+		}
+	}
+	return out
+}
+
+var demoLogGroups = []logGroupFixture{
+	{Region: "us-east-1", Name: "/aws/lambda/ctk-demo-ingest", CreationTime: 1745020800000, RetentionInDays: 14, StoredBytes: 524288, Arn: "arn:aws:logs:us-east-1:" + demoAccountID + ":log-group:/aws/lambda/ctk-demo-ingest"},
+	{Region: "us-east-1", Name: "/aws/cloudtrail/ctk-validation", CreationTime: 1745107200000, RetentionInDays: 90, StoredBytes: 8388608, Arn: "arn:aws:logs:us-east-1:" + demoAccountID + ":log-group:/aws/cloudtrail/ctk-validation"},
+	{Region: "us-west-2", Name: "/aws/ecs/ctk-demo-app", CreationTime: 1744934400000, RetentionInDays: 30, StoredBytes: 2097152, Arn: "arn:aws:logs:us-west-2:" + demoAccountID + ":log-group:/aws/ecs/ctk-demo-app"},
+}
+
+type logGroupFixture struct {
+	Region          string
+	Name            string
+	CreationTime    int64
+	RetentionInDays int64
+	StoredBytes     int64
+	Arn             string
+}
+
+func logGroupsForRegion(region string) []logGroupFixture {
+	region = strings.TrimSpace(region)
+	out := make([]logGroupFixture, 0, len(demoLogGroups))
+	for _, g := range demoLogGroups {
+		if g.Region == region {
+			out = append(out, g)
+		}
+	}
+	return out
+}

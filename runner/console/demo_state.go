@@ -152,8 +152,12 @@ func printDemoBanner(provider string) {
 	lines := []string{
 		"!!! USE THESE DEMO CREDENTIALS !!!",
 		"----------------------------------",
-		fmt.Sprintf("AccessKey: %s", credentials.AccessKey),
-		fmt.Sprintf("SecretKey: %s", credentials.SecretKey),
+	}
+	if !credentials.HideDefaultLabels {
+		lines = append(lines,
+			fmt.Sprintf("AccessKey: %s", credentials.AccessKey),
+			fmt.Sprintf("SecretKey: %s", credentials.SecretKey),
+		)
 	}
 	for _, extra := range credentials.Extras {
 		if extra.Name == "" {

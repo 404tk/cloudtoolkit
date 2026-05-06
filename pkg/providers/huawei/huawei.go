@@ -2,19 +2,26 @@ package huawei
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/api"
 	huaweiauth "github.com/404tk/cloudtoolkit/pkg/providers/huawei/auth"
 	_bss "github.com/404tk/cloudtoolkit/pkg/providers/huawei/bss"
+	_coc "github.com/404tk/cloudtoolkit/pkg/providers/huawei/coc"
 	_cts "github.com/404tk/cloudtoolkit/pkg/providers/huawei/cts"
+	_dns "github.com/404tk/cloudtoolkit/pkg/providers/huawei/dns"
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/ecs"
 	_iam "github.com/404tk/cloudtoolkit/pkg/providers/huawei/iam"
+	_lts "github.com/404tk/cloudtoolkit/pkg/providers/huawei/lts"
+	_msgsms "github.com/404tk/cloudtoolkit/pkg/providers/huawei/msgsms"
 	_obs "github.com/404tk/cloudtoolkit/pkg/providers/huawei/obs"
 	_rds "github.com/404tk/cloudtoolkit/pkg/providers/huawei/rds"
 	"github.com/404tk/cloudtoolkit/pkg/providers/internal/credverify"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
+	"github.com/404tk/cloudtoolkit/pkg/runtime/vmexecspec"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/logger"
@@ -161,6 +168,27 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			storages, err := obsprovider.GetBuckets(ctx)
 			schema.AppendAssets(list, storages)
 			list.AddError("bucket", err)
+		}).
+		Register("domain", func(ctx context.Context, list *schema.Resources) {
+			cred := p.iamCredential()
+			dnsprovider := &_dns.Driver{Cred: cred, Regions: p.regions, Client: p.newAPIClient(cred)}
+			domains, err := dnsprovider.GetDomains(ctx)
+			schema.AppendAssets(list, domains)
+			list.AddError("domain", err)
+		}).
+		Register("log", func(ctx context.Context, list *schema.Resources) {
+			cred := p.iamCredential()
+			ltsprovider := &_lts.Driver{Cred: cred, Regions: p.regions, DomainID: p.domainID, Client: p.newAPIClient(cred)}
+			logs, err := ltsprovider.GetLogs(ctx)
+			schema.AppendAssets(list, logs)
+			list.AddError("log", err)
+		}).
+		Register("sms", func(ctx context.Context, list *schema.Resources) {
+			cred := p.iamCredential()
+			smsprovider := &_msgsms.Driver{Cred: cred, Regions: p.regions, Client: p.newAPIClient(cred)}
+			result, err := smsprovider.GetResource(ctx)
+			list.Sms = result
+			list.AddError("sms", err)
 		})
 
 	return collector.Collect(ctx, env.From(ctx).Cloudlist)
@@ -178,6 +206,31 @@ func (p *Provider) UserManagement(action, username, password string) (schema.IAM
 	default:
 		return schema.IAMResult{}, fmt.Errorf("invalid action: %s (expected: add, del)", action)
 	}
+}
+
+// ExecuteCloudVMCommand implements schema.VMExecutor for Huawei via COC
+// BatchExecuteCommand. PLAN.md decision T3.2 / Task 11. UniAgent must be
+// installed on the target ECS for executions to land.
+//
+// `cmd` arrives in one of two encodings: the headless `__ctk_headless_sh__:`
+// vmexec spec (which carries an explicit osType), or a bare base64 string
+// from the REPL shell loop. COC's defaultExecuteScript is `SHELL` (Linux);
+// Windows targets are rejected until a PowerShell/BAT scriptType mapping is
+// separately validated.
+func (p *Provider) ExecuteCloudVMCommand(ctx context.Context, instanceID, cmd string) (schema.CommandResult, error) {
+	cred := p.iamCredential()
+	driver := &_coc.Driver{Cred: cred, Regions: p.regions, Client: p.newAPIClient(cred)}
+	if osType, command, ok := vmexecspec.Parse(cmd); ok {
+		if osType == "windows" {
+			return schema.CommandResult{}, fmt.Errorf("huawei coc: windows targets are not supported on the SHELL scriptType path")
+		}
+		return driver.Execute(ctx, instanceID, command)
+	}
+	command, err := base64.StdEncoding.DecodeString(cmd)
+	if err != nil {
+		return schema.CommandResult{}, err
+	}
+	return driver.Execute(ctx, instanceID, strings.TrimSpace(string(command)))
 }
 
 // RoleBinding implements schema.RoleBindingManager for huawei IAM. Huawei has

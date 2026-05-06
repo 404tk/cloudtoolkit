@@ -22,6 +22,16 @@ func (t *transport) handleRDS(req *http.Request, body []byte) (*http.Response, e
 	}
 	action := form.Get("Action")
 	switch action {
+	case "DescribeDBInstances":
+		region := regionFromHost(req.URL.Hostname())
+		instances := rdsInstancesForRegion(region)
+		envelope := describeDBInstancesReplyEnvelope{
+			Result: describeDBInstancesReplyResult{
+				DBInstances: instances,
+			},
+			Metadata: rdsResponseMeta{RequestID: "req-replay-rds-describe-db-instances"},
+		}
+		return demoreplay.XMLResponse(req, http.StatusOK, envelope), nil
 	case "ModifyDBInstance":
 		instance := strings.TrimSpace(form.Get("DBInstanceIdentifier"))
 		password := form.Get("MasterUserPassword")
@@ -65,4 +75,31 @@ type dbInstanceReply struct {
 
 type rdsResponseMeta struct {
 	RequestID string `xml:"RequestId"`
+}
+
+type describeDBInstancesReplyEnvelope struct {
+	XMLName  xml.Name                       `xml:"DescribeDBInstancesResponse"`
+	Result   describeDBInstancesReplyResult `xml:"DescribeDBInstancesResult"`
+	Metadata rdsResponseMeta                `xml:"ResponseMetadata"`
+}
+
+type describeDBInstancesReplyResult struct {
+	DBInstances []describeDBInstanceWire `xml:"DBInstances>DBInstance"`
+	Marker      string                   `xml:"Marker,omitempty"`
+}
+
+type describeDBInstanceWire struct {
+	DBInstanceIdentifier string                         `xml:"DBInstanceIdentifier"`
+	Engine               string                         `xml:"Engine"`
+	EngineVersion        string                         `xml:"EngineVersion"`
+	DBName               string                         `xml:"DBName"`
+	DBInstanceStatus     string                         `xml:"DBInstanceStatus"`
+	PubliclyAccessible   bool                           `xml:"PubliclyAccessible"`
+	Endpoint             describeDBInstanceEndpointWire `xml:"Endpoint"`
+	AvailabilityZone     string                         `xml:"AvailabilityZone"`
+}
+
+type describeDBInstanceEndpointWire struct {
+	Address string `xml:"Address"`
+	Port    int64  `xml:"Port"`
 }

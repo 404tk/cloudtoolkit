@@ -11,10 +11,13 @@ import (
 
 	azapi "github.com/404tk/cloudtoolkit/pkg/providers/azure/api"
 	azauth "github.com/404tk/cloudtoolkit/pkg/providers/azure/auth"
+	"github.com/404tk/cloudtoolkit/pkg/providers/azure/billing"
 	azcloud "github.com/404tk/cloudtoolkit/pkg/providers/azure/cloud"
 	"github.com/404tk/cloudtoolkit/pkg/providers/azure/compute"
+	"github.com/404tk/cloudtoolkit/pkg/providers/azure/dns"
 	"github.com/404tk/cloudtoolkit/pkg/providers/azure/graph"
 	"github.com/404tk/cloudtoolkit/pkg/providers/azure/insights"
+	"github.com/404tk/cloudtoolkit/pkg/providers/azure/loganalytics"
 	"github.com/404tk/cloudtoolkit/pkg/providers/azure/rbac"
 	"github.com/404tk/cloudtoolkit/pkg/providers/azure/sqldb"
 	"github.com/404tk/cloudtoolkit/pkg/providers/azure/storage"
@@ -128,6 +131,9 @@ func (p *Provider) CredentialKey(opts map[string]string) string {
 // Resources returns the provider for a resource deployment source.
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	collector := schema.NewResourceCollector(p.Name()).
+		Register("balance", func(ctx context.Context, _ *schema.Resources) {
+			(&billing.Driver{Client: p.apiClient, SubscriptionIDs: p.subscriptionIDs}).QueryAccountBalance(ctx)
+		}).
 		Register("host", func(ctx context.Context, list *schema.Resources) {
 			vmProvider := &compute.Driver{
 				Client:          p.apiClient,
@@ -168,6 +174,33 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			}
 			schema.AppendAssets(list, accounts)
 			list.AddError("account", err)
+		}).
+		Register("domain", func(ctx context.Context, list *schema.Resources) {
+			dnsDriver := &dns.Driver{
+				Client:          p.apiClient,
+				SubscriptionIDs: p.subscriptionIDs,
+			}
+			domains, err := dnsDriver.GetDomains(ctx)
+			schema.AppendAssets(list, domains)
+			list.AddError("domain", err)
+		}).
+		Register("log", func(ctx context.Context, list *schema.Resources) {
+			logDriver := &loganalytics.Driver{
+				Client:          p.apiClient,
+				SubscriptionIDs: p.subscriptionIDs,
+			}
+			logs, err := logDriver.GetLogs(ctx)
+			schema.AppendAssets(list, logs)
+			list.AddError("log", err)
+		}).
+		Register("database", func(ctx context.Context, list *schema.Resources) {
+			sqlDriver := &sqldb.Driver{
+				Client:          p.apiClient,
+				SubscriptionIDs: p.subscriptionIDs,
+			}
+			dbs, err := sqlDriver.GetDatabases(ctx)
+			schema.AppendAssets(list, dbs)
+			list.AddError("database", err)
 		})
 
 	return collector.Collect(ctx, env.From(ctx).Cloudlist)

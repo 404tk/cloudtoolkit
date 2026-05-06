@@ -17,20 +17,23 @@ import (
 )
 
 type transport struct {
-	mu         sync.Mutex
-	bindings   []bindingFixture
-	policyEt   int64
-	saKeys     map[string][]saKeyFixture
-	sqlUsers   map[string][]string
-	gcsPolicy  map[string]api.GCSPolicy
+	mu                 sync.Mutex
+	bindings           []bindingFixture
+	policyEt           int64
+	saKeys             map[string][]saKeyFixture
+	sqlUsers           map[string][]string
+	gcsPolicy          map[string]api.GCSPolicy
+	instanceMetadata   map[string]api.InstanceMetadata
+	instanceMetadataEt int64
 }
 
 func newTransport() *transport {
 	return &transport{
-		bindings:  seedBindings(),
-		saKeys:    seedSAKeys(),
-		sqlUsers:  make(map[string][]string),
-		gcsPolicy: make(map[string]api.GCSPolicy),
+		bindings:         seedBindings(),
+		saKeys:           seedSAKeys(),
+		sqlUsers:         make(map[string][]string),
+		gcsPolicy:        make(map[string]api.GCSPolicy),
+		instanceMetadata: make(map[string]api.InstanceMetadata),
 	}
 }
 
@@ -131,6 +134,12 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 				"Request had invalid authentication credentials."), nil
 		}
 		return t.handleStorage(req, body)
+	case "cloudbilling.googleapis.com":
+		if !verifyBearer(req) {
+			return apiErrorResponse(req, http.StatusUnauthorized, "UNAUTHENTICATED",
+				"Request had invalid authentication credentials."), nil
+		}
+		return t.handleCloudBilling(req)
 	}
 	return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
 		fmt.Sprintf("unsupported replay host: %s", host)), nil
@@ -244,6 +253,15 @@ func (t *transport) handleCompute(req *http.Request) (*http.Response, error) {
 		return handleListZones(req)
 	case len(parts) == 7 && parts[4] == "zones" && parts[6] == "instances":
 		return handleListInstances(req, parts[5])
+	case len(parts) == 7 && parts[4] == "zones" && parts[6] != "instances":
+		return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
+			fmt.Sprintf("unsupported compute path: %s", path)), nil
+	case len(parts) == 8 && parts[4] == "zones" && parts[6] == "instances":
+		return t.handleGetInstance(req, parts[5], parts[7])
+	case len(parts) == 9 && parts[4] == "zones" && parts[6] == "instances" && parts[8] == "setMetadata":
+		return t.handleSetInstanceMetadata(req, parts[5], parts[7])
+	case len(parts) == 9 && parts[4] == "zones" && parts[6] == "instances" && parts[8] == "reset":
+		return t.handleResetInstance(req, parts[5], parts[7])
 	}
 	return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
 		fmt.Sprintf("unsupported compute path: %s", path)), nil
@@ -275,6 +293,110 @@ func handleListInstances(req *http.Request, zone string) (*http.Response, error)
 		resp.Items = append(resp.Items, entry)
 	}
 	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+}
+
+// handleGetInstance serves the GET form of `compute.instances.get` used by the
+// vmexec metadata startup-script + reboot path. Only Name / Zone / Status /
+// Metadata are projected — that's what the driver consumes.
+func (t *transport) handleGetInstance(req *http.Request, zone, instance string) (*http.Response, error) {
+	if req.Method != http.MethodGet {
+		return apiErrorResponse(req, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED",
+			fmt.Sprintf("method %s not supported on instances.get", req.Method)), nil
+	}
+	inst, ok := findInstanceByZoneAndName(zone, instance)
+	if !ok {
+		return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
+			fmt.Sprintf("instance %s not found in zone %s", instance, zone)), nil
+	}
+	resp := api.InstanceWithMetadata{
+		Name:     inst.Name,
+		Zone:     inst.Zone,
+		Status:   inst.Status,
+		Metadata: t.snapshotInstanceMetadata(inst.Name),
+	}
+	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+}
+
+// handleSetInstanceMetadata serves `compute.instances.setMetadata`. The
+// driver supplies the previously-read fingerprint to detect concurrent edits;
+// the replay rejects mismatched fingerprints with the same status GCE returns
+// (PRECONDITION_FAILED / 412) so the optimistic-concurrency code path is
+// exercised.
+func (t *transport) handleSetInstanceMetadata(req *http.Request, zone, instance string) (*http.Response, error) {
+	if req.Method != http.MethodPost {
+		return apiErrorResponse(req, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED",
+			fmt.Sprintf("method %s not supported on instances.setMetadata", req.Method)), nil
+	}
+	if _, ok := findInstanceByZoneAndName(zone, instance); !ok {
+		return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
+			fmt.Sprintf("instance %s not found in zone %s", instance, zone)), nil
+	}
+	body, err := demoreplay.ReadRequestBody(req)
+	if err != nil {
+		return apiErrorResponse(req, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error()), nil
+	}
+	var payload api.InstanceMetadata
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return apiErrorResponse(req, http.StatusBadRequest, "INVALID_ARGUMENT", err.Error()), nil
+	}
+	current := t.snapshotInstanceMetadata(instance)
+	if strings.TrimSpace(payload.Fingerprint) != current.Fingerprint {
+		return apiErrorResponse(req, http.StatusPreconditionFailed, "FAILED_PRECONDITION",
+			"fingerprint does not match the current metadata fingerprint"), nil
+	}
+	t.commitInstanceMetadata(instance, payload)
+	return demoreplay.JSONResponse(req, http.StatusOK, api.ComputeOperation{
+		Name:          fmt.Sprintf("operation-replay-setmetadata-%s", instance),
+		Zone:          fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s", demoProjectID, zone),
+		Status:        "DONE",
+		OperationType: "setMetadata",
+	}), nil
+}
+
+// handleResetInstance serves `compute.instances.reset`. The driver does not
+// poll the operation, so the response just needs to surface a terminal DONE
+// state with no error.
+func (t *transport) handleResetInstance(req *http.Request, zone, instance string) (*http.Response, error) {
+	if req.Method != http.MethodPost {
+		return apiErrorResponse(req, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED",
+			fmt.Sprintf("method %s not supported on instances.reset", req.Method)), nil
+	}
+	if _, ok := findInstanceByZoneAndName(zone, instance); !ok {
+		return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
+			fmt.Sprintf("instance %s not found in zone %s", instance, zone)), nil
+	}
+	return demoreplay.JSONResponse(req, http.StatusOK, api.ComputeOperation{
+		Name:          fmt.Sprintf("operation-replay-reset-%s", instance),
+		Zone:          fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/zones/%s", demoProjectID, zone),
+		Status:        "DONE",
+		OperationType: "reset",
+	}), nil
+}
+
+// snapshotInstanceMetadata returns the metadata payload an `instances.get`
+// would surface for `instance`. Empty metadata maps to the seed fingerprint
+// so the very first setMetadata call has something deterministic to match.
+func (t *transport) snapshotInstanceMetadata(instance string) api.InstanceMetadata {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if md, ok := t.instanceMetadata[instance]; ok {
+		return md
+	}
+	return api.InstanceMetadata{
+		Fingerprint: t.metadataFingerprint(),
+	}
+}
+
+func (t *transport) commitInstanceMetadata(instance string, payload api.InstanceMetadata) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.instanceMetadataEt++
+	payload.Fingerprint = t.metadataFingerprint()
+	t.instanceMetadata[instance] = payload
+}
+
+func (t *transport) metadataFingerprint() string {
+	return fmt.Sprintf("metadata-fp-%d", t.instanceMetadataEt)
 }
 
 func (t *transport) handleIAM(req *http.Request, body []byte) (*http.Response, error) {
@@ -591,14 +713,23 @@ func (t *transport) handleLogging(req *http.Request, _ []byte) (*http.Response, 
 
 func (t *transport) handleSQLAdmin(req *http.Request, _ []byte) (*http.Response, error) {
 	path := strings.TrimSuffix(req.URL.Path, "/")
-	if !strings.Contains(path, "/users") {
-		return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
-			"unsupported sqladmin path: "+path), nil
-	}
 	parts := strings.Split(strings.TrimPrefix(path, "/sql/v1beta4/"), "/")
 	if len(parts) < 4 || parts[0] != "projects" || parts[2] != "instances" {
 		return apiErrorResponse(req, http.StatusBadRequest, "INVALID_ARGUMENT",
 			"malformed sqladmin path"), nil
+	}
+	if parts[1] != demoProjectID {
+		return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
+			fmt.Sprintf("project %s not visible to current credentials", parts[1])), nil
+	}
+	// `/sql/v1beta4/projects/{p}/instances` (no further segments) → instances.list
+	if len(parts) == 3 && req.Method == http.MethodGet {
+		resp := api.SQLInstancesListResponse{Kind: "sql#instancesList", Items: demoSQLInstances()}
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+	}
+	if !strings.Contains(path, "/users") {
+		return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
+			"unsupported sqladmin path: "+path), nil
 	}
 	instanceID := parts[3]
 	switch req.Method {
@@ -625,6 +756,48 @@ func (t *transport) handleSQLAdmin(req *http.Request, _ []byte) (*http.Response,
 	}
 	return apiErrorResponse(req, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED",
 		"unsupported sqladmin method"), nil
+}
+
+// handleCloudBilling serves `cloudbilling.googleapis.com/v1/billingAccounts`
+// (GET, list) used by the cloudlist `balance` asset on GCP.
+func (t *transport) handleCloudBilling(req *http.Request) (*http.Response, error) {
+	if req.Method != http.MethodGet || !strings.HasSuffix(req.URL.Path, "/v1/billingAccounts") {
+		return apiErrorResponse(req, http.StatusNotFound, "NOT_FOUND",
+			fmt.Sprintf("unsupported cloudbilling path: %s %s", req.Method, req.URL.Path)), nil
+	}
+	resp := api.ListBillingAccountsResponse{
+		BillingAccounts: []api.BillingAccount{
+			{Name: "billingAccounts/01-AAAA-BBBB", DisplayName: "Production", Open: true},
+			{Name: "billingAccounts/02-CCCC-DDDD", DisplayName: "Sandbox", Open: false},
+		},
+	}
+	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
+}
+
+func demoSQLInstances() []api.SQLInstance {
+	return []api.SQLInstance{
+		{
+			Name:            "ctk-demo-mysql",
+			DatabaseVersion: "MYSQL_8_0",
+			Region:          "us-central1",
+			State:           "RUNNABLE",
+			IPAddresses: []api.SQLInstanceIPAddress{{
+				Type:      "PRIMARY",
+				IPAddress: "203.0.113.61",
+			}},
+			BackendType:    "SECOND_GEN",
+			InstanceType:   "CLOUD_SQL_INSTANCE",
+			GceZone:        "us-central1-a",
+			ConnectionName: demoProjectID + ":us-central1:ctk-demo-mysql",
+			Settings: api.SQLInstanceSettings{
+				Tier: "db-n1-standard-1",
+				IPConfiguration: struct {
+					IPv4Enabled    bool   `json:"ipv4Enabled"`
+					PrivateNetwork string `json:"privateNetwork,omitempty"`
+				}{IPv4Enabled: true},
+			},
+		},
+	}
 }
 
 func demoCloudAuditLogEntries() []api.LogEntry {

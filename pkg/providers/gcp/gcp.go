@@ -10,14 +10,17 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/gcp/api"
 	"github.com/404tk/cloudtoolkit/pkg/providers/gcp/auth"
+	_billing "github.com/404tk/cloudtoolkit/pkg/providers/gcp/billing"
 	_compute "github.com/404tk/cloudtoolkit/pkg/providers/gcp/compute"
 	_dns "github.com/404tk/cloudtoolkit/pkg/providers/gcp/dns"
 	_iam "github.com/404tk/cloudtoolkit/pkg/providers/gcp/iam"
 	_logging "github.com/404tk/cloudtoolkit/pkg/providers/gcp/logging"
 	_sqladmin "github.com/404tk/cloudtoolkit/pkg/providers/gcp/sqladmin"
 	_storage "github.com/404tk/cloudtoolkit/pkg/providers/gcp/storage"
+	_vmexec "github.com/404tk/cloudtoolkit/pkg/providers/gcp/vmexec"
 	"github.com/404tk/cloudtoolkit/pkg/providers/internal/credverify"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
+	"github.com/404tk/cloudtoolkit/pkg/runtime/vmexecspec"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
 )
@@ -99,6 +102,9 @@ func (p *Provider) CredentialKey(opts map[string]string) string {
 // Resources returns the provider for an resource deployment source.
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	collector := schema.NewResourceCollector(p.Name()).
+		Register("balance", func(ctx context.Context, _ *schema.Resources) {
+			(&_billing.Driver{Client: p.apiClient}).QueryAccountBalance(ctx)
+		}).
 		Register("host", func(ctx context.Context, list *schema.Resources) {
 			instanceProvider := &_compute.Driver{Projects: p.projects, Client: p.apiClient}
 			computes, err := instanceProvider.GetResource(ctx)
@@ -122,6 +128,18 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			storages, err := storageProvider.GetBuckets(ctx)
 			schema.AppendAssets(list, storages)
 			list.AddError("bucket", err)
+		}).
+		Register("log", func(ctx context.Context, list *schema.Resources) {
+			loggingProvider := &_logging.Driver{Client: p.apiClient, Projects: p.projects}
+			logs, err := loggingProvider.GetLogs(ctx)
+			schema.AppendAssets(list, logs)
+			list.AddError("log", err)
+		}).
+		Register("database", func(ctx context.Context, list *schema.Resources) {
+			sqlProvider := &_sqladmin.Driver{Client: p.apiClient, Projects: p.projects}
+			dbs, err := sqlProvider.GetDatabases(ctx)
+			schema.AppendAssets(list, dbs)
+			list.AddError("database", err)
 		})
 
 	return collector.Collect(ctx, env.From(ctx).Cloudlist)
@@ -206,6 +224,31 @@ func (p *Provider) UserManagement(action, username, _ string) (schema.IAMResult,
 	default:
 		return schema.IAMResult{}, fmt.Errorf("invalid action: %s (expected: add, del)", action)
 	}
+}
+
+// ExecuteCloudVMCommand implements schema.VMExecutor for GCP via the metadata
+// startup-script + reboot path. See pkg/providers/gcp/vmexec/vmexec.go for the
+// rationale (PLAN.md decision T2.2/Task 10). Output is not captured —
+// startup-script stdout goes to the serial console.
+//
+// `cmd` arrives in one of two encodings: the headless `__ctk_headless_sh__:`
+// vmexec spec (which carries an explicit osType), or a bare base64 string from
+// the REPL shell loop. Windows targets are rejected here — the startup-script
+// path only runs Linux bash; a Windows-equivalent (`windows-startup-script-*`
+// metadata + Cloud-Init) is out of scope until separately validated.
+func (p *Provider) ExecuteCloudVMCommand(ctx context.Context, instanceID, cmd string) (schema.CommandResult, error) {
+	driver := &_vmexec.Driver{Projects: p.projects, Client: p.apiClient}
+	if osType, command, ok := vmexecspec.Parse(cmd); ok {
+		if osType == "windows" {
+			return schema.CommandResult{}, fmt.Errorf("gcp vmexec: windows targets are not supported on the startup-script path")
+		}
+		return driver.Execute(ctx, instanceID, command)
+	}
+	command, err := base64.StdEncoding.DecodeString(cmd)
+	if err != nil {
+		return schema.CommandResult{}, err
+	}
+	return driver.Execute(ctx, instanceID, strings.TrimSpace(string(command)))
 }
 
 // RoleBinding implements schema.RoleBindingManager for GCP project-level IAM

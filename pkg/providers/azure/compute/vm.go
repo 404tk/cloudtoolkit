@@ -31,7 +31,10 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		return list, err
 	}
 
-	for subscription, groups := range groupsMap {
+	// Iterate in caller-provided order so cloudlist output is deterministic
+	// (Go map iteration is randomised, which used to surface as a flaky test).
+	for _, subscription := range d.SubscriptionIDs {
+		groups := groupsMap[subscription]
 		for _, group := range groups {
 			vmList, err := fetchVMList(ctx, group, subscription, d.Client)
 			if err != nil {

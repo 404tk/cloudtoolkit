@@ -331,10 +331,17 @@ func normalizeRegion(region string) string {
 func normalizeServiceRegion(service, region string) string {
 	region = normalizeRegion(region)
 	switch service {
-	case "iam":
+	case "iam", "route53":
 		return normalizeIAMRegion(region)
 	case "sts":
 		return normalizeSTSRegion(region)
+	case "ce":
+		// Cost Explorer is signed against us-east-1 (commercial) /
+		// cn-northwest-1 (China).
+		if strings.HasPrefix(region, "cn-") {
+			return "cn-northwest-1"
+		}
+		return "us-east-1"
 	default:
 		return region
 	}
@@ -352,6 +359,23 @@ func defaultHost(service, region string) string {
 			return "iam.cn-north-1.amazonaws.com.cn"
 		}
 		return "iam.amazonaws.com"
+	}
+	if service == "route53" {
+		// Route53 is a global service; the data plane host has no region
+		// component. AWS China keeps the same partition split (.com.cn).
+		if strings.HasPrefix(region, "cn-") {
+			return "route53.amazonaws.com.cn"
+		}
+		return "route53.amazonaws.com"
+	}
+	if service == "ce" {
+		// Cost Explorer is global; the regional endpoint exists only as
+		// `ce.us-east-1.amazonaws.com` for the AWS standard partition. The
+		// China partition uses `ce.cn-northwest-1.amazonaws.com.cn`.
+		if strings.HasPrefix(region, "cn-") {
+			return "ce.cn-northwest-1.amazonaws.com.cn"
+		}
+		return "ce.us-east-1.amazonaws.com"
 	}
 	suffix := "amazonaws.com"
 	if strings.HasPrefix(region, "cn-") {

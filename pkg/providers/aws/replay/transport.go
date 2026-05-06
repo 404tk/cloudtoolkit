@@ -89,6 +89,12 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return t.handleCloudTrail(req, body)
 	case isRDSHost(host):
 		return t.handleRDS(req, body)
+	case isRoute53Host(host):
+		return t.handleRoute53(req)
+	case isCostExplorerHost(host):
+		return t.handleCostExplorer(req, body)
+	case isLogsHost(host):
+		return t.handleLogs(req, body)
 	}
 	return apiErrorResponse(req, http.StatusNotFound, "InvalidEndpoint", fmt.Sprintf("unsupported replay host: %s", host)), nil
 }
@@ -708,6 +714,14 @@ func isRDSHost(host string) bool {
 	return strings.HasPrefix(host, "rds.")
 }
 
+func isCostExplorerHost(host string) bool {
+	return strings.HasPrefix(host, "ce.")
+}
+
+func isLogsHost(host string) bool {
+	return strings.HasPrefix(host, "logs.")
+}
+
 type awsResponseMetadata struct {
 	RequestID string `xml:"RequestId"`
 }
@@ -769,9 +783,9 @@ type iamUserWire struct {
 }
 
 type iamListUsersResponse struct {
-	XMLName  xml.Name             `xml:"ListUsersResponse"`
-	Result   iamListUsersResult   `xml:"ListUsersResult"`
-	Metadata awsResponseMetadata  `xml:"ResponseMetadata"`
+	XMLName  xml.Name            `xml:"ListUsersResponse"`
+	Result   iamListUsersResult  `xml:"ListUsersResult"`
+	Metadata awsResponseMetadata `xml:"ResponseMetadata"`
 }
 
 type iamListUsersResult struct {
@@ -813,9 +827,9 @@ type iamAttachedPolicyWire struct {
 }
 
 type iamCreateUserResponse struct {
-	XMLName  xml.Name             `xml:"CreateUserResponse"`
-	Result   iamCreateUserResult  `xml:"CreateUserResult"`
-	Metadata awsResponseMetadata  `xml:"ResponseMetadata"`
+	XMLName  xml.Name            `xml:"CreateUserResponse"`
+	Result   iamCreateUserResult `xml:"CreateUserResult"`
+	Metadata awsResponseMetadata `xml:"ResponseMetadata"`
 }
 
 type iamCreateUserResult struct {

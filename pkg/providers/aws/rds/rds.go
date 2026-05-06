@@ -19,6 +19,7 @@ type Driver struct {
 	Client        *api.Client
 	Region        string
 	DefaultRegion string
+	partialErr    error
 }
 
 // CreateAccount rotates the RDS master password to the value supplied by the

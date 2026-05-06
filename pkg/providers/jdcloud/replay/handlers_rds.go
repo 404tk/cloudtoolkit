@@ -9,12 +9,18 @@ import (
 )
 
 // handleRDS serves the JDCloud RDS account lifecycle paths used by
-// rds-account-check. Endpoints are pattern-inferred from JDCloud's regional
-// REST convention.
+// rds-account-check, plus DescribeRDSInstances for the cloudlist `database`
+// asset. Endpoints are pattern-inferred from JDCloud's regional REST
+// convention.
 func (t *transport) handleRDS(req *http.Request, _ []byte) (*http.Response, error) {
 	path := req.URL.Path
 	method := strings.ToUpper(req.Method)
 	switch {
+	case method == http.MethodGet && strings.HasSuffix(path, "/instances"):
+		resp := api.DescribeRDSInstancesResponse{RequestID: "req-replay-rds-describe-instances"}
+		resp.Result.DBInstances = demoRDSInstances()
+		resp.Result.TotalCount = len(resp.Result.DBInstances)
+		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case method == http.MethodPost && strings.HasSuffix(path, "/accounts"):
 		instanceID := extractInstanceID(path)
 		if instanceID == "" {
@@ -47,6 +53,33 @@ func (t *transport) handleRDS(req *http.Request, _ []byte) (*http.Response, erro
 	}
 	return apiErrorResponse(req, http.StatusNotFound, "InvalidPath",
 		"unsupported rds path: "+path), nil
+}
+
+func demoRDSInstances() []api.RDSInstance {
+	return []api.RDSInstance{
+		{
+			InstanceID:     "rds-prod-01",
+			InstanceName:   "ctk-demo-mysql",
+			Engine:         "mysql",
+			EngineVersion:  "8.0",
+			RegionID:       "cn-north-1",
+			InstanceStatus: "RUNNING",
+			InternalDomain: "rds-prod-01.jcloud-mysql.com",
+			InternalPort:   3306,
+		},
+		{
+			InstanceID:     "rds-public-02",
+			InstanceName:   "ctk-demo-pg",
+			Engine:         "postgres",
+			EngineVersion:  "15.4",
+			RegionID:       "cn-north-1",
+			InstanceStatus: "RUNNING",
+			PublicDomain:   "rds-public-02-pub.jcloud-pg.com",
+			PublicPort:     5432,
+			InternalDomain: "rds-public-02.jcloud-pg.com",
+			InternalPort:   5432,
+		},
+	}
 }
 
 // extractInstanceID parses `/v1/regions/<region>/instances/<id>/accounts`.

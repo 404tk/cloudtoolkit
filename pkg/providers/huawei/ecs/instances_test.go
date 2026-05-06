@@ -23,10 +23,10 @@ func TestDriverGetResourceMapsHostsAcrossPages(t *testing.T) {
 				body: `{"projects":[{"id":"project-n4","name":"cn-north-4","domain_id":"d-1","enabled":true}]}`,
 			},
 			"GET ecs.cn-north-4.myhuaweicloud.com /v1/project-n4/cloudservers/detail?limit=100&offset=1": {
-				body: `{"count":101,"servers":[{"status":"ACTIVE","name":"ecs-1","addresses":{"net-a":[{"addr":"10.0.0.1","OS-EXT-IPS:type":"fixed"},{"addr":"1.1.1.1","OS-EXT-IPS:type":"floating"}]}}]}`,
+				body: `{"count":101,"servers":[{"id":"i-uuid-1","status":"ACTIVE","name":"ecs-1","addresses":{"net-a":[{"addr":"10.0.0.1","OS-EXT-IPS:type":"fixed"},{"addr":"1.1.1.1","OS-EXT-IPS:type":"floating"}]}}]}`,
 			},
 			"GET ecs.cn-north-4.myhuaweicloud.com /v1/project-n4/cloudservers/detail?limit=100&offset=2": {
-				body: `{"count":101,"servers":[{"status":"SHUTOFF","name":"ecs-2","addresses":{"net-a":[{"addr":"10.0.0.2","OS-EXT-IPS:type":"fixed"}]}}]}`,
+				body: `{"count":101,"servers":[{"id":"i-uuid-2","status":"SHUTOFF","name":"ecs-2","addresses":{"net-a":[{"addr":"10.0.0.2","OS-EXT-IPS:type":"fixed"}]}}]}`,
 			},
 		},
 	}
@@ -45,10 +45,10 @@ func TestDriverGetResourceMapsHostsAcrossPages(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("unexpected host count: %d", len(got))
 	}
-	if got[0].HostName != "ecs-1" || got[0].State != "ACTIVE" || got[0].PublicIPv4 != "1.1.1.1" || got[0].PrivateIpv4 != "10.0.0.1" || !got[0].Public || got[0].Region != "cn-north-4" {
+	if got[0].HostName != "ecs-1" || got[0].ID != "i-uuid-1" || got[0].State != "ACTIVE" || got[0].PublicIPv4 != "1.1.1.1" || got[0].PrivateIpv4 != "10.0.0.1" || !got[0].Public || got[0].Region != "cn-north-4" {
 		t.Fatalf("unexpected first host: %+v", got[0])
 	}
-	if got[1].HostName != "ecs-2" || got[1].State != "SHUTOFF" || got[1].PublicIPv4 != "" || got[1].PrivateIpv4 != "10.0.0.2" || got[1].Public || got[1].Region != "cn-north-4" {
+	if got[1].HostName != "ecs-2" || got[1].ID != "i-uuid-2" || got[1].State != "SHUTOFF" || got[1].PublicIPv4 != "" || got[1].PrivateIpv4 != "10.0.0.2" || got[1].Public || got[1].Region != "cn-north-4" {
 		t.Fatalf("unexpected second host: %+v", got[1])
 	}
 }
@@ -67,7 +67,7 @@ func TestDriverGetResourceAggregatesRegionErrorsAndContinues(t *testing.T) {
 				body: `{"projects":[{"id":"project-e3","name":"cn-east-3","domain_id":"d-1","enabled":true}]}`,
 			},
 			"GET ecs.cn-east-3.myhuaweicloud.com /v1/project-e3/cloudservers/detail?limit=100&offset=1": {
-				body: `{"count":1,"servers":[{"status":"ACTIVE","name":"ecs-ok","addresses":{"net-a":[{"addr":"10.0.0.3","OS-EXT-IPS:type":"fixed"}]}}]}`,
+				body: `{"count":1,"servers":[{"id":"i-uuid-ok","status":"ACTIVE","name":"ecs-ok","addresses":{"net-a":[{"addr":"10.0.0.3","OS-EXT-IPS:type":"fixed"}]}}]}`,
 			},
 		},
 	}

@@ -18,6 +18,13 @@ type Credentials struct {
 	// (e.g. azure tenantId / subscriptionId, gcp base64Json). They are
 	// surfaced in the demo replay banner alongside AccessKey / SecretKey.
 	Extras []NamedValue
+	// HideDefaultLabels suppresses the "AccessKey: …" / "SecretKey: …" rows
+	// in the demo banner for providers whose auth model does not use those
+	// labels (azure: clientId/clientSecret, gcp: base64Json). The struct
+	// fields are still populated for replay transport / cache lookups; they
+	// just shouldn't surface as user-facing copy targets when the operator
+	// fills the form using native field names from Extras.
+	HideDefaultLabels bool
 }
 
 // NamedValue is a key/value pair used by demo replay banners and
@@ -120,6 +127,7 @@ var providers = map[string]providerMeta{
 			"event-check",
 			"iam-credential-check",
 			"rds-account-check",
+			"instance-cmd-check",
 		},
 	},
 	"azure": {
@@ -132,6 +140,7 @@ var providers = map[string]providerMeta{
 				{Name: "tenantId", Value: "11111111-2222-3333-4444-555555555555"},
 				{Name: "subscriptionId", Value: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"},
 			},
+			HideDefaultLabels: true,
 		},
 		Payloads: []string{
 			"cloudlist",
@@ -146,11 +155,10 @@ var providers = map[string]providerMeta{
 	},
 	"gcp": {
 		Credentials: Credentials{
-			AccessKey: "ctk-demo-project",
-			SecretKey: "(see base64Json below)",
 			Extras: []NamedValue{
 				{Name: "base64Json", Value: gcpDemoServiceAccountJSON},
 			},
+			HideDefaultLabels: true,
 		},
 		Payloads: []string{
 			"cloudlist",
@@ -161,6 +169,7 @@ var providers = map[string]providerMeta{
 			"iam-user-check",
 			"bucket-check",
 			"bucket-acl-check",
+			"instance-cmd-check",
 		},
 	},
 	"jdcloud": {
@@ -178,8 +187,8 @@ var providers = map[string]providerMeta{
 	},
 	"ucloud": {
 		Credentials: Credentials{
-			AccessKey: "ucloudpubkey-EXAMPLE-ctkdemo-replay-public",
-			SecretKey: "ucloudprivkey-EXAMPLE-ctkdemo-replay-secret",
+			AccessKey: "EXAMPLE4ZPPPQmaLFFsdTLzzYgMgrcKEY",
+			SecretKey: "UCloudzTjmbGC4GR3dbgueU3zRZ7i43eTYQc3EZYqoFR",
 		},
 		Payloads: []string{
 			"cloudlist",

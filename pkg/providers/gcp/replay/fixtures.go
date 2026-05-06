@@ -50,6 +50,17 @@ func instancesForZone(zone string) []instanceFixture {
 	return out
 }
 
+func findInstanceByZoneAndName(zone, name string) (instanceFixture, bool) {
+	zone = strings.TrimSpace(zone)
+	name = strings.TrimSpace(name)
+	for _, inst := range demoInstances {
+		if inst.Zone == zone && inst.Name == name {
+			return inst, true
+		}
+	}
+	return instanceFixture{}, false
+}
+
 type serviceAccountFixture struct {
 	Name           string
 	UniqueID       string

@@ -8,10 +8,13 @@ import (
 
 	_api "github.com/404tk/cloudtoolkit/pkg/providers/aws/api"
 	_auth "github.com/404tk/cloudtoolkit/pkg/providers/aws/auth"
+	_billing "github.com/404tk/cloudtoolkit/pkg/providers/aws/billing"
 	_cloudtrail "github.com/404tk/cloudtoolkit/pkg/providers/aws/cloudtrail"
 	_ec2 "github.com/404tk/cloudtoolkit/pkg/providers/aws/ec2"
 	_iam "github.com/404tk/cloudtoolkit/pkg/providers/aws/iam"
+	_logs "github.com/404tk/cloudtoolkit/pkg/providers/aws/logs"
 	_rds "github.com/404tk/cloudtoolkit/pkg/providers/aws/rds"
+	_route53 "github.com/404tk/cloudtoolkit/pkg/providers/aws/route53"
 	_s3 "github.com/404tk/cloudtoolkit/pkg/providers/aws/s3"
 	_ssm "github.com/404tk/cloudtoolkit/pkg/providers/aws/ssm"
 	"github.com/404tk/cloudtoolkit/pkg/providers/internal/credverify"
@@ -86,6 +89,9 @@ func (p *Provider) Name() string {
 // Resources returns the provider for an resource deployment source.
 func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 	collector := schema.NewResourceCollector(p.Name()).
+		Register("balance", func(ctx context.Context, _ *schema.Resources) {
+			(&_billing.Driver{Client: p.apiClient}).QueryAccountBalance(ctx)
+		}).
 		Register("host", func(ctx context.Context, list *schema.Resources) {
 			ec2provider := &_ec2.Driver{
 				Client:        p.apiClient,
@@ -113,6 +119,34 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			storages, err := s3provider.GetBuckets(ctx)
 			schema.AppendAssets(list, storages)
 			list.AddError("bucket", err)
+		}).
+		Register("domain", func(ctx context.Context, list *schema.Resources) {
+			r53driver := &_route53.Driver{Client: p.apiClient}
+			domains, err := r53driver.GetDomains(ctx)
+			schema.AppendAssets(list, domains)
+			list.AddError("domain", err)
+		}).
+		Register("log", func(ctx context.Context, list *schema.Resources) {
+			logsDriver := &_logs.Driver{
+				Client:        p.apiClient,
+				Region:        p.region,
+				DefaultRegion: p.defaultRegion,
+			}
+			logs, err := logsDriver.GetLogs(ctx)
+			schema.AppendAssets(list, logs)
+			list.AddError("log", err)
+			list.AddError("log", logsDriver.PartialError())
+		}).
+		Register("database", func(ctx context.Context, list *schema.Resources) {
+			rdsDriver := &_rds.Driver{
+				Client:        p.apiClient,
+				Region:        p.region,
+				DefaultRegion: p.defaultRegion,
+			}
+			dbs, err := rdsDriver.GetDatabases(ctx)
+			schema.AppendAssets(list, dbs)
+			list.AddError("database", err)
+			list.AddError("database", rdsDriver.PartialError())
 		})
 
 	return collector.Collect(ctx, env.From(ctx).Cloudlist)

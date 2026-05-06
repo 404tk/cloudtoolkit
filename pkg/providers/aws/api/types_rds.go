@@ -79,3 +79,92 @@ func RandomPassword() (string, error) {
 	}
 	return strings.ReplaceAll(base64.StdEncoding.EncodeToString(buf), "/", "_"), nil
 }
+
+// DBInstance is the typed AWS RDS instance shape returned by
+// DescribeDBInstances. Only the fields cloudlist surfaces are projected.
+type DBInstance struct {
+	DBInstanceIdentifier string
+	Engine               string
+	EngineVersion        string
+	DBName               string
+	Status               string
+	PubliclyAccessible   bool
+	Address              string
+	Port                 int64
+	AvailabilityZone     string
+}
+
+type DescribeDBInstancesOutput struct {
+	DBInstances []DBInstance
+	Marker      string
+	RequestID   string
+}
+
+type describeDBInstancesResponse struct {
+	XMLName                   xml.Name                       `xml:"DescribeDBInstancesResponse"`
+	DescribeDBInstancesResult describeDBInstancesResultWire  `xml:"DescribeDBInstancesResult"`
+	Metadata                  rdsResponseMetadata            `xml:"ResponseMetadata"`
+}
+
+type describeDBInstancesResultWire struct {
+	DBInstances []dbInstanceDescribeWire `xml:"DBInstances>DBInstance"`
+	Marker      string                   `xml:"Marker"`
+}
+
+type dbInstanceDescribeWire struct {
+	DBInstanceIdentifier string                 `xml:"DBInstanceIdentifier"`
+	Engine               string                 `xml:"Engine"`
+	EngineVersion        string                 `xml:"EngineVersion"`
+	DBName               string                 `xml:"DBName"`
+	DBInstanceStatus     string                 `xml:"DBInstanceStatus"`
+	PubliclyAccessible   bool                   `xml:"PubliclyAccessible"`
+	Endpoint             dbInstanceEndpointWire `xml:"Endpoint"`
+	AvailabilityZone     string                 `xml:"AvailabilityZone"`
+}
+
+type dbInstanceEndpointWire struct {
+	Address string `xml:"Address"`
+	Port    int64  `xml:"Port"`
+}
+
+// DescribeDBInstances paginates through RDS DescribeDBInstances. Pass an
+// empty marker for the first call.
+func (c *Client) DescribeDBInstances(ctx context.Context, region, marker string) (DescribeDBInstancesOutput, error) {
+	query := url.Values{}
+	if marker = strings.TrimSpace(marker); marker != "" {
+		query.Set("Marker", marker)
+	}
+	var wire describeDBInstancesResponse
+	err := c.DoXML(ctx, Request{
+		Service:    "rds",
+		Region:     region,
+		Action:     "DescribeDBInstances",
+		Version:    rdsAPIVersion,
+		Method:     http.MethodPost,
+		Path:       "/",
+		Query:      query,
+		Idempotent: true,
+	}, &wire)
+	if err != nil {
+		return DescribeDBInstancesOutput{}, err
+	}
+	out := DescribeDBInstancesOutput{
+		DBInstances: make([]DBInstance, 0, len(wire.DescribeDBInstancesResult.DBInstances)),
+		Marker:      strings.TrimSpace(wire.DescribeDBInstancesResult.Marker),
+		RequestID:   strings.TrimSpace(wire.Metadata.RequestID),
+	}
+	for _, w := range wire.DescribeDBInstancesResult.DBInstances {
+		out.DBInstances = append(out.DBInstances, DBInstance{
+			DBInstanceIdentifier: strings.TrimSpace(w.DBInstanceIdentifier),
+			Engine:               strings.TrimSpace(w.Engine),
+			EngineVersion:        strings.TrimSpace(w.EngineVersion),
+			DBName:               strings.TrimSpace(w.DBName),
+			Status:               strings.TrimSpace(w.DBInstanceStatus),
+			PubliclyAccessible:   w.PubliclyAccessible,
+			Address:              strings.TrimSpace(w.Endpoint.Address),
+			Port:                 w.Endpoint.Port,
+			AvailabilityZone:     strings.TrimSpace(w.AvailabilityZone),
+		})
+	}
+	return out, nil
+}

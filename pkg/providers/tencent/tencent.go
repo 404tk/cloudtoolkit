@@ -12,6 +12,8 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/billing"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cdb"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cloudaudit"
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cls"
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/sms"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cos"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cvm"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/dns"
@@ -169,6 +171,20 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			storages, err := cosprovider.GetBuckets(ctx)
 			schema.AppendAssets(list, storages)
 			list.AddError("bucket", err)
+		}).
+		Register("log", func(ctx context.Context, list *schema.Resources) {
+			clsDriver := &cls.Driver{Credential: p.apiCredential, Region: p.region}
+			clsDriver.SetClientOptions(p.clientOptions...)
+			logs, err := clsDriver.GetLogs(ctx)
+			schema.AppendAssets(list, logs)
+			list.AddError("log", err)
+		}).
+		Register("sms", func(ctx context.Context, list *schema.Resources) {
+			smsDriver := &sms.Driver{Credential: p.apiCredential, Region: p.region}
+			smsDriver.SetClientOptions(p.clientOptions...)
+			result, err := smsDriver.GetResource(ctx)
+			list.Sms = result
+			list.AddError("sms", err)
 		})
 
 	return collector.Collect(ctx, env.From(ctx).Cloudlist)

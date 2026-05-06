@@ -93,6 +93,12 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return t.handleBSS(req, body)
 	case "cts":
 		return t.handleCTS(req, region)
+	case "dns":
+		return t.handleDNS(req, region)
+	case "lts":
+		return t.handleLTS(req, region)
+	case "smsapi":
+		return t.handleSMSAPI(req, region)
 	}
 	return apiErrorResponse(req, http.StatusNotFound, "InvalidEndpoint",
 		fmt.Sprintf("unsupported replay service: %s", service)), nil
@@ -116,6 +122,12 @@ func classifyHost(host string) (string, string) {
 		return "rds", trimSuffix(strings.TrimPrefix(host, "rds."), ".myhuaweicloud.com")
 	case strings.HasPrefix(host, "cts."):
 		return "cts", trimSuffix(strings.TrimPrefix(host, "cts."), ".myhuaweicloud.com")
+	case strings.HasPrefix(host, "dns."):
+		return "dns", trimSuffix(strings.TrimPrefix(host, "dns."), ".myhuaweicloud.com")
+	case strings.HasPrefix(host, "lts."):
+		return "lts", trimSuffix(strings.TrimPrefix(host, "lts."), ".myhuaweicloud.com")
+	case strings.HasPrefix(host, "smsapi."):
+		return "smsapi", trimSuffix(strings.TrimPrefix(host, "smsapi."), ".myhuaweicloud.com")
 	}
 	return "", ""
 }

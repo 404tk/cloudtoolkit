@@ -22,14 +22,14 @@ func TestGetResourceMapsInstancesAndHandlesPagination(t *testing.T) {
 		case "/compute/v1/projects/proj-1/zones/zone-a/instances":
 			switch r.URL.Query().Get("pageToken") {
 			case "":
-				_, _ = w.Write([]byte(`{"items":[{"hostname":"vm-1","zone":"https://www.googleapis.com/compute/v1/projects/proj-1/zones/zone-a","networkInterfaces":[{"networkIP":"10.0.0.1"},{"networkIP":"10.0.0.2","accessConfigs":[{"natIP":"1.1.1.1"},{"natIP":"1.1.1.2"}]}]}],"nextPageToken":"page-2"}`))
+				_, _ = w.Write([]byte(`{"items":[{"hostname":"vm-1.internal","name":"vm-1","zone":"https://www.googleapis.com/compute/v1/projects/proj-1/zones/zone-a","networkInterfaces":[{"networkIP":"10.0.0.1"},{"networkIP":"10.0.0.2","accessConfigs":[{"natIP":"1.1.1.1"},{"natIP":"1.1.1.2"}]}]}],"nextPageToken":"page-2"}`))
 			case "page-2":
-				_, _ = w.Write([]byte(`{"items":[{"hostname":"vm-2","zone":"https://www.googleapis.com/compute/v1/projects/proj-1/zones/zone-a","networkInterfaces":[{"networkIP":"10.0.1.9"}]}]}`))
+				_, _ = w.Write([]byte(`{"items":[{"name":"vm-2","zone":"https://www.googleapis.com/compute/v1/projects/proj-1/zones/zone-a","networkInterfaces":[{"networkIP":"10.0.1.9"}]}]}`))
 			default:
 				t.Fatalf("unexpected pageToken: %s", r.URL.Query().Get("pageToken"))
 			}
 		case "/compute/v1/projects/proj-1/zones/zone-b/instances":
-			_, _ = w.Write([]byte(`{"items":[{"hostname":"vm-3","zone":"https://www.googleapis.com/compute/v1/projects/proj-1/zones/zone-b","networkInterfaces":[{"networkIP":"10.0.2.5","accessConfigs":[{"natIP":"2.2.2.2"}]}]}]}`))
+			_, _ = w.Write([]byte(`{"items":[{"hostname":"vm-3","name":"vm-3","zone":"https://www.googleapis.com/compute/v1/projects/proj-1/zones/zone-b","networkInterfaces":[{"networkIP":"10.0.2.5","accessConfigs":[{"natIP":"2.2.2.2"}]}]}]}`))
 		default:
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
@@ -47,14 +47,15 @@ func TestGetResourceMapsInstancesAndHandlesPagination(t *testing.T) {
 	if len(hosts) != 3 {
 		t.Fatalf("unexpected host count: %d", len(hosts))
 	}
-	if hosts[0].HostName != "vm-1" || hosts[0].PrivateIpv4 != "10.0.0.2" || hosts[0].PublicIPv4 != "1.1.1.1" || !hosts[0].Public {
+	if hosts[0].HostName != "vm-1.internal" || hosts[0].ID != "zone-a/vm-1" || hosts[0].Region != "zone-a" || hosts[0].PrivateIpv4 != "10.0.0.2" || hosts[0].PublicIPv4 != "1.1.1.1" || !hosts[0].Public {
 		t.Fatalf("unexpected first host: %+v", hosts[0])
 	}
-	if hosts[1].HostName != "vm-2" || hosts[1].Public || hosts[1].PublicIPv4 != "" || hosts[1].PrivateIpv4 != "10.0.1.9" {
+	// vm-2 omits hostname; HostName should fall back to the canonical instance name.
+	if hosts[1].HostName != "vm-2" || hosts[1].ID != "zone-a/vm-2" || hosts[1].Region != "zone-a" || hosts[1].Public || hosts[1].PublicIPv4 != "" || hosts[1].PrivateIpv4 != "10.0.1.9" {
 		t.Fatalf("unexpected second host: %+v", hosts[1])
 	}
-	if hosts[2].Region != "https://www.googleapis.com/compute/v1/projects/proj-1/zones/zone-b" {
-		t.Fatalf("unexpected third host region: %+v", hosts[2])
+	if hosts[2].HostName != "vm-3" || hosts[2].ID != "zone-b/vm-3" || hosts[2].Region != "zone-b" {
+		t.Fatalf("unexpected third host: %+v", hosts[2])
 	}
 }
 

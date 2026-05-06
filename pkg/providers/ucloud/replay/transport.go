@@ -10,8 +10,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/api"
 	demoreplay "github.com/404tk/cloudtoolkit/pkg/providers/replay"
+	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/api"
 )
 
 type transport struct {
@@ -96,6 +96,12 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return t.handleCreateUDBUser(req, params)
 	case "DeleteUDBUser":
 		return t.handleDeleteUDBUser(req, params)
+	case "DescribeULogTopic":
+		return t.handleDescribeULogTopic(req)
+	case "DescribeUSMSSignature":
+		return t.handleDescribeUSMSSignature(req)
+	case "DescribeUSMSTemplate":
+		return t.handleDescribeUSMSTemplate(req)
 	}
 	return errorResponse(req, http.StatusNotFound, 1000,
 		fmt.Sprintf("unsupported replay action: %s", action)), nil

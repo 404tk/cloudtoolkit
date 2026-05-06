@@ -160,6 +160,10 @@ func (t *transport) handleOpenAPI(req *http.Request, body []byte) (*http.Respons
 		return t.handleTAT(req, action, body)
 	case "cloudaudit":
 		return t.handleCloudAudit(req, action)
+	case "cls":
+		return t.handleCLS(req, action)
+	case "sms":
+		return t.handleSMS(req, action)
 	default:
 		return openAPIErrorResponse(req, http.StatusNotFound, "InvalidAction.NotFound", fmt.Sprintf("Unsupported replay action: %s", action)), nil
 	}

@@ -138,6 +138,10 @@ func (t *transport) handleOpenAPI(req *http.Request, body []byte) (*http.Respons
 		return t.handleRDSPostgreSQL(req, action, body)
 	case api.ServiceRDSMSSQL:
 		return t.handleRDSSQLServer(req, action, body)
+	case "tls":
+		return t.handleTLS(req, action)
+	case "volcsms":
+		return t.handleSMS(req, action)
 	default:
 		return openAPIErrorResponse(req, http.StatusNotFound, "InvalidAction", fmt.Sprintf("unsupported replay service: %s", service)), nil
 	}
@@ -1025,6 +1029,10 @@ func openAPIService(host string) string {
 		return api.ServiceRDSPostgreSQL
 	case strings.HasPrefix(host, "rds-mssql."):
 		return api.ServiceRDSMSSQL
+	case strings.HasPrefix(host, "tls."):
+		return "tls"
+	case strings.HasPrefix(host, "volcsms."):
+		return "volcsms"
 	default:
 		return ""
 	}

@@ -109,6 +109,8 @@ func (t *transport) handleResourceGroupProvider(req *http.Request, subscription,
 		return t.handleStorageScoped(req, subscription, group, rest[1:])
 	case strings.EqualFold(provider, "Microsoft.Sql") && len(rest) >= 2 && rest[0] == "servers":
 		return t.handleSQLServer(req, subscription, group, rest[1])
+	case strings.EqualFold(provider, "Microsoft.Network") && len(rest) >= 1 && rest[0] == "dnsZones":
+		return t.handleDNSZoneScoped(req, subscription, group, rest[1:])
 	}
 	return armErrorResponse(req, http.StatusNotFound, "InvalidPath",
 		fmt.Sprintf("unsupported provider path: %s/%v", provider, rest)), nil
@@ -166,6 +168,14 @@ func (t *transport) handleSubscriptionProvider(req *http.Request, subscription s
 		return t.handleRoleDefinitions(req, subscription, rest[1:])
 	case strings.EqualFold(provider, "Microsoft.Insights") && len(rest) >= 3 && rest[0] == "eventtypes" && rest[1] == "management" && rest[2] == "values":
 		return t.handleActivityLog(req, subscription)
+	case strings.EqualFold(provider, "Microsoft.Network") && len(rest) >= 1 && rest[0] == "dnsZones":
+		return t.handleListDNSZones(req, subscription)
+	case strings.EqualFold(provider, "Microsoft.Sql") && len(rest) == 1 && rest[0] == "servers":
+		return t.handleListSQLServers(req, subscription)
+	case strings.EqualFold(provider, "Microsoft.OperationalInsights") && len(rest) == 1 && rest[0] == "workspaces":
+		return t.handleListWorkspaces(req, subscription)
+	case strings.EqualFold(provider, "Microsoft.CostManagement") && len(rest) == 1 && rest[0] == "query":
+		return t.handleCostManagementQuery(req, subscription)
 	}
 	return armErrorResponse(req, http.StatusNotFound, "InvalidPath",
 		fmt.Sprintf("unsupported subscription provider: %s/%v", provider, rest)), nil

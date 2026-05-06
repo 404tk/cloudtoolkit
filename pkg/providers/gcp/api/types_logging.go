@@ -74,3 +74,11 @@ type ListLogEntriesResponse struct {
 	Entries       []LogEntry `json:"entries"`
 	NextPageToken string     `json:"nextPageToken"`
 }
+
+// ListLogsResponse is the typed result of `projects/<p>/logs.list`. Returns
+// just the log names available in the project — one per cloudlist `log`
+// asset entry, which is a closer fit than the heavy `entries.list` payload.
+type ListLogsResponse struct {
+	LogNames      []string `json:"logNames"`
+	NextPageToken string   `json:"nextPageToken"`
+}

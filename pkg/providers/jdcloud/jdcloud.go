@@ -13,10 +13,13 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/asset"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/assistant"
 	_auth "github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/auth"
+	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/dns"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/iam"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/lavm"
+	jdlogs "github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/logs"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/oss"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/rds"
+	jdsms "github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/sms"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/vm"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/vmexecspec"
@@ -132,6 +135,30 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			storages, err := d.ListBuckets(ctx)
 			schema.AppendAssets(list, storages)
 			list.AddError("bucket", err)
+		}).
+		Register("log", func(ctx context.Context, list *schema.Resources) {
+			d := &jdlogs.Driver{Client: p.apiClient, Region: p.region}
+			logs, err := d.GetLogs(ctx)
+			schema.AppendAssets(list, logs)
+			list.AddError("log", err)
+		}).
+		Register("database", func(ctx context.Context, list *schema.Resources) {
+			d := &rds.Driver{Client: p.apiClient, Region: p.region}
+			dbs, err := d.GetDatabases(ctx)
+			schema.AppendAssets(list, dbs)
+			list.AddError("database", err)
+		}).
+		Register("sms", func(ctx context.Context, list *schema.Resources) {
+			d := &jdsms.Driver{Client: p.apiClient, Region: p.region}
+			result, err := d.GetResource(ctx)
+			list.Sms = result
+			list.AddError("sms", err)
+		}).
+		Register("domain", func(ctx context.Context, list *schema.Resources) {
+			d := &dns.Driver{Client: p.apiClient, Region: p.region}
+			domains, err := d.GetDomains(ctx)
+			schema.AppendAssets(list, domains)
+			list.AddError("domain", err)
 		})
 
 	return collector.Collect(ctx, env.From(ctx).Cloudlist)

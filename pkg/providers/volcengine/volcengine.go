@@ -9,6 +9,8 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/internal/credverify"
 	_api "github.com/404tk/cloudtoolkit/pkg/providers/volcengine/api"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/audit"
+	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/sms"
+	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/tls"
 	_auth "github.com/404tk/cloudtoolkit/pkg/providers/volcengine/auth"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/billing"
 	_dns "github.com/404tk/cloudtoolkit/pkg/providers/volcengine/dns"
@@ -130,6 +132,18 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			storages, err := d.GetBuckets(ctx)
 			schema.AppendAssets(list, storages)
 			list.AddError("bucket", err)
+		}).
+		Register("log", func(ctx context.Context, list *schema.Resources) {
+			d := &tls.Driver{Client: p.apiClient, Region: p.region}
+			logs, err := d.GetLogs(ctx)
+			schema.AppendAssets(list, logs)
+			list.AddError("log", err)
+		}).
+		Register("sms", func(ctx context.Context, list *schema.Resources) {
+			d := &sms.Driver{Client: p.apiClient, Region: p.region}
+			result, err := d.GetResource(ctx)
+			list.Sms = result
+			list.AddError("sms", err)
 		})
 
 	return collector.Collect(ctx, env.From(ctx).Cloudlist)
