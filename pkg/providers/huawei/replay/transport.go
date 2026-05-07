@@ -67,7 +67,7 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 	switch service {
 	case "obs":
-		return t.handleOBS(req, host, region, body)
+		return t.handleOBS(req, region, body)
 	case "":
 		return apiErrorResponse(req, http.StatusNotFound, "InvalidEndpoint",
 			fmt.Sprintf("unsupported replay host: %s", host)), nil

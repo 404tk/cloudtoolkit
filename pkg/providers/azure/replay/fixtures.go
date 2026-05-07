@@ -68,16 +68,6 @@ var demoRoleDefinitions = []roleDefinitionFixture{
 	{Name: "Storage Blob Data Contributor", GUID: "ba92f5b4-2d11-453d-a403-e96b0029c9fe"},
 }
 
-func roleDefinitionByName(name string) (roleDefinitionFixture, bool) {
-	name = strings.TrimSpace(name)
-	for _, def := range demoRoleDefinitions {
-		if strings.EqualFold(def.Name, name) {
-			return def, true
-		}
-	}
-	return roleDefinitionFixture{}, false
-}
-
 func roleDefinitionByGUID(guid string) (roleDefinitionFixture, bool) {
 	guid = strings.TrimSpace(guid)
 	for _, def := range demoRoleDefinitions {
@@ -181,16 +171,6 @@ func storageAccountByName(name string) (storageAccountFixture, bool) {
 		}
 	}
 	return storageAccountFixture{}, false
-}
-
-func vmByName(name string) (vmFixture, bool) {
-	name = strings.TrimSpace(name)
-	for _, vm := range demoVMs {
-		if vm.Name == name {
-			return vm, true
-		}
-	}
-	return vmFixture{}, false
 }
 
 func vmByNICName(nicName string) (vmFixture, bool) {

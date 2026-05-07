@@ -48,7 +48,7 @@ var demoCloudTrailEvents = []api.CloudTrailEvent{
 	},
 }
 
-func (t *transport) handleCloudTrail(req *http.Request, body []byte) (*http.Response, error) {
+func (t *transport) handleCloudTrail(req *http.Request, _ []byte) (*http.Response, error) {
 	if req.Method != http.MethodPost {
 		return apiErrorResponse(req, http.StatusMethodNotAllowed, "InvalidAction", "cloudtrail replay expects POST"), nil
 	}

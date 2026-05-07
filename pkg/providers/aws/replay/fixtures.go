@@ -168,16 +168,6 @@ var demoIAMUsers = []iamUserFixture{
 	},
 }
 
-func findIAMUser(userName string) (iamUserFixture, bool) {
-	userName = strings.TrimSpace(userName)
-	for _, user := range demoIAMUsers {
-		if user.UserName == userName {
-			return user, true
-		}
-	}
-	return iamUserFixture{}, false
-}
-
 type bucketObjectFixture struct {
 	Key          string
 	Size         int64

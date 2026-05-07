@@ -53,17 +53,23 @@ func (s *iamMutationState) snapshotUsers() []subUserFixture {
 	return users
 }
 
-func (s *iamMutationState) ensureUser(name string) subUserFixture {
+func (s *iamMutationState) ensureUser(name, displayName string) subUserFixture {
 	name = strings.TrimSpace(name)
+	displayName = strings.TrimSpace(displayName)
+	if displayName == "" {
+		displayName = name
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.deleted, name)
 	if user, ok := s.created[name]; ok {
+		user.DisplayName = displayName
+		s.created[name] = user
 		return user
 	}
 	user := subUserFixture{
 		UserName:    name,
-		DisplayName: name,
+		DisplayName: displayName,
 		Email:       name + "@ctk.demo",
 		Status:      "Active",
 		CreatedAt:   1714694400,

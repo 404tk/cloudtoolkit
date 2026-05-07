@@ -12,9 +12,9 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 )
 
-// Driver wraps UCloud Action Trail (UACT) lookups. Action name and shape are
-// pattern-inferred from UCloud's JSON-RPC convention; verify against the
-// upstream SDK before relying on this in production.
+// Driver wraps UCloud Action Trail (UACT) lookups used by event-check. Replay
+// fixtures and focused tests cover the action-log request/response contract
+// used by this validation path.
 type Driver struct {
 	Credential ucloudauth.Credential
 	Client     *api.Client

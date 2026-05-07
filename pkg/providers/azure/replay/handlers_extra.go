@@ -22,9 +22,7 @@ func (t *transport) handleListSQLServers(req *http.Request, subscription string)
 	resp := struct {
 		Value []azapi.SQLServer `json:"value"`
 	}{}
-	for _, server := range demoSQLServers(subscription) {
-		resp.Value = append(resp.Value, server)
-	}
+	resp.Value = append(resp.Value, demoSQLServers(subscription)...)
 	return jsonResponse(req, resp), nil
 }
 
@@ -39,9 +37,7 @@ func (t *transport) handleListWorkspaces(req *http.Request, subscription string)
 	resp := struct {
 		Value []azapi.Workspace `json:"value"`
 	}{}
-	for _, w := range demoWorkspaces(subscription) {
-		resp.Value = append(resp.Value, w)
-	}
+	resp.Value = append(resp.Value, demoWorkspaces(subscription)...)
 	return jsonResponse(req, resp), nil
 }
 

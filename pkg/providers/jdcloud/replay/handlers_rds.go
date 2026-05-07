@@ -1,6 +1,7 @@
 package replay
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -10,9 +11,8 @@ import (
 
 // handleRDS serves the JDCloud RDS account lifecycle paths used by
 // rds-account-check, plus DescribeRDSInstances for the cloudlist `database`
-// asset. Endpoints are pattern-inferred from JDCloud's regional REST
-// convention.
-func (t *transport) handleRDS(req *http.Request, _ []byte) (*http.Response, error) {
+// asset. The replay path mirrors the RDS account lifecycle driver contract.
+func (t *transport) handleRDS(req *http.Request, body []byte) (*http.Response, error) {
 	path := req.URL.Path
 	method := strings.ToUpper(req.Method)
 	switch {
@@ -26,7 +26,13 @@ func (t *transport) handleRDS(req *http.Request, _ []byte) (*http.Response, erro
 		if instanceID == "" {
 			return apiErrorResponse(req, http.StatusBadRequest, "InvalidPath", "malformed accounts path"), nil
 		}
-		t.addRDSAccount(instanceID, "ctkuser")
+		var payload api.CreateRDSAccountRequest
+		_ = json.Unmarshal(body, &payload)
+		account := strings.TrimSpace(payload.AccountName)
+		if account == "" {
+			return apiErrorResponse(req, http.StatusBadRequest, "InvalidParameter", "accountName is required"), nil
+		}
+		t.addRDSAccount(instanceID, account)
 		resp := api.CreateRDSAccountResponse{RequestID: "req-replay-rds-create-account"}
 		return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 	case method == http.MethodDelete && strings.Contains(path, "/accounts/"):

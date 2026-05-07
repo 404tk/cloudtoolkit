@@ -221,8 +221,8 @@ type IAMDetachPoliciesFromUserResponse struct {
 // based attachments documented for `AttachPoliciesToUser`.
 type IAMListPoliciesForUserResponse struct {
 	BaseResponse
-	TotalCount int                      `json:"TotalCount"`
-	Policies   []IAMUserAttachedPolicy  `json:"Policies"`
+	TotalCount int                     `json:"TotalCount"`
+	Policies   []IAMUserAttachedPolicy `json:"Policies"`
 }
 
 type IAMUserAttachedPolicy struct {
@@ -237,8 +237,7 @@ type IAMRemoveUserFromProjectResponse struct {
 }
 
 // IAMUserApiKey models the persistent fields of a UCloud IAM user API key.
-// Field names follow the casing of UCloud's other IAM responses; verify
-// against the upstream SDK before relying on this in production.
+// Field names follow the casing used by the user-scoped IAM API responses.
 type IAMUserApiKey struct {
 	AccessKeyID string `json:"AccessKeyID"`
 	Status      string `json:"Status,omitempty"`

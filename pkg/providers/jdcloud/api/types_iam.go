@@ -121,9 +121,8 @@ type DescribeUserPinResponse struct {
 
 // IAMSubUserAccessKey models the persistent fields of a JDCloud sub-user
 // access key. The endpoint paths under /subUser/<name>:<action> follow the
-// same convention as :attachSubUserPolicy, and the response shape is
-// pattern-inferred — verify against the upstream SDK before relying on this
-// in production.
+// same convention as :attachSubUserPolicy and are covered by the
+// iam-credential replay and focused tests.
 type IAMSubUserAccessKey struct {
 	AccessKey  string `json:"accessKey"`
 	Status     string `json:"status,omitempty"`

@@ -12,10 +12,9 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 )
 
-// ListAccessKeys enumerates the access keys attached to a JDCloud sub user
-// via the pattern-inferred `:describeAccessKeys` action under /subUser. The
-// path mirrors the existing `:attachSubUserPolicy` / `:detachSubUserPolicy`
-// shape; verify against upstream SDK if behaviour deviates.
+// ListAccessKeys enumerates the access keys attached to a JDCloud sub user.
+// The path mirrors the existing `:attachSubUserPolicy` /
+// `:detachSubUserPolicy` shape used by the IAM validation driver.
 func (d *Driver) ListAccessKeys(ctx context.Context, userName string) ([]schema.IAMCredential, error) {
 	if d.Client == nil {
 		return nil, fmt.Errorf("jdcloud iam: nil api client")

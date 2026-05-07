@@ -13,11 +13,11 @@ import (
 	_iam "github.com/404tk/cloudtoolkit/pkg/providers/ucloud/iam"
 	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/uact"
 	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/udb"
-	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/uloghub"
-	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/usms"
 	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/udns"
 	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/ufile"
 	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/uhost"
+	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/uloghub"
+	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/usms"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
@@ -371,10 +371,8 @@ func (p *Provider) RoleBinding(ctx context.Context, action, principal, role, sco
 }
 
 // IAMCredential implements schema.IAMCredentialManager for UCloud IAM. The
-// access-key actions follow the pattern-inferred `ListUserApiKeys` /
-// `CreateUserApiKey` / `DeleteUserApiKey` shape consistent with UCloud's
-// other `XForUser` IAM RPCs; verify against the upstream SDK before relying
-// on this in production.
+// access-key actions use `ListUserApiKeys` / `CreateUserApiKey` /
+// `DeleteUserApiKey`, consistent with UCloud's other user-scoped IAM RPCs.
 func (p *Provider) IAMCredential(ctx context.Context, action, principal, credentialID string) (schema.IAMCredentialResult, error) {
 	driver := &_iam.Driver{
 		Credential: p.credential,

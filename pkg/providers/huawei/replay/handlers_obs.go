@@ -13,7 +13,7 @@ import (
 	demoreplay "github.com/404tk/cloudtoolkit/pkg/providers/replay"
 )
 
-func (t *transport) handleOBS(req *http.Request, host, region string, body []byte) (*http.Response, error) {
+func (t *transport) handleOBS(req *http.Request, region string, body []byte) (*http.Response, error) {
 	switch verifyOBSAuth(req, body) {
 	case demoreplay.AuthInvalidAccessKey:
 		return obsErrorResponse(req, http.StatusForbidden, "InvalidAccessKeyId",

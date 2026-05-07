@@ -340,13 +340,7 @@ func (t *transport) handleIAM(req *http.Request, body []byte) (*http.Response, e
 		resp := iamCreateAccessKeyResponse{
 			Metadata: awsResponseMetadata{RequestID: "req-replay-iam-create-access-key"},
 		}
-		resp.Result.AccessKey = iamAccessKeySecretWire{
-			AccessKeyID:     key.AccessKeyID,
-			SecretAccessKey: key.SecretAccessKey,
-			UserName:        key.UserName,
-			Status:          key.Status,
-			CreateDate:      key.CreateDate,
-		}
+		resp.Result.AccessKey = iamAccessKeySecretWire(key)
 		return demoreplay.XMLResponse(req, http.StatusOK, resp), nil
 	case "DeleteAccessKey":
 		userName := strings.TrimSpace(form.Get("UserName"))
@@ -425,12 +419,7 @@ func (t *transport) handleS3(req *http.Request, host string) (*http.Response, er
 			resp.NextContinuationToken = strconv.Itoa(window.End)
 		}
 		for _, object := range bucket.Objects[window.Start:window.End] {
-			resp.Contents = append(resp.Contents, s3ObjectWire{
-				Key:          object.Key,
-				Size:         object.Size,
-				LastModified: object.LastModified,
-				StorageClass: object.StorageClass,
-			})
+			resp.Contents = append(resp.Contents, s3ObjectWire(object))
 		}
 		return demoreplay.XMLResponse(req, http.StatusOK, resp), nil
 	}

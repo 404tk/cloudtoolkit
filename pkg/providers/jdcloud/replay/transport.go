@@ -14,17 +14,22 @@ import (
 )
 
 type transport struct {
-	mu          sync.Mutex
-	iam         *iamMutationState
-	bucketACL   map[string]string
-	rdsAccounts map[string][]string
+	mu                   sync.Mutex
+	iam                  *iamMutationState
+	bucketACL            map[string]string
+	rdsAccounts          map[string][]string
+	assistantCommands    map[string]api.CreateCommandRequest
+	assistantInvocations map[string]assistantInvocationFixture
+	assistantSeq         int
 }
 
 func newTransport() *transport {
 	return &transport{
-		iam:         newIAMState(),
-		bucketACL:   seedBucketACL(),
-		rdsAccounts: make(map[string][]string),
+		iam:                  newIAMState(),
+		bucketACL:            seedBucketACL(),
+		rdsAccounts:          make(map[string][]string),
+		assistantCommands:    make(map[string]api.CreateCommandRequest),
+		assistantInvocations: make(map[string]assistantInvocationFixture),
 	}
 }
 
@@ -106,6 +111,8 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return t.handleSMS(req)
 	case "domainservice":
 		return t.handleDomainService(req)
+	case "assistant":
+		return t.handleAssistant(req, body)
 	}
 	return apiErrorResponse(req, http.StatusNotFound, "InvalidService",
 		fmt.Sprintf("unsupported replay service: %s", service)), nil

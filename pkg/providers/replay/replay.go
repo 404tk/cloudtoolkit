@@ -183,6 +183,10 @@ var providers = map[string]providerMeta{
 			"bucket-check",
 			"role-binding-check",
 			"bucket-acl-check",
+			"event-check",
+			"rds-account-check",
+			"iam-credential-check",
+			"instance-cmd-check",
 		},
 	},
 	"ucloud": {
@@ -198,6 +202,7 @@ var providers = map[string]providerMeta{
 			"bucket-acl-check",
 			"event-check",
 			"rds-account-check",
+			"iam-credential-check",
 		},
 	},
 }

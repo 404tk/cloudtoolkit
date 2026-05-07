@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/api"
 	demoreplay "github.com/404tk/cloudtoolkit/pkg/providers/replay"
+	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/api"
 )
 
 type hostFixture struct {
@@ -328,20 +328,6 @@ func findBucket(name string) (bucketFixture, bool) {
 	return bucketFixture{}, false
 }
 
-func listBucketsForRegion(region string) []bucketFixture {
-	region = strings.TrimSpace(region)
-	if region == "" {
-		return append([]bucketFixture(nil), demoBuckets...)
-	}
-	items := make([]bucketFixture, 0, len(demoBuckets))
-	for _, bucket := range demoBuckets {
-		if bucket.Region == region {
-			items = append(items, bucket)
-		}
-	}
-	return items
-}
-
 func findZone(id int64) (dnsZoneFixture, bool) {
 	for _, zone := range demoZones {
 		if zone.ID == id {
@@ -391,10 +377,6 @@ func filterSQLServer(region string) []sqlServerFixture {
 		}
 	}
 	return items
-}
-
-func projectDisplayName() string {
-	return fmt.Sprintf("%s(%d)", demoProject, demoAccountID)
 }
 
 func shellOutput(instanceID, command string) string {

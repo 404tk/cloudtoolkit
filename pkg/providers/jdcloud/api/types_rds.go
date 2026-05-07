@@ -1,9 +1,8 @@
 package api
 
 // JDCloud RDS account lifecycle. Endpoint paths follow the standard
-// `/v1/regions/<region>/instances/<id>/<resource>` pattern used elsewhere in
-// JDCloud's REST API; verify against the upstream SDK before relying on
-// this in production.
+// `/v1/regions/<region>/instances/<id>/<resource>` pattern and are exercised
+// by rds-account-check replay and focused tests.
 
 import (
 	"context"

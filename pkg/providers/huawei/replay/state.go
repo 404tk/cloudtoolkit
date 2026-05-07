@@ -8,13 +8,13 @@ import (
 )
 
 type iamMutationState struct {
-	mu             sync.Mutex
-	created        map[string]iamUserFixture
-	deleted        map[string]bool
-	memberOf       map[string]map[string]bool
-	sequence       int
-	accessKeys     map[string][]huaweiAccessKeyFixture
-	accessKeySeq   int
+	mu           sync.Mutex
+	created      map[string]iamUserFixture
+	deleted      map[string]bool
+	memberOf     map[string]map[string]bool
+	sequence     int
+	accessKeys   map[string][]huaweiAccessKeyFixture
+	accessKeySeq int
 }
 
 func newIAMMutationState() *iamMutationState {
@@ -100,24 +100,6 @@ func (s *iamMutationState) snapshotUsers() []iamUserFixture {
 		users = append(users, user)
 	}
 	return users
-}
-
-func (s *iamMutationState) findByName(name string) (iamUserFixture, bool) {
-	name = strings.TrimSpace(name)
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.deleted[name] {
-		return iamUserFixture{}, false
-	}
-	if user, ok := s.created[name]; ok {
-		return user, true
-	}
-	for _, user := range demoBaseIAMUsers {
-		if user.Name == name {
-			return user, true
-		}
-	}
-	return iamUserFixture{}, false
 }
 
 func (s *iamMutationState) findByID(id string) (iamUserFixture, bool) {

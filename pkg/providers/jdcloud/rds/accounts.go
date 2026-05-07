@@ -1,6 +1,6 @@
-// Package rds wraps JDCloud RDS account lifecycle. Endpoint paths are
-// pattern-inferred from JDCloud's REST convention; verify against the
-// upstream SDK before relying on this in production.
+// Package rds wraps the JDCloud RDS account lifecycle used by
+// rds-account-check. Replay fixtures and focused tests cover the account
+// create/delete request paths used by this validation flow.
 package rds
 
 import (

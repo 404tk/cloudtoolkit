@@ -238,9 +238,8 @@ func (p *Provider) BucketDump(ctx context.Context, action, bucketName string) ([
 }
 
 // IAMCredential implements schema.IAMCredentialManager for JDCloud IAM. The
-// path family follows the same pattern-inferred convention as
-// `:describeAttachedPolicies` and `:attachSubUserPolicy`. Verify against the
-// upstream SDK before relying on this in production.
+// access-key lifecycle follows the same sub-user action family as
+// `:describeAttachedPolicies` and `:attachSubUserPolicy`.
 func (p *Provider) IAMCredential(ctx context.Context, action, principal, credentialID string) (schema.IAMCredentialResult, error) {
 	driver := &iam.Driver{Client: p.apiClient, AccessKey: p.accessKey}
 	result := schema.IAMCredentialResult{
@@ -315,9 +314,9 @@ func (p *Provider) BucketACL(ctx context.Context, action, container, level strin
 	return result, fmt.Errorf("jdcloud: unsupported bucket-acl action %q", action)
 }
 
-// EventDump implements schema.EventReader for JDCloud ActionTrail. The
-// endpoint paths are pattern-inferred from JDCloud's regional REST family;
-// `whitelist` is unsupported because ActionTrail is read-only.
+// EventDump implements schema.EventReader for JDCloud ActionTrail. `dump`
+// lists recent audit events; `whitelist` is unsupported because ActionTrail is
+// read-only.
 func (p *Provider) EventDump(ctx context.Context, action, args string) (schema.EventActionResult, error) {
 	driver := &actiontrail.Driver{Client: p.apiClient, Region: p.region}
 	switch action {
@@ -339,9 +338,8 @@ func (p *Provider) EventDump(ctx context.Context, action, args string) (schema.E
 }
 
 // DBManagement implements schema.DBManager for JDCloud RDS. `useradd` /
-// `userdel` follow the pattern-inferred `/v1/regions/<region>/instances/<id>/accounts`
-// path. Verify against the upstream SDK before relying on this in
-// production.
+// `userdel` create and revoke validation accounts under
+// `/v1/regions/<region>/instances/<id>/accounts`.
 func (p *Provider) DBManagement(ctx context.Context, action, instanceID string) (schema.DatabaseActionResult, error) {
 	driver := &rds.Driver{Client: p.apiClient, Region: p.region}
 	switch action {

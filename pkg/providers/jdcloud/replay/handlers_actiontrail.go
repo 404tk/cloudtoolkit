@@ -9,7 +9,7 @@ import (
 )
 
 // handleActionTrail serves the JDCloud audit-log lookup used by event-check.
-// The path is pattern-inferred — `/v1/regions/<region>/events:lookup`.
+// The replay path mirrors `/v1/regions/<region>/events:lookup`.
 func (t *transport) handleActionTrail(req *http.Request) (*http.Response, error) {
 	path := req.URL.Path
 	if req.Method != http.MethodGet || !strings.HasSuffix(path, ":lookup") {

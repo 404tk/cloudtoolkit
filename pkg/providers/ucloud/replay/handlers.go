@@ -283,11 +283,7 @@ func (t *transport) handleCreateUser(req *http.Request, params map[string]string
 		return errorResponse(req, http.StatusBadRequest, 400, "UserName is required"), nil
 	}
 	display := strings.TrimSpace(params["DisplayName"])
-	if display == "" {
-		display = name
-	}
-	user := t.iam.ensureUser(name)
-	user.DisplayName = display
+	user := t.iam.ensureUser(name, display)
 	resp := api.IAMCreateUserResponse{
 		BaseResponse:    newBase("CreateUserResponse"),
 		APIAccess:       false,
@@ -295,7 +291,7 @@ func (t *transport) handleCreateUser(req *http.Request, params map[string]string
 		AccessKeySecret: "",
 		CompanyID:       demoCompanyID,
 		ConsoleAccess:   true,
-		DisplayName:     display,
+		DisplayName:     user.DisplayName,
 		Password:        strings.TrimSpace(params["Password"]),
 		UserName:        name,
 	}
@@ -406,7 +402,7 @@ func (t *transport) handleDeleteUserApiKey(req *http.Request, params map[string]
 	return successResponse(req, resp), nil
 }
 
-func (t *transport) handleDescribeActionLogList(req *http.Request, params map[string]string) (*http.Response, error) {
+func (t *transport) handleDescribeActionLogList(req *http.Request, _ map[string]string) (*http.Response, error) {
 	resp := api.DescribeActionLogListResponse{BaseResponse: newBase("DescribeActionLogListResponse")}
 	resp.Events = demoUCloudActionLogs()
 	resp.TotalCount = len(resp.Events)

@@ -21,8 +21,6 @@ func init() {
 			{Text: "cn-east-1", Description: "Suqian"},
 			{Text: "cn-south-1", Description: "Guangzhou"},
 		},
-		// TODO: re-advertise iam-credential/event/database after the JDCloud
-		// OpenAPI or SDK paths are verified against upstream sources.
-		Capabilities: []string{"cloudlist", "iam", "bucket", "vm", "iam-role", "bucket-acl"},
+		Capabilities: []string{"cloudlist", "iam", "bucket", "event", "vm", "database", "iam-role", "bucket-acl", "iam-credential"},
 	})
 }

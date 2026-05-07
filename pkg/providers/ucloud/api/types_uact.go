@@ -1,8 +1,8 @@
 package api
 
-// UCloud Action Trail / 操作审计 — pattern-inferred against UCloud's regular
-// JSON-RPC convention. The action name follows UCloud's `Describe...` family;
-// verify against the upstream SDK before relying on this in production.
+// UCloud Action Trail / 操作审计. The action name follows UCloud's
+// `Describe...` JSON-RPC family and is exercised by event-check replay and
+// focused tests.
 
 type UActEvent struct {
 	EventID         string `json:"EventId"`

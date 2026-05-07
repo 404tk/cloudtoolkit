@@ -64,11 +64,11 @@ Validation payload coverage:
   </tr>
   <tr>
     <td align="left" width="210"><img src="docs/icons/jdcloud.svg" width="28" height="28" alt="JDCloud icon">&nbsp;<strong>JDCloud</strong></td>
-    <td align="center">✓</td><td align="center">✓</td><td align="center">—</td><td align="center">✓</td><td align="center">—</td><td align="center">✓</td><td align="center">✓</td><td align="center">—</td>
+    <td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td>
   </tr>
   <tr>
     <td align="left" width="210"><img src="docs/icons/ucloud.svg" width="28" height="28" alt="UCloud icon">&nbsp;<strong>UCloud</strong></td>
-    <td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">—</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">—</td>
+    <td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">—</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td><td align="center">✓</td>
   </tr>
 </table>
 

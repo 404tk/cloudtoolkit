@@ -169,12 +169,7 @@ func (t *transport) handleOSSListObjectsV2(req *http.Request, bucketName, region
 		resp.NextContinuationToken = page[len(page)-1].Key
 	}
 	for _, object := range page {
-		resp.Contents = append(resp.Contents, listBucketObject{
-			Key:          object.Key,
-			Size:         object.Size,
-			LastModified: object.LastModified,
-			StorageClass: object.StorageClass,
-		})
+		resp.Contents = append(resp.Contents, listBucketObject(object))
 	}
 	return ossXMLResponse(req, http.StatusOK, resp), nil
 }

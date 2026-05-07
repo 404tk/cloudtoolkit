@@ -136,7 +136,7 @@ func handleDNSRecordSets(req *http.Request, subscription, group string, zone dns
 			}
 		case "MX":
 			for _, m := range r.MX {
-				wire.Properties.MXRecords = append(wire.Properties.MXRecords, dnsMXWire{Preference: m.Preference, Exchange: m.Exchange})
+				wire.Properties.MXRecords = append(wire.Properties.MXRecords, dnsMXWire(m))
 			}
 		case "TXT":
 			for _, v := range r.TXT {
@@ -196,14 +196,14 @@ type dnsRecordSetWire struct {
 }
 
 type dnsRecordSetPropsWire struct {
-	TTL          int64           `json:"TTL"`
-	FQDN         string          `json:"fqdn"`
-	ARecords     []dnsAWire      `json:"ARecords,omitempty"`
-	AAAARecords  []dnsAAAAWire   `json:"AAAARecords,omitempty"`
-	CNAMERecord  *dnsCNAMEWire   `json:"CNAMERecord,omitempty"`
-	MXRecords    []dnsMXWire     `json:"MXRecords,omitempty"`
-	TXTRecords   []dnsTXTWire    `json:"TXTRecords,omitempty"`
-	NSRecords    []dnsNSWire     `json:"NSRecords,omitempty"`
+	TTL         int64         `json:"TTL"`
+	FQDN        string        `json:"fqdn"`
+	ARecords    []dnsAWire    `json:"ARecords,omitempty"`
+	AAAARecords []dnsAAAAWire `json:"AAAARecords,omitempty"`
+	CNAMERecord *dnsCNAMEWire `json:"CNAMERecord,omitempty"`
+	MXRecords   []dnsMXWire   `json:"MXRecords,omitempty"`
+	TXTRecords  []dnsTXTWire  `json:"TXTRecords,omitempty"`
+	NSRecords   []dnsNSWire   `json:"NSRecords,omitempty"`
 }
 
 type dnsAWire struct {

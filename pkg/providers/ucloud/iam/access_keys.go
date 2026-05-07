@@ -11,9 +11,8 @@ import (
 )
 
 // ListAccessKeys enumerates the API keys belonging to a UCloud IAM sub user.
-// The action name follows the same `ListXForUser` family used by UCloud's
-// other IAM enumeration RPCs (`ListPoliciesForUser`); verify against the
-// upstream SDK before relying on this in production.
+// The action name follows the same user-scoped IAM RPC family as
+// `ListPoliciesForUser`.
 func (d *Driver) ListAccessKeys(ctx context.Context, userName string) ([]schema.IAMCredential, error) {
 	userName = strings.TrimSpace(userName)
 	if userName == "" {

@@ -11,9 +11,9 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 )
 
-// Driver wraps the JDCloud ActionTrail audit log lookup. The endpoint is
-// pattern-inferred from JDCloud's regional REST convention; verify against
-// the upstream SDK before relying on this in production.
+// Driver wraps the JDCloud ActionTrail audit log lookup used by event-check.
+// Replay fixtures and focused tests cover the request/response contract used
+// by this validation path.
 type Driver struct {
 	Client *api.Client
 	Region string

@@ -543,7 +543,7 @@ func (t *transport) handleRoleAssignments(req *http.Request, subscription string
 
 // handleRoleDefinitions serves GET under
 // /subscriptions/{sub}/providers/Microsoft.Authorization/roleDefinitions[?$filter=...].
-func (t *transport) handleRoleDefinitions(req *http.Request, subscription string, parts []string) (*http.Response, error) {
+func (t *transport) handleRoleDefinitions(req *http.Request, subscription string, _ []string) (*http.Response, error) {
 	if req.Method != http.MethodGet {
 		return armErrorResponse(req, http.StatusMethodNotAllowed, "MethodNotAllowed",
 			fmt.Sprintf("method %s not supported on roleDefinitions", req.Method)), nil

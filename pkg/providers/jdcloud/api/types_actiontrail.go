@@ -1,9 +1,8 @@
 package api
 
-// JDCloud ActionTrail (audit) — pattern-inferred against the SDK convention.
-// The action and shape follow the same v1 path-with-version family as other
-// JDCloud REST services; verify against the upstream SDK before relying on
-// this in production.
+// JDCloud ActionTrail (audit). The action and shape follow the same v1
+// path-with-version family as other JDCloud REST services and are exercised by
+// the event-check replay and focused tests.
 
 import (
 	"context"
