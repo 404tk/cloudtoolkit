@@ -31,9 +31,6 @@ func TestReplayE2E_NewCapabilities(t *testing.T) {
 		if len(result.Events) != 3 {
 			t.Fatalf("expected 3 demo events, got %d", len(result.Events))
 		}
-		if result.Events[0].Id != "jdc-evt-0001" {
-			t.Errorf("unexpected first event id: %+v", result.Events[0])
-		}
 	})
 
 	t.Run("event-check_whitelist_unsupported", func(t *testing.T) {

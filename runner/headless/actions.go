@@ -69,6 +69,19 @@ var actionSpecs = map[string]actionSpec{
 			return "total " + args[0]
 		},
 	},
+	"evt": {
+		payload: "event-check",
+		minArgs: 0,
+		maxArgs: 1,
+		usage:   "evt [scope]",
+		summary: "review recent cloud events",
+		build: func(args []string) string {
+			if len(args) == 0 || strings.TrimSpace(args[0]) == "" {
+				return "dump all"
+			}
+			return "dump " + strings.TrimSpace(args[0])
+		},
+	},
 	"shell": {
 		payload: "instance-cmd-check",
 		minArgs: 2,

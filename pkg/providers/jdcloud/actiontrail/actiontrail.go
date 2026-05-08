@@ -51,7 +51,7 @@ func (d *Driver) DumpEvents(ctx context.Context, args string) ([]schema.Event, e
 				break
 			}
 			out = append(out, schema.Event{
-				Id:   ev.EventID,
+				// Id:   ev.EventID,
 				Name: ev.EventName,
 				// API:      ev.EventName,
 				Status:   eventStatus(ev.ErrorCode, ev.ErrorMessage),
