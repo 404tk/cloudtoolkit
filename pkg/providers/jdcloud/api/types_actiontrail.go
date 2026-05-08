@@ -1,68 +1,160 @@
 package api
 
-// JDCloud ActionTrail (audit). The action and shape follow the same v1
-// path-with-version family as other JDCloud REST services and are exercised by
-// the event-check replay and focused tests.
+// JDCloud AuditTrail lookupEvents. This read-only API backs event-check dump in
+// authorized environments.
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"net/http"
-	"net/url"
 	"strconv"
+	"strings"
+	"time"
 )
 
 type ActionTrailEvent struct {
-	EventID         string `json:"eventId"`
-	EventName       string `json:"eventName"`
-	EventTime       string `json:"eventTime"`
-	EventSource     string `json:"eventSource"`
-	UserName        string `json:"userName"`
-	SourceIPAddress string `json:"sourceIpAddress"`
-	Region          string `json:"region"`
-	Status          string `json:"status"`
-	AccessKey       string `json:"accessKeyId"`
-	ResourceName    string `json:"resourceName"`
-	ResourceType    string `json:"resourceType"`
+	EventTime           ActionTrailTimestamp  `json:"eventTime"`
+	EventVersion        string                `json:"eventVersion"`
+	Service             string                `json:"service"`
+	ServiceAPIVersion   string                `json:"serviceApiVersion"`
+	EventName           string                `json:"eventName"`
+	EventSource         string                `json:"eventSource"`
+	EventID             string                `json:"eventId"`
+	EventType           string                `json:"eventType"`
+	Region              string                `json:"region"`
+	IP                  string                `json:"ip"`
+	UserAgent           string                `json:"userAgent"`
+	ErrorCode           string                `json:"errorCode"`
+	ErrorMessage        string                `json:"errorMessage"`
+	RequestID           string                `json:"requestId"`
+	Plane               string                `json:"plane"`
+	Classification      string                `json:"classification"`
+	Account             string                `json:"account"`
+	AccessKeyID         string                `json:"accessKeyId"`
+	Resources           []ActionTrailResource `json:"resources"`
+	Identity            ActionTrailIdentity   `json:"identity"`
+	AccountGroup        string                `json:"accountGroup"`
+	Request             string                `json:"request"`
+	Response            string                `json:"response"`
+	AdditionalEventData string                `json:"additionalEventData"`
+}
+
+type ActionTrailResource struct {
+	ResourceName string `json:"resourceName"`
+	ResourceID   string `json:"resourceId"`
+	ResourceType string `json:"resourceType"`
+	Name         string `json:"name"`
+	ID           string `json:"id"`
+	Type         string `json:"type"`
+}
+
+type ActionTrailIdentity struct {
+	Type              string `json:"type"`
+	Principal         string `json:"principal"`
+	ERPPrincipal      string `json:"erpPrincipal"`
+	Account           string `json:"account"`
+	PreviousPrincipal string `json:"previousPrincipal"`
+	InvokedBy         string `json:"invokedBy"`
+	MFA               string `json:"mfa"`
 }
 
 type DescribeActionTrailEventsResponse struct {
 	RequestID string        `json:"requestId"`
 	Error     *APIErrorBody `json:"error,omitempty"`
 	Result    struct {
-		Events     []ActionTrailEvent `json:"events"`
-		NextToken  string             `json:"nextToken,omitempty"`
-		TotalCount int                `json:"totalCount,omitempty"`
+		PageSize    int                `json:"pageSize"`
+		PageNumber  int                `json:"pageNumber"`
+		TotalNumber int64              `json:"totalNumber"`
+		Events      []ActionTrailEvent `json:"events"`
 	} `json:"result"`
 }
 
-// DescribeActionTrailEvents calls JDCloud ActionTrail to list recent audit
-// events. The path mirrors other JDCloud regional list endpoints
-// (`/v1/regions/<region>/<resource>:<action>` pattern).
-func (c *Client) DescribeActionTrailEvents(ctx context.Context, region string, start, end int64, maxResults int, nextToken string) (DescribeActionTrailEventsResponse, error) {
+// DescribeActionTrailEvents calls JDCloud AuditTrail lookupEvents:
+// POST /v1/regions/{regionId}/events.
+func (c *Client) DescribeActionTrailEvents(ctx context.Context, region string, start, end int64, pageNumber, pageSize int, lookupAttributes string) (DescribeActionTrailEventsResponse, error) {
 	if region == "" || region == "all" {
 		region = "cn-north-1"
 	}
-	query := url.Values{}
+	body := actionTrailLookupEventsRequest{
+		RegionID:   region,
+		PageSize:   intPtr(pageSize),
+		PageNumber: intPtr(pageNumber),
+	}
 	if start > 0 {
-		query.Set("startTime", strconv.FormatInt(start, 10))
+		body.StartTime = &start
 	}
 	if end > 0 {
-		query.Set("endTime", strconv.FormatInt(end, 10))
+		body.EndTime = &end
 	}
-	if maxResults > 0 {
-		query.Set("maxResults", strconv.Itoa(maxResults))
+	if lookupAttributes = strings.TrimSpace(lookupAttributes); lookupAttributes != "" {
+		body.LookupAttributes = &lookupAttributes
 	}
-	if nextToken != "" {
-		query.Set("nextToken", nextToken)
+	rawBody, err := json.Marshal(body)
+	if err != nil {
+		return DescribeActionTrailEventsResponse{}, err
 	}
 	var resp DescribeActionTrailEventsResponse
-	err := c.DoJSON(ctx, Request{
-		Service: "actiontrail",
-		Region:  "",
-		Method:  http.MethodGet,
+	err = c.DoJSON(ctx, Request{
+		Service: "audittrail",
+		Region:  region,
+		Method:  http.MethodPost,
 		Version: "v1",
-		Path:    "/regions/" + region + "/events:lookup",
-		Query:   query,
+		Path:    "/regions/" + region + "/events",
+		Body:    rawBody,
 	}, &resp)
 	return resp, err
+}
+
+type actionTrailLookupEventsRequest struct {
+	RegionID         string  `json:"regionId"`
+	StartTime        *int64  `json:"startTime,omitempty"`
+	EndTime          *int64  `json:"endTime,omitempty"`
+	Classification   *string `json:"classification,omitempty"`
+	PageSize         *int    `json:"pageSize,omitempty"`
+	PageNumber       *int    `json:"pageNumber,omitempty"`
+	LookupAttributes *string `json:"lookupAttributes,omitempty"`
+}
+
+func intPtr(value int) *int {
+	if value <= 0 {
+		return nil
+	}
+	return &value
+}
+
+type ActionTrailTimestamp int64
+
+func (t *ActionTrailTimestamp) UnmarshalJSON(data []byte) error {
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("null")) {
+		return nil
+	}
+	if trimmed[0] == '"' {
+		var text string
+		if err := json.Unmarshal(trimmed, &text); err != nil {
+			return err
+		}
+		text = strings.TrimSpace(text)
+		if text == "" {
+			return nil
+		}
+		if value, err := strconv.ParseInt(text, 10, 64); err == nil {
+			*t = ActionTrailTimestamp(value)
+			return nil
+		}
+		parsed, err := time.Parse(time.RFC3339, text)
+		if err != nil {
+			return fmt.Errorf("jdcloud audittrail: invalid eventTime %q", text)
+		}
+		*t = ActionTrailTimestamp(parsed.Unix())
+		return nil
+	}
+	var value int64
+	if err := json.Unmarshal(trimmed, &value); err != nil {
+		return err
+	}
+	*t = ActionTrailTimestamp(value)
+	return nil
 }

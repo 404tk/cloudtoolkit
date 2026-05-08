@@ -101,8 +101,8 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return t.handleOSS(req)
 	case "asset":
 		return t.handleAsset(req)
-	case "actiontrail":
-		return t.handleActionTrail(req)
+	case "audittrail":
+		return t.handleActionTrail(req, body)
 	case "rds":
 		return t.handleRDS(req, body)
 	case "logs":

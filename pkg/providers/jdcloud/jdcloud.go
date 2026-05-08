@@ -314,11 +314,11 @@ func (p *Provider) BucketACL(ctx context.Context, action, container, level strin
 	return result, fmt.Errorf("jdcloud: unsupported bucket-acl action %q", action)
 }
 
-// EventDump implements schema.EventReader for JDCloud ActionTrail. `dump`
-// lists recent audit events; `whitelist` is unsupported because ActionTrail is
+// EventDump implements schema.EventReader for JDCloud AuditTrail. `dump`
+// lists recent audit events; `whitelist` is unsupported because AuditTrail is
 // read-only.
 func (p *Provider) EventDump(ctx context.Context, action, args string) (schema.EventActionResult, error) {
-	driver := &actiontrail.Driver{Client: p.apiClient, Region: p.region}
+	driver := &actiontrail.Driver{Client: p.apiClient, Region: p.region, AccessKey: p.accessKey}
 	switch action {
 	case "dump":
 		events, err := driver.DumpEvents(ctx, args)

@@ -3,7 +3,7 @@ package api
 // JDCloud Logs service (`logs` / `jcs:logs`) — describeLogTopics.
 //
 // Pattern-inferred against the JDCloud REST convention used by neighbouring
-// services in this codebase (asset, actiontrail, oss): list paths follow
+// services in this codebase: list paths commonly follow
 // `/v1/regions/<region>/<resource>:<action>` with snake-cased query params.
 // Verify against the upstream JDCloud OpenAPI / SDK before relying on this
 // in production deployments; the cloudlist `log` asset path keeps the demo

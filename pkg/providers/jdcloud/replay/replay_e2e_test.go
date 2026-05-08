@@ -38,7 +38,7 @@ func TestReplayE2E_NewCapabilities(t *testing.T) {
 
 	t.Run("event-check_whitelist_unsupported", func(t *testing.T) {
 		if _, err := provider.EventDump(context.Background(), "whitelist", ""); err == nil {
-			t.Fatalf("expected ActionTrail whitelist to be unsupported")
+			t.Fatalf("expected AuditTrail whitelist to be unsupported")
 		}
 	})
 
