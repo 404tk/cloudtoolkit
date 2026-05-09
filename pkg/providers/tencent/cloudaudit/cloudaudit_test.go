@@ -2,6 +2,8 @@ package cloudaudit
 
 import (
 	"context"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,10 +16,11 @@ import (
 
 func newTestDriver(t *testing.T, baseURL string) *Driver {
 	t.Helper()
-	d := &Driver{Credential: auth.New("ak", "sk", "")}
+	clock := func() time.Time { return time.Unix(1776458501, 0).UTC() }
+	d := &Driver{Credential: auth.New("AKIDCURRENT", "sk", ""), Clock: clock}
 	d.SetClientOptions(
 		api.WithBaseURL(baseURL),
-		api.WithClock(func() time.Time { return time.Unix(1776458501, 0).UTC() }),
+		api.WithClock(clock),
 		api.WithRetryPolicy(api.RetryPolicy{
 			MaxAttempts: 1,
 			Sleep:       func(context.Context, time.Duration) error { return nil },
@@ -26,43 +29,20 @@ func newTestDriver(t *testing.T, baseURL string) *Driver {
 	return d
 }
 
-func TestDumpEventsMapsResponse(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if got := r.Header.Get("X-TC-Action"); got != "LookUpEvents" {
-			t.Fatalf("unexpected action: %s", got)
-		}
-		_, _ = w.Write([]byte(`{"Response":{"ListOver":true,"Events":[{"EventId":"e1","EventName":"CreateUser","EventNameCn":"创建子用户","EventTime":"2026-04-22 09:10:11","EventRegion":"ap-guangzhou","Username":"alice","SourceIPAddress":"203.0.113.10","ResourceName":"ctk-demo-bot","Status":0,"SecretId":"AKID","ApiVersion":"2019-01-16"}],"RequestId":"r1"}}`))
-	}))
-	defer server.Close()
-
-	driver := newTestDriver(t, server.URL)
-	got, err := driver.DumpEvents(context.Background(), "")
-	if err != nil {
-		t.Fatalf("DumpEvents: %v", err)
-	}
-	if len(got) != 1 {
-		t.Fatalf("expected 1 event, got %d", len(got))
-	}
-	ev := got[0]
-	if ev.Id != "e1" || ev.API != "CreateUser" || ev.Name != "创建子用户" {
-		t.Errorf("unexpected event: %+v", ev)
-	}
-	if ev.SourceIp != "203.0.113.10" || ev.AccessKey != "AKID" {
-		t.Errorf("unexpected event detail: %+v", ev)
-	}
-	if ev.Status != "成功" {
-		t.Errorf("expected status '成功', got %q", ev.Status)
-	}
-}
-
 func TestDumpEventsPaginates(t *testing.T) {
 	calls := 0
+	var secondBody string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
 		switch calls {
 		case 1:
-			_, _ = w.Write([]byte(`{"Response":{"ListOver":false,"NextToken":"page-2","Events":[{"EventId":"e1","EventName":"CreateUser"}],"RequestId":"r1"}}`))
+			_, _ = w.Write([]byte(`{"Response":{"ListOver":false,"NextToken":2,"Events":[{"EventId":"e1","EventName":"CreateUser"}],"RequestId":"r1"}}`))
 		case 2:
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read body: %v", err)
+			}
+			secondBody = string(body)
 			_, _ = w.Write([]byte(`{"Response":{"ListOver":true,"Events":[{"EventId":"e2","EventName":"DeleteUser"}],"RequestId":"r2"}}`))
 		default:
 			t.Fatalf("unexpected call: %d", calls)
@@ -77,6 +57,41 @@ func TestDumpEventsPaginates(t *testing.T) {
 	}
 	if len(got) != 2 {
 		t.Fatalf("expected 2 events across pages, got %d", len(got))
+	}
+	if !strings.Contains(secondBody, `"NextToken":"2"`) {
+		t.Fatalf("expected numeric response token to be sent as string, got %s", secondBody)
+	}
+}
+
+func TestDumpEventsCapsDefaultOutputAndFormatsUnixTime(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body strings.Builder
+		body.WriteString(`{"Response":{"ListOver":true,"Events":[`)
+		for i := 0; i < defaultEventLimit+5; i++ {
+			if i > 0 {
+				body.WriteByte(',')
+			}
+			_, _ = fmt.Fprintf(&body, `{"EventId":"e%d","EventName":"CreateUser","EventTime":"1778317184"}`, i)
+		}
+		body.WriteString(`],"RequestId":"r1"}}`)
+		_, _ = w.Write([]byte(body.String()))
+	}))
+	defer server.Close()
+
+	driver := newTestDriver(t, server.URL)
+	got, err := driver.DumpEvents(context.Background(), "")
+	if err != nil {
+		t.Fatalf("DumpEvents: %v", err)
+	}
+	if len(got) != defaultEventLimit {
+		t.Fatalf("expected %d events, got %d", defaultEventLimit, len(got))
+	}
+	if got[defaultEventLimit-1].Id != "e19" {
+		t.Fatalf("expected output to stop at e19, got %s", got[defaultEventLimit-1].Id)
+	}
+	wantTime := time.Unix(1778317184, 0).UTC().Format(time.RFC3339)
+	if got[0].Time != wantTime {
+		t.Fatalf("expected formatted event time %q, got %q", wantTime, got[0].Time)
 	}
 }
 

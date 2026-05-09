@@ -1,15 +1,20 @@
 package api
 
-import "context"
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+)
 
 const cloudAuditVersion = "2019-03-19"
 
 type LookUpEventsRequest struct {
-	StartTime        *int64                 `json:"StartTime,omitempty"`
-	EndTime          *int64                 `json:"EndTime,omitempty"`
-	MaxResults       *uint64                `json:"MaxResults,omitempty"`
-	NextToken        *string                `json:"NextToken,omitempty"`
-	LookupAttributes []LookupAttribute      `json:"LookupAttributes,omitempty"`
+	StartTime        *int64            `json:"StartTime,omitempty"`
+	EndTime          *int64            `json:"EndTime,omitempty"`
+	MaxResults       *int64            `json:"MaxResults,omitempty"`
+	NextToken        *string           `json:"NextToken,omitempty"`
+	LookupAttributes []LookupAttribute `json:"LookupAttributes,omitempty"`
 }
 
 type LookupAttribute struct {
@@ -19,11 +24,40 @@ type LookupAttribute struct {
 
 type LookUpEventsResponse struct {
 	Response struct {
-		NextToken *string             `json:"NextToken"`
-		ListOver  *bool               `json:"ListOver"`
-		Events    []CloudAuditEvent   `json:"Events"`
-		RequestID string              `json:"RequestId"`
+		NextToken *CloudAuditNextToken `json:"NextToken"`
+		ListOver  *bool                `json:"ListOver"`
+		Events    []CloudAuditEvent    `json:"Events"`
+		RequestID string               `json:"RequestId"`
 	} `json:"Response"`
+}
+
+type CloudAuditNextToken string
+
+func (t *CloudAuditNextToken) UnmarshalJSON(data []byte) error {
+	data = bytes.TrimSpace(data)
+	if bytes.Equal(data, []byte("null")) {
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(data, &s); err == nil {
+		*t = CloudAuditNextToken(s)
+		return nil
+	}
+	var n json.Number
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	if err := decoder.Decode(&n); err == nil {
+		*t = CloudAuditNextToken(n.String())
+		return nil
+	}
+	return fmt.Errorf("invalid CloudAudit NextToken %s", string(data))
+}
+
+func (t *CloudAuditNextToken) String() string {
+	if t == nil {
+		return ""
+	}
+	return string(*t)
 }
 
 type CloudAuditEvent struct {
@@ -46,7 +80,7 @@ type CloudAuditEvent struct {
 // recent operations so a CSPM detection can be cross-referenced. StartTime /
 // EndTime are unix seconds; pass 0 to leave them unset and fall back to the
 // CloudAudit default lookback window.
-func (c *Client) LookUpEvents(ctx context.Context, region string, startTime, endTime int64, maxResults uint64, nextToken string) (LookUpEventsResponse, error) {
+func (c *Client) LookUpEvents(ctx context.Context, region string, startTime, endTime int64, maxResults int64, nextToken, accessKeyID string) (LookUpEventsResponse, error) {
 	req := LookUpEventsRequest{}
 	if startTime > 0 {
 		ts := startTime
@@ -57,10 +91,18 @@ func (c *Client) LookUpEvents(ctx context.Context, region string, startTime, end
 		req.EndTime = &te
 	}
 	if maxResults > 0 {
-		req.MaxResults = uint64Ptr(maxResults)
+		req.MaxResults = int64Ptr(maxResults)
 	}
 	if nt := nextToken; nt != "" {
 		req.NextToken = &nt
+	}
+	if accessKeyID != "" {
+		req.LookupAttributes = []LookupAttribute{
+			{
+				AttributeKey:   stringPtr("AccessKeyId"),
+				AttributeValue: stringPtr(accessKeyID),
+			},
+		}
 	}
 	var resp LookUpEventsResponse
 	err := c.DoJSON(ctx, "cloudaudit", cloudAuditVersion, "LookUpEvents", region, req, &resp)
