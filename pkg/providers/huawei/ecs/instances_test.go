@@ -91,6 +91,44 @@ func TestDriverGetResourceAggregatesRegionErrorsAndContinues(t *testing.T) {
 	}
 }
 
+func TestDriverGetResourceSkipsProjectNotFoundRegions(t *testing.T) {
+	transport := &routingTransport{
+		routes: map[string]routeResponse{
+			"GET iam.cn-north-4.myhuaweicloud.com /v3/projects?name=cn-east-201": {
+				body: `{"projects":[]}`,
+			},
+			"GET iam.cn-north-4.myhuaweicloud.com /v3/projects?name=cn-north-4": {
+				body: `{"projects":[{"id":"project-n4","name":"cn-north-4","domain_id":"d-1","enabled":true}]}`,
+			},
+			"GET ecs.cn-north-4.myhuaweicloud.com /v1/project-n4/cloudservers/detail?limit=100&offset=1": {
+				body: `{"count":1,"servers":[{"id":"i-uuid-ok","status":"ACTIVE","name":"ecs-ok","addresses":{"net-a":[{"addr":"10.0.0.3","OS-EXT-IPS:type":"fixed"}]}}]}`,
+			},
+			"GET iam.cn-north-4.myhuaweicloud.com /v3/projects?name=cn-south-201": {
+				body: `{"projects":[]}`,
+			},
+		},
+	}
+
+	driver := newTestDriver([]string{"cn-east-201", "cn-north-4", "cn-south-201"}, "d-1", transport)
+	var (
+		got    []schema.Host
+		err    error
+		output string
+	)
+	output = captureStdout(t, func() {
+		got, err = driver.GetResource(context.Background())
+	})
+	if err != nil {
+		t.Fatalf("GetResource() error = %v", err)
+	}
+	if len(got) != 1 || got[0].HostName != "ecs-ok" || got[0].Region != "cn-north-4" {
+		t.Fatalf("unexpected hosts: %+v", got)
+	}
+	if strings.Contains(output, "cn-east-201") || strings.Contains(output, "cn-south-201") {
+		t.Fatalf("skipped regions should not be printed: %q", output)
+	}
+}
+
 func newTestDriver(regions []string, domainID string, transport http.RoundTripper) *Driver {
 	cred := auth.New("AKID", "SECRET", "cn-north-4", false)
 	return &Driver{

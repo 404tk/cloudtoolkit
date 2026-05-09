@@ -57,6 +57,35 @@ func TestDriverGetDatabasesListsAcrossPagesAndPrintsProgress(t *testing.T) {
 	}
 }
 
+func TestDriverGetDatabasesUsesProjectCatalog(t *testing.T) {
+	transport := &routingTransport{
+		t: t,
+		routes: map[string]routeResponse{
+			"GET rds.cn-north-4.myhuaweicloud.com /v3/project-n4/instances?limit=100&offset=0": {
+				body: `{"instances":[{"id":"db-1","region":"cn-north-4","port":3306,"private_ips":["10.0.0.1"],"datastore":{"type":"MySQL","version":"8.0"}}],"total_count":1}`,
+			},
+		},
+	}
+
+	driver := newTestDriver([]string{"cn-north-4"}, "d-1", transport)
+	driver.ProjectCatalog = api.NewProjectCatalog([]api.IAMProject{
+		{ID: "project-n4", Name: "cn-north-4", DomainID: "d-1", Enabled: true},
+	}, "d-1")
+	var (
+		got []schema.Database
+		err error
+	)
+	_ = captureStdout(t, func() {
+		got, err = driver.GetDatabases(context.Background())
+	})
+	if err != nil {
+		t.Fatalf("GetDatabases() error = %v", err)
+	}
+	if len(got) != 1 || got[0].InstanceId != "db-1" {
+		t.Fatalf("unexpected databases: %+v", got)
+	}
+}
+
 func TestDriverGetDatabasesAggregatesRegionErrorsAndContinues(t *testing.T) {
 	transport := &routingTransport{
 		t: t,
@@ -107,12 +136,22 @@ func TestDriverGetDatabasesSkipsRegionsWithoutProject(t *testing.T) {
 	}
 
 	driver := newTestDriver([]string{"cn-east-201", "cn-east-3"}, "d-1", transport)
-	got, err := driver.GetDatabases(context.Background())
+	var (
+		got    []schema.Database
+		err    error
+		output string
+	)
+	output = captureStdout(t, func() {
+		got, err = driver.GetDatabases(context.Background())
+	})
 	if err != nil {
 		t.Fatalf("GetDatabases() error = %v", err)
 	}
 	if len(got) != 1 || got[0].InstanceId != "db-2" {
 		t.Fatalf("unexpected databases: %+v", got)
+	}
+	if strings.Contains(output, "cn-east-201") {
+		t.Fatalf("skipped region should not be printed: %q", output)
 	}
 }
 
@@ -139,7 +178,14 @@ func TestDriverGetDatabasesSkipsLaterRegionsWithoutProject(t *testing.T) {
 	}
 
 	driver := newTestDriver([]string{"cn-north-4", "cn-east-201", "cn-east-3"}, "d-1", transport)
-	got, err := driver.GetDatabases(context.Background())
+	var (
+		got    []schema.Database
+		err    error
+		output string
+	)
+	output = captureStdout(t, func() {
+		got, err = driver.GetDatabases(context.Background())
+	})
 	if err != nil {
 		t.Fatalf("GetDatabases() error = %v", err)
 	}
@@ -152,6 +198,9 @@ func TestDriverGetDatabasesSkipsLaterRegionsWithoutProject(t *testing.T) {
 	}
 	if !ids["db-1"] || !ids["db-2"] {
 		t.Fatalf("unexpected databases: %+v", got)
+	}
+	if strings.Contains(output, "cn-east-201") {
+		t.Fatalf("skipped region should not be printed: %q", output)
 	}
 }
 

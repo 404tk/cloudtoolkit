@@ -24,6 +24,8 @@ type Driver struct {
 	DomainID  string
 	Client    *api.Client
 	projectID map[string]string
+
+	ProjectCatalog *api.ProjectCatalog
 }
 
 func (d *Driver) client() *api.Client {
@@ -42,7 +44,10 @@ func (d *Driver) GetLogs(ctx context.Context) ([]schema.Log, error) {
 		return out, errors.New("huawei lts: nil driver")
 	}
 	logger.Info("List Huawei LTS log groups ...")
-	region := d.region()
+	region, ok := d.region()
+	if !ok {
+		return out, nil
+	}
 	projectID, err := d.resolveProjectID(ctx, region)
 	if err != nil {
 		return out, err
@@ -70,6 +75,12 @@ func (d *Driver) GetLogs(ctx context.Context) ([]schema.Log, error) {
 }
 
 func (d *Driver) resolveProjectID(ctx context.Context, region string) (string, error) {
+	if projectID, ok := d.ProjectCatalog.ProjectID(region); ok {
+		return projectID, nil
+	}
+	if d.ProjectCatalog != nil {
+		return "", &api.ProjectNotFoundError{Region: region}
+	}
 	if d.projectID == nil {
 		d.projectID = make(map[string]string)
 	}
@@ -84,16 +95,19 @@ func (d *Driver) resolveProjectID(ctx context.Context, region string) (string, e
 	return pid, nil
 }
 
-func (d *Driver) region() string {
+func (d *Driver) region() (string, bool) {
 	for _, r := range d.Regions {
 		if r = strings.TrimSpace(r); r != "" && r != "all" {
-			return r
+			return r, true
 		}
 	}
-	if r := strings.TrimSpace(d.Cred.Region); r != "" && r != "all" {
-		return r
+	if d.ProjectCatalog != nil {
+		return "", false
 	}
-	return defaultRegion
+	if r := strings.TrimSpace(d.Cred.Region); r != "" && r != "all" {
+		return r, true
+	}
+	return defaultRegion, true
 }
 
 // formatLTSTime converts the LTS millisecond epoch into the human readable

@@ -28,6 +28,8 @@ func (t *transport) handleIAM(req *http.Request, _ string, body []byte) (*http.R
 		return t.handleShowUser(req, path)
 	case method == http.MethodGet && path == "/v3/auth/domains":
 		return handleListDomains(req)
+	case method == http.MethodGet && path == "/v3/auth/projects":
+		return handleListProjects(req)
 	case method == http.MethodGet && path == "/v3/projects":
 		return handleListProjects(req)
 	case method == http.MethodGet && path == "/v3/regions":

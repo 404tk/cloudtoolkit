@@ -36,6 +36,7 @@ type RegionTracker struct {
 	prevLength int
 	flag       bool
 	count      int
+	updated    bool
 }
 
 func NewRegionTracker() *RegionTracker { return &RegionTracker{} }
@@ -44,6 +45,7 @@ func NewRegionTracker() *RegionTracker { return &RegionTracker{} }
 func (t *RegionTracker) Update(region string, newItems int) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	t.updated = true
 	t.prevLength, t.flag = regionPrint(region, newItems, t.prevLength, t.flag)
 	t.count += newItems
 }
@@ -60,6 +62,9 @@ func (t *RegionTracker) Count() int {
 func (t *RegionTracker) Finish() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if !t.updated {
+		return
+	}
 	if !t.flag {
 		fmt.Fprintf(writer(), "\n\033[F\033[K")
 	}

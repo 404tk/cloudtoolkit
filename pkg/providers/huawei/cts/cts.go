@@ -30,6 +30,8 @@ type Driver struct {
 	DomainID  string
 	Client    *api.Client
 	projectID map[string]string
+
+	ProjectCatalog *api.ProjectCatalog
 }
 
 func (d *Driver) client() *api.Client {
@@ -127,6 +129,12 @@ func (d *Driver) listRegionEvents(ctx context.Context, region, sourceFilter stri
 }
 
 func (d *Driver) resolveProjectID(ctx context.Context, region string) (string, error) {
+	if projectID, ok := d.ProjectCatalog.ProjectID(region); ok {
+		return projectID, nil
+	}
+	if d.ProjectCatalog != nil {
+		return "", &api.ProjectNotFoundError{Region: region}
+	}
 	if d.projectID == nil {
 		d.projectID = make(map[string]string)
 	}
@@ -162,6 +170,9 @@ func (d *Driver) resolveRegions() []string {
 	}
 
 	region := strings.TrimSpace(d.Cred.Region)
+	if d.ProjectCatalog != nil {
+		return nil
+	}
 	if region == "" || region == "all" {
 		region = defaultRegion
 	}

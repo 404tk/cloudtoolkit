@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/404tk/cloudtoolkit/pkg/providers/huawei/api"
 	huaweiauth "github.com/404tk/cloudtoolkit/pkg/providers/huawei/auth"
@@ -35,6 +36,10 @@ type Provider struct {
 	apiOptions []api.Option
 	obsOptions []_obs.Option
 	skipCache  bool
+
+	projectCatalogOnce sync.Once
+	projectCatalog     *api.ProjectCatalog
+	projectCatalogErr  error
 }
 
 var defaultRegion = "cn-north-4"
@@ -143,7 +148,8 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 		}).
 		Register("host", func(ctx context.Context, list *schema.Resources) {
 			cred := p.iamCredential()
-			ecsprovider := &ecs.Driver{Cred: cred, Regions: p.serviceRegions("ecs"), DomainID: p.domainID, Client: p.newAPIClient(cred)}
+			regions, projects := p.projectServiceRegions(ctx, "ecs")
+			ecsprovider := &ecs.Driver{Cred: cred, Regions: regions, DomainID: p.domainID, Client: p.newAPIClient(cred), ProjectCatalog: projects}
 			hosts, err := ecsprovider.GetResource(ctx)
 			schema.AppendAssets(list, hosts)
 			list.AddError("host", err)
@@ -157,7 +163,8 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 		}).
 		Register("database", func(ctx context.Context, list *schema.Resources) {
 			cred := p.iamCredential()
-			rdsprovider := &_rds.Driver{Cred: cred, Regions: p.serviceRegions("rds"), DomainID: p.domainID, Client: p.newAPIClient(cred)}
+			regions, projects := p.projectServiceRegions(ctx, "rds")
+			rdsprovider := &_rds.Driver{Cred: cred, Regions: regions, DomainID: p.domainID, Client: p.newAPIClient(cred), ProjectCatalog: projects}
 			databases, err := rdsprovider.GetDatabases(ctx)
 			schema.AppendAssets(list, databases)
 			list.AddError("database", err)
@@ -178,14 +185,16 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 		}).
 		Register("log", func(ctx context.Context, list *schema.Resources) {
 			cred := p.iamCredential()
-			ltsprovider := &_lts.Driver{Cred: cred, Regions: p.regions, DomainID: p.domainID, Client: p.newAPIClient(cred)}
+			regions, projects := p.projectServiceRegions(ctx, "lts")
+			ltsprovider := &_lts.Driver{Cred: cred, Regions: regions, DomainID: p.domainID, Client: p.newAPIClient(cred), ProjectCatalog: projects}
 			logs, err := ltsprovider.GetLogs(ctx)
 			schema.AppendAssets(list, logs)
 			list.AddError("log", err)
 		}).
 		Register("sms", func(ctx context.Context, list *schema.Resources) {
 			cred := p.iamCredential()
-			smsprovider := &_msgsms.Driver{Cred: cred, Regions: p.serviceRegions("msgsms"), DomainID: p.domainID, Client: p.newAPIClient(cred)}
+			regions, projects := p.projectServiceRegions(ctx, "msgsms")
+			smsprovider := &_msgsms.Driver{Cred: cred, Regions: regions, DomainID: p.domainID, Client: p.newAPIClient(cred), ProjectCatalog: projects}
 			result, err := smsprovider.GetResource(ctx)
 			list.Sms = result
 			list.AddError("sms", err)
@@ -399,11 +408,13 @@ func (p *Provider) BucketACL(ctx context.Context, action, container, level strin
 // error because CTS is a read-only audit service.
 func (p *Provider) EventDump(ctx context.Context, action, args string) (schema.EventActionResult, error) {
 	cred := p.iamCredential()
+	regions, projects := p.projectServiceRegions(ctx, "cts")
 	driver := &_cts.Driver{
-		Cred:     cred,
-		Regions:  p.regions,
-		DomainID: p.domainID,
-		Client:   p.newAPIClient(cred),
+		Cred:           cred,
+		Regions:        regions,
+		DomainID:       p.domainID,
+		Client:         p.newAPIClient(cred),
+		ProjectCatalog: projects,
 	}
 	switch action {
 	case "dump":
@@ -437,6 +448,47 @@ func (p *Provider) DBManagement(ctx context.Context, action, instanceID string) 
 	default:
 		return schema.DatabaseActionResult{}, fmt.Errorf("invalid action: %s (expected: useradd, userdel)", action)
 	}
+}
+
+func (p *Provider) projectServiceRegions(ctx context.Context, service string) ([]string, *api.ProjectCatalog) {
+	regions := p.serviceRegions(service)
+	if !hasMultipleRegions(regions) {
+		return regions, nil
+	}
+	catalog, err := p.accessibleProjectCatalog(ctx)
+	if err != nil || catalog == nil {
+		return regions, nil
+	}
+	return catalog.FilterRegions(regions), catalog
+}
+
+func (p *Provider) accessibleProjectCatalog(ctx context.Context) (*api.ProjectCatalog, error) {
+	if p == nil {
+		return nil, fmt.Errorf("huawei provider: nil provider")
+	}
+	p.projectCatalogOnce.Do(func() {
+		cred := p.iamCredential()
+		p.projectCatalog, p.projectCatalogErr = api.ListAccessibleProjectCatalog(ctx, p.newAPIClient(cred), p.domainID)
+	})
+	return p.projectCatalog, p.projectCatalogErr
+}
+
+func hasMultipleRegions(regions []string) bool {
+	seen := make(map[string]struct{}, len(regions))
+	for _, region := range regions {
+		region = strings.TrimSpace(region)
+		if region == "" {
+			continue
+		}
+		if _, ok := seen[region]; ok {
+			continue
+		}
+		seen[region] = struct{}{}
+		if len(seen) > 1 {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *Provider) iamCredential() huaweiauth.Credential {

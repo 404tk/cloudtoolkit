@@ -72,6 +72,42 @@ var (
 		"cn-southwest-3",
 		"cn-north-11",
 	)
+	ctsSupportedRegions = regionSet(
+		"af-south-1",
+		"cn-north-4",
+		"cn-north-1",
+		"cn-east-2",
+		"cn-east-3",
+		"cn-south-1",
+		"cn-south-2",
+		"cn-southwest-2",
+		"ap-southeast-2",
+		"ap-southeast-1",
+		"ap-southeast-3",
+		"cn-north-2",
+		"cn-north-9",
+		"cn-south-4",
+		"ru-northwest-2",
+		"la-south-2",
+		"sa-brazil-1",
+		"la-north-2",
+		"na-mexico-1",
+		"eu-west-101",
+		"ap-southeast-4",
+		"ap-southeast-5",
+		"af-north-1",
+		"tr-west-1",
+		"cn-east-5",
+		"cn-north-12",
+		"cn-southwest-3",
+		"cn-north-11",
+		"cn-east-4",
+		"me-east-1",
+		"eu-west-0",
+		"my-kualalumpur-1",
+		"ru-moscow-1",
+		"ae-ad-1",
+	)
 	msgsmsSupportedRegions = regionSet(
 		"cn-north-4",
 		"cn-south-1",
@@ -97,6 +133,8 @@ func (p *Provider) serviceRegions(service string) []string {
 		supported = ecsSupportedRegions
 	case "rds":
 		supported = rdsSupportedRegions
+	case "cts":
+		supported = ctsSupportedRegions
 	case "msgsms":
 		supported = msgsmsSupportedRegions
 	default:

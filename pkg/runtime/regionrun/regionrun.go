@@ -7,6 +7,7 @@ package regionrun
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -18,6 +19,19 @@ import (
 
 // DefaultConcurrency is the fan-out used when the caller passes concurrency <= 0.
 const DefaultConcurrency = 6
+
+var errSkipRegion = errors.New("region skipped")
+
+// SkipRegion tells ForEach that the current region is not applicable and
+// should not be reported as either progress or an error.
+func SkipRegion() error {
+	return errSkipRegion
+}
+
+// IsSkipRegion reports whether err was produced by SkipRegion.
+func IsSkipRegion(err error) bool {
+	return errors.Is(err, errSkipRegion)
+}
 
 type PartialError struct {
 	errs map[string]error
@@ -122,6 +136,9 @@ func ForEach[T any](
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
+				if IsSkipRegion(err) {
+					return
+				}
 				errs[region] = err
 			}
 			before := len(out)

@@ -19,6 +19,9 @@ func TestProviderServiceRegionsFiltersOnlyWhenRegionAll(t *testing.T) {
 	if got, want := p.serviceRegions("rds"), []string{"cn-north-4", "cn-east-3"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("serviceRegions(rds) = %v, want %v", got, want)
 	}
+	if got, want := p.serviceRegions("cts"), []string{"cn-north-4", "cn-east-3"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("serviceRegions(cts) = %v, want %v", got, want)
+	}
 	if got, want := p.serviceRegions("msgsms"), []string{"cn-north-4"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("serviceRegions(msgsms) = %v, want %v", got, want)
 	}

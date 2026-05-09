@@ -27,6 +27,8 @@ type Driver struct {
 	DomainID  string
 	Client    *api.Client
 	projectID map[string]string
+
+	ProjectCatalog *api.ProjectCatalog
 }
 
 func (d *Driver) client() *api.Client {
@@ -36,16 +38,19 @@ func (d *Driver) client() *api.Client {
 	return d.Client
 }
 
-func (d *Driver) region() string {
+func (d *Driver) region() (string, bool) {
 	for _, r := range d.Regions {
 		if r = strings.TrimSpace(r); isSupportedRegion(r) {
-			return r
+			return r, true
 		}
 	}
-	if r := strings.TrimSpace(d.Cred.Region); isSupportedRegion(r) {
-		return r
+	if d.ProjectCatalog != nil {
+		return "", false
 	}
-	return defaultRegion
+	if r := strings.TrimSpace(d.Cred.Region); isSupportedRegion(r) {
+		return r, true
+	}
+	return defaultRegion, true
 }
 
 func (d *Driver) GetResource(ctx context.Context) (schema.Sms, error) {
@@ -54,7 +59,10 @@ func (d *Driver) GetResource(ctx context.Context) (schema.Sms, error) {
 		return out, errors.New("huawei msgsms: nil driver")
 	}
 	logger.Info("List Huawei MSGSMS signs and templates ...")
-	region := d.region()
+	region, ok := d.region()
+	if !ok {
+		return out, nil
+	}
 	projectID, err := d.resolveProjectID(ctx, region)
 	if err != nil {
 		return out, err
@@ -101,6 +109,12 @@ func (d *Driver) GetResource(ctx context.Context) (schema.Sms, error) {
 }
 
 func (d *Driver) resolveProjectID(ctx context.Context, region string) (string, error) {
+	if projectID, ok := d.ProjectCatalog.ProjectID(region); ok {
+		return projectID, nil
+	}
+	if d.ProjectCatalog != nil {
+		return "", &api.ProjectNotFoundError{Region: region}
+	}
 	if d.projectID == nil {
 		d.projectID = make(map[string]string)
 	}

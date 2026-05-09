@@ -23,6 +23,8 @@ type Driver struct {
 	DomainID  string
 	Client    *api.Client
 	projectID map[string]string
+
+	ProjectCatalog *api.ProjectCatalog
 }
 
 func (d *Driver) client() *api.Client {
@@ -56,9 +58,8 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 		if probeErr != nil {
 			switch {
 			case api.IsProjectNotFound(probeErr):
-				logger.Warning("Skip RDS region", probeRegion, ":", probeErr.Error())
-				tracker.Update(probeRegion, 0)
-				trackerUsed = true
+				// Some public service regions may not have an account project.
+				// Treat them as not applicable instead of polluting output.
 			case api.IsAccessDenied(probeErr):
 				return list, probeErr
 			default:
@@ -85,8 +86,7 @@ func (d *Driver) GetDatabases(ctx context.Context) ([]schema.Database, error) {
 		instances, err := d.listRegionDatabases(ctx, region)
 		if err != nil {
 			if api.IsProjectNotFound(err) {
-				logger.Warning("Skip RDS region", region, ":", err.Error())
-				return nil, nil
+				return nil, regionrun.SkipRegion()
 			}
 			return nil, err
 		}
@@ -163,6 +163,12 @@ func (d *Driver) listRegionDatabases(ctx context.Context, region string) ([]sche
 }
 
 func (d *Driver) resolveProjectID(ctx context.Context, region string) (string, error) {
+	if projectID, ok := d.ProjectCatalog.ProjectID(region); ok {
+		return projectID, nil
+	}
+	if d.ProjectCatalog != nil {
+		return "", &api.ProjectNotFoundError{Region: region}
+	}
 	if d.projectID == nil {
 		d.projectID = make(map[string]string)
 	}

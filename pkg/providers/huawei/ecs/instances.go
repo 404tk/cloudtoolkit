@@ -23,6 +23,8 @@ type Driver struct {
 	Regions  []string
 	DomainID string
 	Client   *api.Client
+
+	ProjectCatalog *api.ProjectCatalog
 }
 
 func (d *Driver) client() *api.Client {
@@ -50,12 +52,17 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 		probeRegion := regions[0]
 		probeItems, probeErr := d.listRegion(ctx, probeRegion)
 		if probeErr != nil {
-			if api.IsAccessDenied(probeErr) {
+			switch {
+			case api.IsProjectNotFound(probeErr):
+				// Some public service regions may not have an account project.
+				// Treat them as not applicable instead of polluting output.
+			case api.IsAccessDenied(probeErr):
 				return list, probeErr
+			default:
+				seedErrs[probeRegion] = probeErr
+				tracker.Update(probeRegion, 0)
+				trackerUsed = true
 			}
-			seedErrs[probeRegion] = probeErr
-			tracker.Update(probeRegion, 0)
-			trackerUsed = true
 		} else {
 			list = append(list, probeItems...)
 			tracker.Update(probeRegion, len(probeItems))
@@ -69,14 +76,21 @@ func (d *Driver) GetResource(ctx context.Context) ([]schema.Host, error) {
 
 	trackerUsed = true
 	got, regionErrs := regionrun.ForEach(ctx, regions, 0, tracker, func(ctx context.Context, r string) ([]schema.Host, error) {
-		return d.listRegion(ctx, r)
+		items, err := d.listRegion(ctx, r)
+		if err != nil {
+			if api.IsProjectNotFound(err) {
+				return nil, regionrun.SkipRegion()
+			}
+			return nil, err
+		}
+		return items, nil
 	})
 	list = append(list, got...)
 	return list, regionrun.Wrap(mergeRegionErrors(seedErrs, regionErrs))
 }
 
 func (d *Driver) listRegion(ctx context.Context, region string) ([]schema.Host, error) {
-	projectID, err := api.ResolveProjectID(ctx, d.client(), d.DomainID, region)
+	projectID, err := d.resolveProjectID(ctx, region)
 	if err != nil {
 		return nil, err
 	}
@@ -125,6 +139,16 @@ func (d *Driver) listRegion(ctx context.Context, region string) ([]schema.Host, 
 		}, nil
 	})
 	return items, err
+}
+
+func (d *Driver) resolveProjectID(ctx context.Context, region string) (string, error) {
+	if projectID, ok := d.ProjectCatalog.ProjectID(region); ok {
+		return projectID, nil
+	}
+	if d.ProjectCatalog != nil {
+		return "", &api.ProjectNotFoundError{Region: region}
+	}
+	return api.ResolveProjectID(ctx, d.client(), d.DomainID, region)
 }
 
 func mergeRegionErrors(base, extra map[string]error) map[string]error {
