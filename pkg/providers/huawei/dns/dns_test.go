@@ -43,19 +43,19 @@ func jsonResponse(r *http.Request, body string) *http.Response {
 	}
 }
 
-const sampleZones = `{"zones":[
+const sampleZones = `{"links":{"self":"https://dns.cn-north-4.myhuaweicloud.com/v2/zones"},"zones":[
   {"id":"z-public-1","name":"ctk-demo.example.com.","status":"ACTIVE","zone_type":"public","record_num":4},
   {"id":"z-public-2","name":"another.example.","status":"ACTIVE","zone_type":"public","record_num":1}
 ],"metadata":{"total_count":2}}`
 
-const sampleRecordSetsZ1 = `{"recordsets":[
+const sampleRecordSetsZ1 = `{"links":{"self":"https://dns.cn-north-4.myhuaweicloud.com/v2/zones/z-public-1/recordsets"},"recordsets":[
   {"id":"r-a","name":"ctk-demo.example.com.","type":"A","ttl":300,"status":"ACTIVE","records":["198.51.100.10","198.51.100.11"]},
   {"id":"r-cname","name":"www.ctk-demo.example.com.","type":"CNAME","ttl":60,"status":"ACTIVE","records":["ctk-demo.example.com."]},
   {"id":"r-mx","name":"ctk-demo.example.com.","type":"MX","ttl":300,"status":"ACTIVE","records":["10 mx1.ctk-demo.example.com."]},
   {"id":"r-ns","name":"ctk-demo.example.com.","type":"NS","ttl":172800,"status":"ACTIVE","records":["ns1.example.com."]}
 ],"metadata":{"total_count":4}}`
 
-const sampleRecordSetsZ2 = `{"recordsets":[
+const sampleRecordSetsZ2 = `{"links":{"self":"https://dns.cn-north-4.myhuaweicloud.com/v2/zones/z-public-2/recordsets"},"recordsets":[
   {"id":"r-a-2","name":"db.another.example.","type":"A","ttl":60,"status":"ACTIVE","records":["10.0.0.10"]}
 ],"metadata":{"total_count":1}}`
 

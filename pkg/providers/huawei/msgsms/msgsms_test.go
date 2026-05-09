@@ -45,14 +45,17 @@ func jsonResponse(r *http.Request, body string) *http.Response {
 
 func TestGetResourceMapsSignsAndTemplates(t *testing.T) {
 	driver := &Driver{
-		Cred:    auth.New("AKID", "SECRET", "cn-north-4", false),
-		Regions: []string{"cn-north-4"},
+		Cred:     auth.New("AKID", "SECRET", "cn-north-4", false),
+		Regions:  []string{"cn-north-4"},
+		DomainID: "d-1",
 		Client: newTestClient(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			switch r.URL.Path {
-			case "/v1/sms/signs":
-				return jsonResponse(r, `{"signs":[{"sign_id":"s1","sign_name":"ctk-prod","sign_status":"PASSED","sign_type":"app"},{"sign_id":"s2","sign_name":"ctk-stage","sign_status":"PENDING","sign_type":"website"}],"total_count":2}`), nil
-			case "/v1/sms/templates":
-				return jsonResponse(r, `{"templates":[{"template_id":"t1","template_name":"OTP","content":"Code is {1}","template_status":"PASSED","template_type":"verification"}],"total_count":1}`), nil
+			case "/v3/projects":
+				return jsonResponse(r, `{"projects":[{"id":"project-n4","name":"cn-north-4","domain_id":"d-1","enabled":true}]}`), nil
+			case "/v2/project-n4/msgsms/signatures":
+				return jsonResponse(r, `{"results":[{"id":"row-s1","signature_id":"s1","signature_name":"ctk-prod","status":"REVIEW_PASSED","signature_type":"NOTIFY_TYPE"},{"id":"row-s2","signature_id":"s2","signature_name":"ctk-stage","status":"PENDING_REVIEW","signature_type":"VERIFY_CODE_TYPE"}],"total":2}`), nil
+			case "/v2/project-n4/msgsms/templates":
+				return jsonResponse(r, `{"results":[{"id":"row-t1","template_id":"t1","template_name":"OTP","template_content":"Code is {1}","status":"REVIEW_PASSED","template_type":"VERIFY_CODE_TYPE"}],"total":1}`), nil
 			}
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 			return nil, nil
@@ -62,7 +65,7 @@ func TestGetResourceMapsSignsAndTemplates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetResource: %v", err)
 	}
-	if len(res.Signs) != 2 || res.Signs[0].Name != "ctk-prod" || res.Signs[0].Status != "PASSED" {
+	if len(res.Signs) != 2 || res.Signs[0].Name != "ctk-prod" || res.Signs[0].Status != "REVIEW_PASSED" {
 		t.Errorf("signs mismatch: %+v", res.Signs)
 	}
 	if len(res.Templates) != 1 || res.Templates[0].Name != "OTP" || res.Templates[0].Content == "" {
@@ -72,9 +75,13 @@ func TestGetResourceMapsSignsAndTemplates(t *testing.T) {
 
 func TestGetResourcePropagatesSignsError(t *testing.T) {
 	driver := &Driver{
-		Cred:    auth.New("AKID", "SECRET", "cn-north-4", false),
-		Regions: []string{"cn-north-4"},
+		Cred:     auth.New("AKID", "SECRET", "cn-north-4", false),
+		Regions:  []string{"cn-north-4"},
+		DomainID: "d-1",
 		Client: newTestClient(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if r.URL.Path == "/v3/projects" {
+				return jsonResponse(r, `{"projects":[{"id":"project-n4","name":"cn-north-4","domain_id":"d-1","enabled":true}]}`), nil
+			}
 			return &http.Response{
 				StatusCode: http.StatusForbidden,
 				Header:     http.Header{"Content-Type": []string{"application/json"}},
@@ -94,10 +101,14 @@ func TestGetResourcePropagatesSignsError(t *testing.T) {
 
 func TestGetResourceHandlesEmptyResults(t *testing.T) {
 	driver := &Driver{
-		Cred:    auth.New("AKID", "SECRET", "cn-north-4", false),
-		Regions: []string{"cn-north-4"},
+		Cred:     auth.New("AKID", "SECRET", "cn-north-4", false),
+		Regions:  []string{"cn-north-4"},
+		DomainID: "d-1",
 		Client: newTestClient(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
-			return jsonResponse(r, `{"signs":[],"templates":[],"total_count":0}`), nil
+			if r.URL.Path == "/v3/projects" {
+				return jsonResponse(r, `{"projects":[{"id":"project-n4","name":"cn-north-4","domain_id":"d-1","enabled":true}]}`), nil
+			}
+			return jsonResponse(r, `{"results":[],"total":0}`), nil
 		})),
 	}
 	res, err := driver.GetResource(context.Background())

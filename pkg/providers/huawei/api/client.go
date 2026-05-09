@@ -107,8 +107,12 @@ func (c *Client) DoJSON(ctx context.Context, req Request, out any) error {
 
 	body := append([]byte(nil), req.Body...)
 	headers := httpclient.CloneHeader(req.Headers)
-	if len(body) > 0 && strings.TrimSpace(headers.Get("Content-Type")) == "" {
-		headers.Set("Content-Type", "application/json;charset=UTF-8")
+	if strings.TrimSpace(headers.Get("Content-Type")) == "" {
+		if len(body) > 0 {
+			headers.Set("Content-Type", "application/json;charset=UTF-8")
+		} else {
+			headers.Set("Content-Type", "application/json")
+		}
 	}
 	timestamp := c.now().UTC()
 	signed, err := Sign(&SignRequest{

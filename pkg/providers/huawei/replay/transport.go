@@ -97,7 +97,7 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return t.handleDNS(req, region)
 	case "lts":
 		return t.handleLTS(req, region)
-	case "smsapi":
+	case "msgsms", "smsapi":
 		return t.handleSMSAPI(req, region)
 	}
 	return apiErrorResponse(req, http.StatusNotFound, "InvalidEndpoint",
@@ -128,6 +128,8 @@ func classifyHost(host string) (string, string) {
 		return "lts", trimSuffix(strings.TrimPrefix(host, "lts."), ".myhuaweicloud.com")
 	case strings.HasPrefix(host, "smsapi."):
 		return "smsapi", trimSuffix(strings.TrimPrefix(host, "smsapi."), ".myhuaweicloud.com")
+	case strings.HasPrefix(host, "msgsms."):
+		return "msgsms", trimSuffix(strings.TrimPrefix(host, "msgsms."), ".myhuaweicloud.com")
 	}
 	return "", ""
 }

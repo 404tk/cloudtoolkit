@@ -1,35 +1,39 @@
 package api
 
-// Huawei MSGSMS — list SMS templates and signs (audit assets). Pattern-
-// inferred against the documented `smn.<region>.myhuaweicloud.com` /
-// `smsapi.<region>.myhuaweicloud.com` v1 surface; verify against upstream
-// MSGSMS docs before relying on this in production.
+// Huawei MSGSMS v2 — list SMS templates and signatures for the cloudlist `sms`
+// asset. The response shape mirrors huaweicloud-sdk-go-v3 services/msgsms/v2:
+//
+//   GET /v2/{project_id}/msgsms/signatures
+//   GET /v2/{project_id}/msgsms/templates
 
 type MSGSMSSign struct {
-	SignID     string `json:"sign_id"`
-	SignName   string `json:"sign_name"`
-	Status     string `json:"sign_status"`
-	SignType   string `json:"sign_type"`
+	ID         string `json:"id"`
+	SignID     string `json:"signature_id"`
+	SignName   string `json:"signature_name"`
+	Status     string `json:"status"`
+	SignType   string `json:"signature_type"`
 	CreateTime string `json:"create_time"`
-	Reason     string `json:"reason"`
+	Reason     string `json:"review_desc"`
 }
 
 type ListSmsSignResponse struct {
-	Signs      []MSGSMSSign `json:"signs"`
-	TotalCount int          `json:"total_count"`
+	Results []MSGSMSSign `json:"results"`
+	Total   int64        `json:"total"`
 }
 
 type MSGSMSTemplate struct {
+	ID           string `json:"id"`
 	TemplateID   string `json:"template_id"`
 	TemplateName string `json:"template_name"`
-	Content      string `json:"content"`
-	Status       string `json:"template_status"`
+	Content      string `json:"template_content"`
+	Status       string `json:"status"`
+	FlowStatus   string `json:"flow_status"`
 	TemplateType string `json:"template_type"`
 	CreateTime   string `json:"create_time"`
-	Reason       string `json:"reason"`
+	Reason       string `json:"review_desc"`
 }
 
 type ListSmsTemplateResponse struct {
-	Templates  []MSGSMSTemplate `json:"templates"`
-	TotalCount int              `json:"total_count"`
+	Results []MSGSMSTemplate `json:"results"`
+	Total   int64            `json:"total"`
 }

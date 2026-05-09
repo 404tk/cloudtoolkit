@@ -72,6 +72,10 @@ var (
 		"cn-southwest-3",
 		"cn-north-11",
 	)
+	msgsmsSupportedRegions = regionSet(
+		"cn-north-4",
+		"cn-south-1",
+	)
 )
 
 func regionSet(regions ...string) map[string]struct{} {
@@ -93,6 +97,8 @@ func (p *Provider) serviceRegions(service string) []string {
 		supported = ecsSupportedRegions
 	case "rds":
 		supported = rdsSupportedRegions
+	case "msgsms":
+		supported = msgsmsSupportedRegions
 	default:
 		return p.regions
 	}

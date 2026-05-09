@@ -25,6 +25,9 @@ func TestClientDoJSONGETWithQuery(t *testing.T) {
 		if got := r.Header.Get(HeaderAuthorization); got == "" {
 			t.Fatal("missing authorization header")
 		}
+		if got := r.Header.Get("Content-Type"); got != "application/json" {
+			t.Fatalf("unexpected content type: %s", got)
+		}
 		_, _ = w.Write([]byte(`{"users":[]}`))
 	}))
 	defer server.Close()

@@ -185,7 +185,7 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 		}).
 		Register("sms", func(ctx context.Context, list *schema.Resources) {
 			cred := p.iamCredential()
-			smsprovider := &_msgsms.Driver{Cred: cred, Regions: p.regions, Client: p.newAPIClient(cred)}
+			smsprovider := &_msgsms.Driver{Cred: cred, Regions: p.serviceRegions("msgsms"), DomainID: p.domainID, Client: p.newAPIClient(cred)}
 			result, err := smsprovider.GetResource(ctx)
 			list.Sms = result
 			list.AddError("sms", err)

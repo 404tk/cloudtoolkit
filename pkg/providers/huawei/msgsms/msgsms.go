@@ -1,7 +1,5 @@
 // Package msgsms wraps Huawei Cloud MSGSMS template + sign listing for the
 // cloudlist `sms` asset.
-//
-// Pattern-inferred — see api/types_msgsms.go.
 package msgsms
 
 import (
@@ -18,10 +16,17 @@ import (
 
 const defaultRegion = "cn-north-4"
 
+var supportedRegions = map[string]struct{}{
+	"cn-north-4": {},
+	"cn-south-1": {},
+}
+
 type Driver struct {
-	Cred    auth.Credential
-	Regions []string
-	Client  *api.Client
+	Cred      auth.Credential
+	Regions   []string
+	DomainID  string
+	Client    *api.Client
+	projectID map[string]string
 }
 
 func (d *Driver) client() *api.Client {
@@ -33,11 +38,11 @@ func (d *Driver) client() *api.Client {
 
 func (d *Driver) region() string {
 	for _, r := range d.Regions {
-		if r = strings.TrimSpace(r); r != "" && r != "all" {
+		if r = strings.TrimSpace(r); isSupportedRegion(r) {
 			return r
 		}
 	}
-	if r := strings.TrimSpace(d.Cred.Region); r != "" && r != "all" {
+	if r := strings.TrimSpace(d.Cred.Region); isSupportedRegion(r) {
 		return r
 	}
 	return defaultRegion
@@ -50,20 +55,25 @@ func (d *Driver) GetResource(ctx context.Context) (schema.Sms, error) {
 	}
 	logger.Info("List Huawei MSGSMS signs and templates ...")
 	region := d.region()
+	projectID, err := d.resolveProjectID(ctx, region)
+	if err != nil {
+		return out, err
+	}
 
 	var signs api.ListSmsSignResponse
 	if err := d.client().DoJSON(ctx, api.Request{
-		Service:    "smsapi",
+		Service:    "msgsms",
 		Region:     region,
+		Intl:       d.Cred.Intl,
 		Method:     http.MethodGet,
-		Path:       "/v1/sms/signs",
+		Path:       "/v2/" + projectID + "/msgsms/signatures",
 		Idempotent: true,
 	}, &signs); err != nil {
 		return out, err
 	}
-	for _, s := range signs.Signs {
+	for _, s := range signs.Results {
 		out.Signs = append(out.Signs, schema.SmsSign{
-			Name:   s.SignName,
+			Name:   firstNonEmpty(s.SignName, s.SignID, s.ID),
 			Type:   s.SignType,
 			Status: firstNonEmpty(s.Status, s.Reason),
 		})
@@ -71,22 +81,43 @@ func (d *Driver) GetResource(ctx context.Context) (schema.Sms, error) {
 
 	var templates api.ListSmsTemplateResponse
 	if err := d.client().DoJSON(ctx, api.Request{
-		Service:    "smsapi",
+		Service:    "msgsms",
 		Region:     region,
+		Intl:       d.Cred.Intl,
 		Method:     http.MethodGet,
-		Path:       "/v1/sms/templates",
+		Path:       "/v2/" + projectID + "/msgsms/templates",
 		Idempotent: true,
 	}, &templates); err != nil {
 		return out, err
 	}
-	for _, t := range templates.Templates {
+	for _, t := range templates.Results {
 		out.Templates = append(out.Templates, schema.SmsTemplate{
-			Name:    t.TemplateName,
-			Status:  firstNonEmpty(t.Status, t.Reason),
+			Name:    firstNonEmpty(t.TemplateName, t.TemplateID, t.ID),
+			Status:  firstNonEmpty(t.Status, t.FlowStatus, t.Reason),
 			Content: t.Content,
 		})
 	}
 	return out, nil
+}
+
+func (d *Driver) resolveProjectID(ctx context.Context, region string) (string, error) {
+	if d.projectID == nil {
+		d.projectID = make(map[string]string)
+	}
+	if cached := strings.TrimSpace(d.projectID[region]); cached != "" {
+		return cached, nil
+	}
+	pid, err := api.ResolveProjectID(ctx, d.client(), d.DomainID, region)
+	if err != nil {
+		return "", err
+	}
+	d.projectID[region] = pid
+	return pid, nil
+}
+
+func isSupportedRegion(region string) bool {
+	_, ok := supportedRegions[region]
+	return ok
 }
 
 func firstNonEmpty(values ...string) string {

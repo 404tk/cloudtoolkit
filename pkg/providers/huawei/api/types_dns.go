@@ -13,7 +13,7 @@ package api
 // ListZonesResponse is the typed shape of `GET /v2/zones`. Only public zones
 // are listed at this path; private zones use a separate endpoint.
 type ListZonesResponse struct {
-	Links    []DNSLink `json:"links"`
+	Links    *DNSLink  `json:"links"`
 	Metadata DNSMeta   `json:"metadata"`
 	Zones    []DNSZone `json:"zones"`
 }
@@ -38,7 +38,7 @@ type DNSZone struct {
 // type — the wire format keeps every value as a string, with type-specific
 // formatting (e.g. MX is "<preference> <exchange>").
 type ListRecordSetsResponse struct {
-	Links      []DNSLink   `json:"links"`
+	Links      *DNSLink    `json:"links"`
 	Metadata   DNSMeta     `json:"metadata"`
 	RecordSets []DNSRecord `json:"recordsets"`
 }
