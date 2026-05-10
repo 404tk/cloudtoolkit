@@ -11,13 +11,11 @@ import (
 	ucloudauth "github.com/404tk/cloudtoolkit/pkg/providers/ucloud/auth"
 	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/billing"
 	_iam "github.com/404tk/cloudtoolkit/pkg/providers/ucloud/iam"
-	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/uact"
 	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/udb"
 	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/udns"
 	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/ufile"
 	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/uhost"
-	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/uloghub"
-	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/usms"
+	"github.com/404tk/cloudtoolkit/pkg/providers/ucloud/ulog"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils"
@@ -180,28 +178,6 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			users, err := d.ListUsers(ctx)
 			schema.AppendAssets(list, users)
 			list.AddError("account", err)
-		}).
-		Register("log", func(ctx context.Context, list *schema.Resources) {
-			d := &uloghub.Driver{
-				Credential: p.credential,
-				Client:     p.newClient(),
-				ProjectID:  p.projectID,
-				Region:     p.region,
-			}
-			logs, err := d.GetLogs(ctx)
-			schema.AppendAssets(list, logs)
-			list.AddError("log", err)
-		}).
-		Register("sms", func(ctx context.Context, list *schema.Resources) {
-			d := &usms.Driver{
-				Credential: p.credential,
-				Client:     p.newClient(),
-				ProjectID:  p.projectID,
-				Region:     p.region,
-			}
-			result, err := d.GetResource(ctx)
-			list.Sms = result
-			list.AddError("sms", err)
 		})
 
 	return collector.Collect(ctx, env.From(ctx).Cloudlist)
@@ -412,10 +388,10 @@ func (p *Provider) IAMCredential(ctx context.Context, action, principal, credent
 	return result, fmt.Errorf("ucloud: unsupported iam-credential action %q", action)
 }
 
-// EventDump implements schema.EventReader for UCloud Action Trail (UACT).
+// EventDump implements schema.EventReader for UCloud Operation Log (ULog).
 // Action `dump` lists recent operation events; `whitelist` is unsupported.
 func (p *Provider) EventDump(ctx context.Context, action, args string) (schema.EventActionResult, error) {
-	driver := &uact.Driver{
+	driver := &ulog.Driver{
 		Credential: p.credential,
 		Client:     p.newClient(),
 		ProjectID:  p.projectID,

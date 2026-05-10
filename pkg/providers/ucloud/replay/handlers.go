@@ -402,53 +402,49 @@ func (t *transport) handleDeleteUserApiKey(req *http.Request, params map[string]
 	return successResponse(req, resp), nil
 }
 
-func (t *transport) handleDescribeActionLogList(req *http.Request, _ map[string]string) (*http.Response, error) {
-	resp := api.DescribeActionLogListResponse{BaseResponse: newBase("DescribeActionLogListResponse")}
-	resp.Events = demoUCloudActionLogs()
-	resp.TotalCount = len(resp.Events)
+func (t *transport) handleGetUserOperationEvents(req *http.Request, _ map[string]string) (*http.Response, error) {
+	resp := api.GetUserOperationEventsResponse{BaseResponse: newBase("GetUserOperationEventsResponse")}
+	resp.Events = demoUCloudOperationEvents()
 	return successResponse(req, resp), nil
 }
 
-func demoUCloudActionLogs() []api.UActEvent {
-	return []api.UActEvent{
+func demoUCloudOperationEvents() []api.UCloudOperationEvent {
+	return []api.UCloudOperationEvent{
 		{
-			EventID:         "uact-evt-0001",
-			EventName:       "CreateUser",
-			EventTime:       "2026-04-22T09:11:00Z",
-			EventSource:     "iam.ucloud.cn",
-			UserName:        "admin",
-			SourceIPAddress: "203.0.113.71",
-			Region:          "cn-bj2",
-			Status:          "Success",
-			AccessKey:       "ucloudpubkey-CTKDEMOaudit",
-			ResourceName:    "user/admin",
-			ResourceType:    "iam:User",
+			API:         "CreateUser",
+			IsSuccess:   true,
+			OperateTime: 1776858660,
+			UserName:    "admin",
+			UserEmail:   "admin@example.com",
+			Region:      "cn-bj2",
+			RelatedResource: []api.UCloudRelatedResource{{
+				ResourceID:   "ucloud-user-admin",
+				ResourceName: "user/admin",
+			}},
 		},
 		{
-			EventID:         "uact-evt-0002",
-			EventName:       "UpdateBucket",
-			EventTime:       "2026-04-22T09:14:00Z",
-			EventSource:     "ufile.ucloud.cn",
-			UserName:        "admin",
-			SourceIPAddress: "203.0.113.71",
-			Region:          "cn-bj2",
-			Status:          "Success",
-			AccessKey:       "ucloudpubkey-CTKDEMOaudit",
-			ResourceName:    "ctk-validation-public",
-			ResourceType:    "ufile:Bucket",
+			API:         "UpdateBucket",
+			IsSuccess:   true,
+			OperateTime: 1776858870,
+			UserName:    "admin",
+			UserEmail:   "admin@example.com",
+			Region:      "cn-bj2",
+			RelatedResource: []api.UCloudRelatedResource{{
+				ResourceID:   "ctk-validation-public",
+				ResourceName: "ctk-validation-public",
+			}},
 		},
 		{
-			EventID:         "uact-evt-0003",
-			EventName:       "DeleteAccessKey",
-			EventTime:       "2026-04-22T09:18:00Z",
-			EventSource:     "iam.ucloud.cn",
-			UserName:        "admin",
-			SourceIPAddress: "203.0.113.71",
-			Region:          "cn-bj2",
-			Status:          "Failed",
-			AccessKey:       "ucloudpubkey-CTKDEMOaudit",
-			ResourceName:    "user/admin",
-			ResourceType:    "iam:AccessKey",
+			API:         "DeleteAccessKey",
+			IsSuccess:   false,
+			OperateTime: 1776859092,
+			UserName:    "admin",
+			UserEmail:   "admin@example.com",
+			Region:      "cn-bj2",
+			RelatedResource: []api.UCloudRelatedResource{{
+				ResourceID:   "ucloud-user-admin",
+				ResourceName: "user/admin",
+			}},
 		},
 	}
 }
