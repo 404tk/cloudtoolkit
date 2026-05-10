@@ -58,7 +58,7 @@ func Sign(input SignInput) (Signature, error) {
 	if host == "" {
 		return Signature{}, fmt.Errorf("volcengine signer: empty host")
 	}
-	service := strings.ToLower(strings.TrimSpace(input.Service))
+	service := strings.TrimSpace(input.Service)
 	if service == "" {
 		return Signature{}, fmt.Errorf("volcengine signer: empty service")
 	}

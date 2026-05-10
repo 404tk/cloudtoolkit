@@ -30,14 +30,33 @@ func TestGetResourceListsSignsAndTemplates(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		values, _ := url.ParseQuery(r.URL.RawQuery)
 		switch values.Get("Action") {
-		case "ListSign":
-			_, _ = w.Write([]byte(`{"ResponseMetadata":{"RequestId":"r1"},"Result":{"Total":2,"List":[
-  {"SignId":"sg-1","Sign":"ctk-prod","SignType":"company","Status":"PASSED"},
-  {"SignId":"sg-2","Sign":"ctk-stage","SignType":"website","Status":"PENDING"}
+		case "GetSubAccountList":
+			if values.Get("Version") != "2021-01-11" {
+				t.Fatalf("unexpected subaccount version: %s", values.Get("Version"))
+			}
+			_, _ = w.Write([]byte(`{"ResponseMetadata":{"RequestId":"r0"},"Result":{"total":1,"list":[
+  {"subAccountId":"sms-sub-1","subAccountName":"ctk-validation","status":1}
 ]}}`))
-		case "ListSmsTemplate":
-			_, _ = w.Write([]byte(`{"ResponseMetadata":{"RequestId":"r2"},"Result":{"Total":1,"List":[
-  {"TemplateId":"tpl-1","TemplateName":"OTP","TemplateType":"verification","Content":"Code is {1}","Status":"PASSED"}
+		case "GetSignatureAndOrderList":
+			if values.Get("Version") != "2025-01-01" {
+				t.Fatalf("unexpected sign version: %s", values.Get("Version"))
+			}
+			if values.Get("subAccount") != "sms-sub-1" {
+				t.Fatalf("unexpected sign subAccount: %s", values.Get("subAccount"))
+			}
+			_, _ = w.Write([]byte(`{"ResponseMetadata":{"RequestId":"r1"},"Result":{"total":2,"list":[
+  {"id":"sg-1","content":"ctk-prod","source":"company","status":3},
+  {"id":"sg-2","content":"ctk-stage","source":"website","status":1}
+]}}`))
+		case "GetSmsTemplateAndOrderList":
+			if values.Get("Version") != "2021-01-11" {
+				t.Fatalf("unexpected template version: %s", values.Get("Version"))
+			}
+			if values.Get("subAccount") != "sms-sub-1" {
+				t.Fatalf("unexpected template subAccount: %s", values.Get("subAccount"))
+			}
+			_, _ = w.Write([]byte(`{"ResponseMetadata":{"RequestId":"r2"},"Result":{"total":1,"list":[
+  {"id":"tpl-1","name":"OTP","channelType":"verification","content":"Code is {1}","status":3}
 ]}}`))
 		default:
 			t.Fatalf("unexpected action: %s", values.Get("Action"))
@@ -50,7 +69,7 @@ func TestGetResourceListsSignsAndTemplates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetResource: %v", err)
 	}
-	if len(res.Signs) != 2 || res.Signs[0].Name != "ctk-prod" || res.Signs[0].Status != "PASSED" {
+	if len(res.Signs) != 2 || res.Signs[0].Name != "ctk-prod" || res.Signs[0].Status != "passed" {
 		t.Errorf("signs mismatch: %+v", res.Signs)
 	}
 	if len(res.Templates) != 1 || res.Templates[0].Name != "OTP" {
@@ -68,7 +87,7 @@ func TestGetResourcePropagatesAPIError(t *testing.T) {
 	driver := newTestDriver(server.URL)
 	_, err := driver.GetResource(context.Background())
 	if err == nil {
-		t.Fatal("expected error when ListSign fails")
+		t.Fatal("expected error when signature list fails")
 	}
 	if !strings.Contains(err.Error(), "AccessDenied") {
 		t.Errorf("expected AccessDenied, got %v", err)
@@ -77,7 +96,7 @@ func TestGetResourcePropagatesAPIError(t *testing.T) {
 
 func TestGetResourceHandlesEmptyResults(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"ResponseMetadata":{"RequestId":"r3"},"Result":{"Total":0,"List":[]}}`))
+		_, _ = w.Write([]byte(`{"ResponseMetadata":{"RequestId":"r3"},"Result":{"total":0,"list":[]}}`))
 	}))
 	defer server.Close()
 

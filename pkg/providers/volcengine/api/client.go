@@ -14,16 +14,18 @@ import (
 )
 
 type Request struct {
-	Service    string
-	Version    string
-	Action     string
-	Method     string
-	Region     string
-	Path       string
-	Query      url.Values
-	Body       []byte
-	Headers    http.Header
-	Idempotent bool
+	Service     string
+	SignService string
+	Endpoint    string
+	Version     string
+	Action      string
+	Method      string
+	Region      string
+	Path        string
+	Query       url.Values
+	Body        []byte
+	Headers     http.Header
+	Idempotent  bool
 }
 
 type Option func(*Client)
@@ -100,7 +102,7 @@ func (c *Client) DoOpenAPI(ctx context.Context, req Request, out any) error {
 		return err
 	}
 
-	service := strings.ToLower(strings.TrimSpace(req.Service))
+	service := strings.TrimSpace(req.Service)
 	if service == "" {
 		return fmt.Errorf("volcengine client: empty service")
 	}
@@ -113,24 +115,58 @@ func (c *Client) DoOpenAPI(ctx context.Context, req Request, out any) error {
 		return fmt.Errorf("volcengine client: empty action")
 	}
 
-	method := strings.ToUpper(strings.TrimSpace(req.Method))
-	if method == "" {
-		method = http.MethodGet
-	}
 	query := httpclient.CloneValues(req.Query)
 	query.Set("Action", action)
 	query.Set("Version", version)
+
+	return c.doSigned(ctx, req, service, action, query, out)
+}
+
+func (c *Client) DoSigned(ctx context.Context, req Request, out any) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := c.credential.Validate(); err != nil {
+		return err
+	}
+
+	service := strings.TrimSpace(req.Service)
+	if service == "" {
+		return fmt.Errorf("volcengine client: empty service")
+	}
+	action := strings.TrimSpace(req.Action)
+	if action == "" {
+		action = strings.TrimPrefix(strings.TrimSpace(req.Path), "/")
+	}
+	query := httpclient.CloneValues(req.Query)
+
+	return c.doSigned(ctx, req, service, action, query, out)
+}
+
+func (c *Client) doSigned(ctx context.Context, req Request, service, action string, query url.Values, out any) error {
+	endpointService := strings.ToLower(strings.TrimSpace(service))
+	if endpointService == "" {
+		endpointService = service
+	}
+	signService := strings.TrimSpace(req.SignService)
+	if signService == "" {
+		signService = service
+	}
 
 	signRegion := effectiveRegion(req.Region)
 	endpointRegion := strings.TrimSpace(req.Region)
 	if endpointRegion == "" || endpointRegion == "all" {
 		endpointRegion = signRegion
 	}
-	scheme, host, path, err := c.resolveEndpoint(req, service, endpointRegion)
+	scheme, host, path, err := c.resolveEndpoint(req, endpointService, endpointRegion)
 	if err != nil {
 		return err
 	}
 
+	method := strings.ToUpper(strings.TrimSpace(req.Method))
+	if method == "" {
+		method = http.MethodGet
+	}
 	body := []byte(nil)
 	if method == http.MethodPost {
 		body = append([]byte(nil), req.Body...)
@@ -157,7 +193,7 @@ func (c *Client) DoOpenAPI(ctx context.Context, req Request, out any) error {
 		Query:        httpclient.CloneValues(query),
 		Body:         body,
 		ContentType:  contentType,
-		Service:      service,
+		Service:      signService,
 		Region:       signRegion,
 		AccessKey:    c.credential.AccessKey,
 		SecretKey:    c.credential.SecretKey,
@@ -203,7 +239,10 @@ func (c *Client) DoOpenAPI(ctx context.Context, req Request, out any) error {
 }
 
 func (c *Client) resolveEndpoint(req Request, service, region string) (string, string, string, error) {
-	base := ResolveEndpoint(service, region, c.siteStack)
+	base := strings.TrimSpace(req.Endpoint)
+	if base == "" {
+		base = ResolveEndpoint(service, region, c.siteStack)
+	}
 	if c.baseURL != nil {
 		base = c.baseURL.String()
 	}

@@ -12,6 +12,7 @@ var globalServices = map[string]struct{}{
 	"dns":     {},
 	"iam":     {},
 	"audit":   {},
+	"sms":     {},
 }
 
 var regionalServiceHostAliases = map[string]string{
@@ -41,6 +42,14 @@ func ResolveEndpoint(service, region, siteStack string) string {
 		host = endpointHostPrefix(service) + "." + region + "." + stack + ".com"
 	}
 	return "https://" + host
+}
+
+func ResolveTLSEndpoint(region string) string {
+	region = strings.TrimSpace(region)
+	if region == "" || region == "all" {
+		region = DefaultRegion
+	}
+	return "https://tls-" + region + ".volces.com"
 }
 
 func endpointHostPrefix(service string) string {

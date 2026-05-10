@@ -29,13 +29,19 @@ func newTestDriver(baseURL string) *Driver {
 func TestGetLogsListsTLSProjects(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		values, _ := url.ParseQuery(r.URL.RawQuery)
-		if values.Get("Action") != "DescribeProjects" {
-			t.Fatalf("unexpected action: %s", values.Get("Action"))
+		if r.URL.Path != "/DescribeProjects" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
-		_, _ = w.Write([]byte(`{"ResponseMetadata":{"RequestId":"r1"},"Result":{"Total":2,"Projects":[
+		if values.Get("Action") != "" || values.Get("Version") != "" {
+			t.Fatalf("unexpected OpenAPI query: %s", r.URL.RawQuery)
+		}
+		if got := r.Header.Get("X-Tls-Apiversion"); got != "0.3.0" {
+			t.Fatalf("unexpected tls api version: %s", got)
+		}
+		_, _ = w.Write([]byte(`{"ResponseMetadata":{"RequestId":"r1"},"Total":2,"Projects":[
   {"ProjectId":"tls-1","ProjectName":"prod-tls","Region":"cn-beijing","CreateTime":"2026-04-15 09:11:00","Description":"prod logs"},
   {"ProjectId":"tls-2","ProjectName":"audit-tls","Region":"cn-beijing","CreateTime":"2026-04-16 10:00:00","Description":""}
-]}}`))
+]}`))
 	}))
 	defer server.Close()
 
@@ -74,7 +80,7 @@ func TestGetLogsRejectsAPIError(t *testing.T) {
 
 func TestGetLogsHandlesEmptyResults(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"ResponseMetadata":{"RequestId":"r2"},"Result":{"Total":0,"Projects":[]}}`))
+		_, _ = w.Write([]byte(`{"ResponseMetadata":{"RequestId":"r2"},"Total":0,"Projects":[]}`))
 	}))
 	defer server.Close()
 

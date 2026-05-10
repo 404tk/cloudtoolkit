@@ -1,4 +1,4 @@
-// Package tls wraps the Volcengine TLS DescribeProjects action for the
+// Package tls wraps the Volcengine TLS DescribeProjects endpoint for the
 // cloudlist `log` asset.
 package tls
 
@@ -43,7 +43,8 @@ func (d *Driver) GetLogs(ctx context.Context) ([]schema.Log, error) {
 		if err != nil {
 			return out, err
 		}
-		for _, p := range resp.Result.Projects {
+		projects := resp.ProjectItems()
+		for _, p := range projects {
 			out = append(out, schema.Log{
 				ProjectName:    p.ProjectName,
 				Region:         firstNonEmpty(p.Region, region),
@@ -51,7 +52,7 @@ func (d *Driver) GetLogs(ctx context.Context) ([]schema.Log, error) {
 				LastModifyTime: p.CreateTime,
 			})
 		}
-		if len(resp.Result.Projects) < pageSize {
+		if len(projects) < pageSize {
 			break
 		}
 	}
