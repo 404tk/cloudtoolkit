@@ -126,8 +126,8 @@ func (t *transport) handleOpenAPI(req *http.Request, body []byte) (*http.Respons
 		return t.handleBilling(req, action)
 	case "iam":
 		return t.handleIAM(req, action, body)
-	case "audit":
-		return t.handleAudit(req, action)
+	case "cloudtrail":
+		return t.handleCloudTrail(req, action, body)
 	case "dns":
 		return t.handleDNS(req, action, body)
 	case "ecs":
@@ -157,13 +157,25 @@ func (t *transport) handleBilling(req *http.Request, action string) (*http.Respo
 	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 }
 
-func (t *transport) handleAudit(req *http.Request, action string) (*http.Response, error) {
-	if action != "DescribeEvents" {
-		return openAPIErrorResponse(req, http.StatusNotFound, "InvalidAction", fmt.Sprintf("unsupported audit action: %s", action)), nil
+func (t *transport) handleCloudTrail(req *http.Request, action string, body []byte) (*http.Response, error) {
+	if action != "LookupEvents" {
+		return openAPIErrorResponse(req, http.StatusNotFound, "InvalidAction", fmt.Sprintf("unsupported cloudtrail action: %s", action)), nil
 	}
-	resp := api.DescribeEventsResponse{}
-	resp.ResponseMetadata.RequestID = "req-audit-describe-events"
-	resp.Result.Events = append(resp.Result.Events, demoVolcengineAuditEvents()...)
+	var lookup struct {
+		NextToken string `json:"NextToken"`
+	}
+	_ = json.Unmarshal(body, &lookup)
+	events := demoVolcengineAuditEvents()
+	start := 0
+	if lookup.NextToken != "" {
+		start = int(parseInt32(lookup.NextToken, int32(len(events))))
+	}
+	if start > len(events) {
+		start = len(events)
+	}
+	resp := api.LookupEventsResponse{}
+	resp.ResponseMetadata.RequestID = "req-cloudtrail-lookup-events"
+	resp.Result.Trails = append(resp.Result.Trails, events[start:]...)
 	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 }
 
@@ -1021,6 +1033,8 @@ func openAPIService(host string) string {
 		return "iam"
 	case strings.HasPrefix(host, "dns."):
 		return "dns"
+	case strings.HasPrefix(host, "cloudtrail."):
+		return "cloudtrail"
 	case strings.HasPrefix(host, "ecs."):
 		return "ecs"
 	case strings.HasPrefix(host, "rds-mysql."):

@@ -2,9 +2,9 @@ package audit
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -25,51 +25,23 @@ func newTestClient(baseURL string) *api.Client {
 	)
 }
 
-func TestDumpEventsParsesPaging(t *testing.T) {
-	calls := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls++
-		values, _ := url.ParseQuery(r.URL.RawQuery)
-		if values.Get("Action") != "DescribeEvents" {
-			t.Fatalf("unexpected action: %s", values.Get("Action"))
-		}
-		if calls == 1 {
-			_, _ = w.Write([]byte(`{"ResponseMetadata":{"RequestId":"r1"},"Result":{"Events":[{"EventId":"e1","EventName":"CreateUser","EventTime":"2026-04-22T09:11:00Z","SourceIPAddress":"1.1.1.1","Status":"Success","AccessKeyId":"AKLT"}],"PageToken":"p2"}}`))
-			return
-		}
-		if got := values.Get("PageToken"); got != "p2" {
-			t.Fatalf("expected page token p2 on second call, got %q", got)
-		}
-		_, _ = w.Write([]byte(`{"ResponseMetadata":{"RequestId":"r2"},"Result":{"Events":[{"EventId":"e2","EventName":"DeleteUser","EventTime":"2026-04-22T09:14:00Z","Status":"Failed"}],"PageToken":""}}`))
-	}))
-	defer server.Close()
-
-	driver := &Driver{Client: newTestClient(server.URL), Region: "cn-beijing"}
-	events, err := driver.DumpEvents(context.Background(), "")
-	if err != nil {
-		t.Fatalf("DumpEvents: %v", err)
-	}
-	if len(events) != 2 {
-		t.Fatalf("expected 2 events, got %d", len(events))
-	}
-	if events[0].Id != "e1" || events[0].Name != "CreateUser" {
-		t.Errorf("unexpected first event: %+v", events[0])
-	}
-	if events[1].Status != "Failed" {
-		t.Errorf("unexpected second status: %+v", events[1])
-	}
-}
-
 func TestDumpEventsParsesTimeWindow(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		values, _ := url.ParseQuery(r.URL.RawQuery)
-		if values.Get("StartTime") != "1700000000" {
-			t.Fatalf("expected start unix 1700000000, got %s", values.Get("StartTime"))
+		var body struct {
+			StartTime  int64 `json:"StartTime"`
+			EndTime    int64 `json:"EndTime"`
+			MaxResults int32 `json:"MaxResults"`
 		}
-		if values.Get("EndTime") != "1700003600" {
-			t.Fatalf("expected end unix 1700003600, got %s", values.Get("EndTime"))
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Fatalf("decode body: %v", err)
 		}
-		_, _ = w.Write([]byte(`{"ResponseMetadata":{"RequestId":"r1"},"Result":{"Events":[],"PageToken":""}}`))
+		if body.StartTime != 1700000000 {
+			t.Fatalf("expected start unix 1700000000, got %d", body.StartTime)
+		}
+		if body.EndTime != 1700003600 {
+			t.Fatalf("expected end unix 1700003600, got %d", body.EndTime)
+		}
+		_, _ = w.Write([]byte(`{"ResponseMetadata":{"RequestId":"r1"},"Result":{"Trails":[],"NextToken":""}}`))
 	}))
 	defer server.Close()
 

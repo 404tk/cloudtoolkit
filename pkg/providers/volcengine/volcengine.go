@@ -9,14 +9,14 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/internal/credverify"
 	_api "github.com/404tk/cloudtoolkit/pkg/providers/volcengine/api"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/audit"
-	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/sms"
-	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/tls"
 	_auth "github.com/404tk/cloudtoolkit/pkg/providers/volcengine/auth"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/billing"
 	_dns "github.com/404tk/cloudtoolkit/pkg/providers/volcengine/dns"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/ecs"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/iam"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/rds"
+	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/sms"
+	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/tls"
 	"github.com/404tk/cloudtoolkit/pkg/providers/volcengine/tos"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/vmexecspec"
@@ -246,11 +246,11 @@ func (p *Provider) IAMCredential(ctx context.Context, action, principal, credent
 	return result, fmt.Errorf("volcengine: unsupported iam-credential action %q", action)
 }
 
-// EventDump implements schema.EventReader for Volcengine Audit. Action
-// `dump` lists recent operation events; `whitelist` is unsupported (Audit is
-// read-only).
+// EventDump implements schema.EventReader for Volcengine CloudTrail. Action
+// `dump` lists recent operation events; `whitelist` is unsupported because
+// CloudTrail is read-only.
 func (p *Provider) EventDump(ctx context.Context, action, args string) (schema.EventActionResult, error) {
-	driver := &audit.Driver{Client: p.apiClient, Region: p.region}
+	driver := &audit.Driver{Client: p.apiClient, Region: p.region, AccessKey: p.credential.AccessKey}
 	switch action {
 	case "dump":
 		events, err := driver.DumpEvents(ctx, args)

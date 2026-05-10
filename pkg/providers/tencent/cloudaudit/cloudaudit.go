@@ -47,15 +47,11 @@ func (d *Driver) DumpEvents(ctx context.Context, args string) ([]schema.Event, e
 	if err != nil {
 		return nil, err
 	}
-	accessKeyID := strings.TrimSpace(d.Credential.SecretID)
-	if accessKeyID == "" {
-		return nil, errors.New("tencent cloudaudit: empty secret id")
-	}
 	client := d.newClient()
 	out := make([]schema.Event, 0)
 	nextToken := ""
 	for page := 0; page < maxPages; page++ {
-		resp, err := client.LookUpEvents(ctx, defaultLookupRegion, startTime, endTime, defaultMaxResults, nextToken, accessKeyID)
+		resp, err := client.LookUpEvents(ctx, defaultLookupRegion, startTime, endTime, defaultMaxResults, nextToken, d.Credential.SecretID)
 		if err != nil {
 			return out, err
 		}

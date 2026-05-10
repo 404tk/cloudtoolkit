@@ -8,11 +8,11 @@ const (
 )
 
 var globalServices = map[string]struct{}{
-	"billing": {},
-	"dns":     {},
-	"iam":     {},
-	"audit":   {},
-	"sms":     {},
+	"billing":    {},
+	"cloudtrail": {},
+	"dns":        {},
+	"iam":        {},
+	"sms":        {},
 }
 
 var regionalServiceHostAliases = map[string]string{
