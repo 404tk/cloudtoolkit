@@ -41,6 +41,18 @@ func For(service, region string, intl bool) string {
 			return "https://bss-intl.myhuaweicloud.com"
 		}
 		return "https://bss.myhuaweicloud.com"
+	case "coc":
+		switch region {
+		case "eu-west-101":
+			return "https://coc-eu-west-101-open-api.myhuaweicloud.eu"
+		case "ap-southeast-3":
+			return "https://coc-intl.myhuaweicloud.com"
+		default:
+			if intl {
+				return "https://coc-intl.myhuaweicloud.com"
+			}
+			return "https://coc.myhuaweicloud.com"
+		}
 	case "obs":
 		return fmt.Sprintf("https://obs.%s.myhuaweicloud.com", region)
 	}

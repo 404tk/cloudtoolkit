@@ -1,5 +1,3 @@
-// Package sms wraps Volcengine SMS for the cloudlist `sms` asset.
-// Pattern-inferred — see api/types_sms.go.
 package sms
 
 import (

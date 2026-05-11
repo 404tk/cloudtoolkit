@@ -19,7 +19,6 @@ import (
 	jdlogs "github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/logs"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/oss"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/rds"
-	jdsms "github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/sms"
 	"github.com/404tk/cloudtoolkit/pkg/providers/jdcloud/vm"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/vmexecspec"
@@ -147,12 +146,6 @@ func (p *Provider) Resources(ctx context.Context) (schema.Resources, error) {
 			dbs, err := d.GetDatabases(ctx)
 			schema.AppendAssets(list, dbs)
 			list.AddError("database", err)
-		}).
-		Register("sms", func(ctx context.Context, list *schema.Resources) {
-			d := &jdsms.Driver{Client: p.apiClient, Region: p.region}
-			result, err := d.GetResource(ctx)
-			list.Sms = result
-			list.AddError("sms", err)
 		}).
 		Register("domain", func(ctx context.Context, list *schema.Resources) {
 			d := &dns.Driver{Client: p.apiClient, Region: p.region}

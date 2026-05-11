@@ -107,8 +107,6 @@ func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return t.handleRDS(req, body)
 	case "logs":
 		return t.handleLogs(req)
-	case "sms":
-		return t.handleSMS(req)
 	case "domainservice":
 		return t.handleDomainService(req)
 	case "assistant":

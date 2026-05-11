@@ -9,34 +9,35 @@ import (
 )
 
 // handleLogs serves the cloudlist `log` asset endpoint
-// `/v1/regions/<region>/logTopics:describe`. Pattern-inferred — see
-// pkg/providers/jdcloud/api/types_logs.go.
+// `/v1/regions/<region>/logsets`.
 func (t *transport) handleLogs(req *http.Request) (*http.Response, error) {
-	if req.Method != http.MethodGet || !strings.HasSuffix(req.URL.Path, "/logTopics:describe") {
+	if req.Method != http.MethodGet || !strings.HasSuffix(req.URL.Path, "/logsets") {
 		return apiErrorResponse(req, http.StatusNotFound, "InvalidPath",
 			"unsupported logs path: "+req.URL.Path), nil
 	}
-	resp := api.DescribeLogTopicsResponse{RequestID: "req-replay-logs-describe-topics"}
-	resp.Result.Topics = []api.LogTopic{
+	resp := api.DescribeLogsetsResponse{RequestID: "req-replay-logs-describe-logsets"}
+	resp.Result.Data = []api.LogsetEnd{
 		{
-			LogTopicID:   "topic-ctk-demo-app",
-			LogTopicName: "ctk-demo-app",
-			Description:  "ctk demo application logs",
-			LogSetID:     "set-ctk-demo",
-			LogSetName:   "ctk-demo",
-			CreateTime:   "2026-04-01T08:00:00Z",
-			UpdateTime:   "2026-04-22T09:00:00Z",
+			UID:         "set-ctk-demo-app",
+			Name:        "ctk-demo-app",
+			Description: "ctk demo application logset",
+			HasTopic:    true,
+			Region:      "cn-north-1",
+			CreateTime:  "2026-04-01T08:00:00Z",
+			LifeCycle:   30,
 		},
 		{
-			LogTopicID:   "topic-ctk-demo-audit",
-			LogTopicName: "ctk-demo-audit",
-			Description:  "ctk demo audit pipeline",
-			LogSetID:     "set-ctk-demo",
-			LogSetName:   "ctk-demo",
-			CreateTime:   "2026-03-15T08:00:00Z",
-			UpdateTime:   "2026-04-22T09:00:00Z",
+			UID:         "set-ctk-demo-audit",
+			Name:        "ctk-demo-audit",
+			Description: "ctk demo audit logset",
+			HasTopic:    true,
+			Region:      "cn-north-1",
+			CreateTime:  "2026-03-15T08:00:00Z",
+			LifeCycle:   90,
 		},
 	}
-	resp.Result.TotalCount = len(resp.Result.Topics)
+	resp.Result.NumberRecords = int64(len(resp.Result.Data))
+	resp.Result.PageNumber = 1
+	resp.Result.PageSize = int64(len(resp.Result.Data))
 	return demoreplay.JSONResponse(req, http.StatusOK, resp), nil
 }

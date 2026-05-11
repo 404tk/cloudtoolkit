@@ -1,7 +1,4 @@
-// Package logs wraps the JDCloud log service describeLogTopics action for
-// the cloudlist `log` asset.
-//
-// Pattern-inferred — see types_logs.go in the api package.
+// Package logs wraps the JDCloud log service for the cloudlist `log` asset.
 package logs
 
 import (
@@ -32,32 +29,28 @@ func (d *Driver) requestRegion() string {
 	return defaultRegion
 }
 
-// GetLogs lists JDCloud log topics in the resolved region.
+// GetLogs lists JDCloud logsets in the resolved region.
 func (d *Driver) GetLogs(ctx context.Context) ([]schema.Log, error) {
 	out := []schema.Log{}
 	if d == nil || d.Client == nil {
 		return out, errors.New("jdcloud logs: nil api client")
 	}
-	logger.Info("List JDCloud log topics ...")
+	logger.Info("List JDCloud logsets ...")
 	region := d.requestRegion()
 	for page := 1; page <= maxPages; page++ {
-		resp, err := d.Client.DescribeLogTopics(ctx, region, page, pageSize)
+		resp, err := d.Client.DescribeLogsets(ctx, region, page, pageSize)
 		if err != nil {
 			return out, err
 		}
-		for _, t := range resp.Result.Topics {
-			name := t.LogTopicName
-			if t.LogSetName != "" {
-				name = t.LogSetName + "/" + t.LogTopicName
-			}
+		for _, s := range resp.Result.Data {
 			out = append(out, schema.Log{
-				ProjectName:    name,
-				Region:         region,
-				Description:    t.Description,
-				LastModifyTime: firstNonEmpty(t.UpdateTime, t.CreateTime),
+				ProjectName:    s.Name,
+				Region:         firstNonEmpty(s.Region, region),
+				Description:    firstNonEmpty(s.Description, s.UID),
+				LastModifyTime: s.CreateTime,
 			})
 		}
-		if len(resp.Result.Topics) < pageSize {
+		if len(resp.Result.Data) < pageSize {
 			break
 		}
 	}

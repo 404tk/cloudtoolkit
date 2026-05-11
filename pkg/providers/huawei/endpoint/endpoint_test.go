@@ -20,6 +20,9 @@ func TestFor(t *testing.T) {
 		{"rds dublin", "rds", "eu-west-101", false, "https://rds.eu-west-101.myhuaweicloud.eu"},
 		{"bss domestic", "bss", "any", false, "https://bss.myhuaweicloud.com"},
 		{"bss intl", "bss", "any", true, "https://bss-intl.myhuaweicloud.com"},
+		{"coc domestic", "coc", "cn-north-4", false, "https://coc.myhuaweicloud.com"},
+		{"coc ap intl", "coc", "ap-southeast-3", false, "https://coc-intl.myhuaweicloud.com"},
+		{"coc dublin", "coc", "eu-west-101", false, "https://coc-eu-west-101-open-api.myhuaweicloud.eu"},
 		{"obs explicit", "obs", "cn-north-4", false, "https://obs.cn-north-4.myhuaweicloud.com"},
 	}
 	for _, tc := range cases {

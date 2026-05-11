@@ -34,6 +34,12 @@ func newTestClient(t *testing.T, fn roundTripFunc) *api.Client {
 	)
 }
 
+func testProjectCatalog() *api.ProjectCatalog {
+	return api.NewProjectCatalog([]api.IAMProject{
+		{ID: "project-1", Name: "cn-north-4"},
+	}, "")
+}
+
 func jsonResponse(r *http.Request, body string) *http.Response {
 	return &http.Response{
 		StatusCode: http.StatusOK,
@@ -45,20 +51,39 @@ func jsonResponse(r *http.Request, body string) *http.Response {
 
 func TestExecuteSubmitsAndPolls(t *testing.T) {
 	pollCount := 0
+	deleteCount := 0
 	driver := &Driver{
-		Cred:     auth.New("AKID", "SECRET", "cn-north-4", false),
-		Regions:  []string{"cn-north-4"},
-		nowSleep: func(time.Duration) {},
+		Cred:           auth.New("AKID", "SECRET", "cn-north-4", false),
+		Regions:        []string{"cn-north-4"},
+		ProjectCatalog: testProjectCatalog(),
+		nowSleep:       func(time.Duration) {},
 		Client: newTestClient(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if r.URL.Host != "coc.myhuaweicloud.com" {
+				t.Fatalf("unexpected COC host: %s", r.URL.Host)
+			}
+			if got := r.Header.Get("x-project-id"); got != "project-1" {
+				t.Fatalf("expected x-project-id=project-1, got %q", got)
+			}
 			switch {
-			case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/v1/job/scripts/orders/batch-execute"):
-				return jsonResponse(r, `{"order_id":"ord-1","job_id":"job-1","status":"PENDING"}`), nil
-			case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/orders/ord-1"):
+			case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/v1/job/scripts"):
+				body, _ := io.ReadAll(r.Body)
+				if !strings.Contains(string(body), `"type":"SHELL"`) {
+					t.Fatalf("expected SHELL script create body, got %s", string(body))
+				}
+				return jsonResponse(r, `{"data":"script-1"}`), nil
+			case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/v1/job/scripts/script-1"):
+				return jsonResponse(r, `{"data":"exec-1"}`), nil
+			case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/v1/job/script/orders/exec-1"):
 				pollCount++
 				if pollCount < 2 {
-					return jsonResponse(r, `{"order_id":"ord-1","status":"RUNNING"}`), nil
+					return jsonResponse(r, `{"data":{"execute_uuid":"exec-1","status":"PROCESSING","properties":{"current_execute_batch_index":1}}}`), nil
 				}
-				return jsonResponse(r, `{"order_id":"ord-1","status":"FINISHED","instances":[{"instance_id":"vm-1","execute_status":"SUCCESS","output":"hello world"}]}`), nil
+				return jsonResponse(r, `{"data":{"execute_uuid":"exec-1","status":"FINISHED","properties":{"current_execute_batch_index":1}}}`), nil
+			case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/v1/job/script/orders/exec-1/batches/1"):
+				return jsonResponse(r, `{"data":{"batch_index":1,"total_instances":1,"execute_instances":[{"target_instance":{"resource_id":"vm-1","provider":"ECS","region_id":"cn-north-4","type":"CLOUDSERVER"},"status":"FINISHED","message":"hello world"}]}}`), nil
+			case r.Method == http.MethodDelete && strings.HasSuffix(r.URL.Path, "/v1/job/scripts/script-1"):
+				deleteCount++
+				return jsonResponse(r, `{"data":"script-1"}`), nil
 			default:
 				t.Fatalf("unexpected request: %s %s%s", r.Method, r.URL.Host, r.URL.Path)
 				return nil, nil
@@ -72,11 +97,46 @@ func TestExecuteSubmitsAndPolls(t *testing.T) {
 	if !strings.Contains(res.Output, "hello world") {
 		t.Errorf("expected output to include script stdout, got %q", res.Output)
 	}
-	if !strings.Contains(res.Output, "SUCCESS") {
+	if !strings.Contains(res.Output, "FINISHED") {
 		t.Errorf("expected status header, got %q", res.Output)
 	}
 	if pollCount < 2 {
 		t.Errorf("expected at least 2 polls (waiting for completion), got %d", pollCount)
+	}
+	if deleteCount != 1 {
+		t.Errorf("expected best-effort script delete, got %d", deleteCount)
+	}
+}
+
+func TestExecuteOSWindowsUsesBATScript(t *testing.T) {
+	captured := ""
+	driver := &Driver{
+		Cred:           auth.New("AKID", "SECRET", "cn-north-4", false),
+		Regions:        []string{"cn-north-4"},
+		ProjectCatalog: testProjectCatalog(),
+		nowSleep:       func(time.Duration) {},
+		Client: newTestClient(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+			if r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/v1/job/scripts") {
+				body, _ := io.ReadAll(r.Body)
+				captured = string(body)
+				return jsonResponse(r, `{"data":""}`), nil
+			}
+			t.Fatalf("unexpected request: %s %s%s", r.Method, r.URL.Host, r.URL.Path)
+			return nil, nil
+		})),
+	}
+	_, err := driver.ExecuteOS(context.Background(), "vm-1", "windows", "whoami")
+	if err == nil {
+		t.Fatal("expected empty script uuid error")
+	}
+	if !strings.Contains(captured, `"type":"BAT"`) {
+		t.Fatalf("expected BAT script create body, got %s", captured)
+	}
+	if !strings.Contains(captured, "@echo off") || !strings.Contains(captured, "whoami") {
+		t.Fatalf("expected batch wrapper around command, got %s", captured)
+	}
+	if strings.Contains(captured, "/bin/bash") {
+		t.Fatalf("windows script should not use bash wrapper, got %s", captured)
 	}
 }
 
@@ -92,9 +152,10 @@ func TestExecuteRejectsEmptyArgs(t *testing.T) {
 
 func TestExecutePropagatesSubmitError(t *testing.T) {
 	driver := &Driver{
-		Cred:     auth.New("AKID", "SECRET", "cn-north-4", false),
-		Regions:  []string{"cn-north-4"},
-		nowSleep: func(time.Duration) {},
+		Cred:           auth.New("AKID", "SECRET", "cn-north-4", false),
+		Regions:        []string{"cn-north-4"},
+		ProjectCatalog: testProjectCatalog(),
+		nowSleep:       func(time.Duration) {},
 		Client: newTestClient(t, roundTripFunc(func(r *http.Request) (*http.Response, error) {
 			return &http.Response{
 				StatusCode: http.StatusForbidden,

@@ -217,23 +217,18 @@ func (p *Provider) UserManagement(action, username, password string) (schema.IAM
 	}
 }
 
-// ExecuteCloudVMCommand implements schema.VMExecutor for Huawei via COC
-// BatchExecuteCommand. PLAN.md decision T3.2 / Task 11. UniAgent must be
-// installed on the target ECS for executions to land.
+// ExecuteCloudVMCommand implements schema.VMExecutor for Huawei via COC script
+// jobs. UniAgent must be installed on the target ECS for executions to land.
 //
 // `cmd` arrives in one of two encodings: the headless `__ctk_headless_sh__:`
 // vmexec spec (which carries an explicit osType), or a bare base64 string
-// from the REPL shell loop. COC's defaultExecuteScript is `SHELL` (Linux);
-// Windows targets are rejected until a PowerShell/BAT scriptType mapping is
-// separately validated.
+// from the REPL shell loop. COC supports SHELL for Linux and BAT for Windows;
+// bare REPL commands default to the Linux/SHELL path.
 func (p *Provider) ExecuteCloudVMCommand(ctx context.Context, instanceID, cmd string) (schema.CommandResult, error) {
 	cred := p.iamCredential()
-	driver := &_coc.Driver{Cred: cred, Regions: p.regions, Client: p.newAPIClient(cred)}
+	driver := &_coc.Driver{Cred: cred, Regions: p.regions, DomainID: p.domainID, Client: p.newAPIClient(cred)}
 	if osType, command, ok := vmexecspec.Parse(cmd); ok {
-		if osType == "windows" {
-			return schema.CommandResult{}, fmt.Errorf("huawei coc: windows targets are not supported on the SHELL scriptType path")
-		}
-		return driver.Execute(ctx, instanceID, command)
+		return driver.ExecuteOS(ctx, instanceID, osType, command)
 	}
 	command, err := base64.StdEncoding.DecodeString(cmd)
 	if err != nil {

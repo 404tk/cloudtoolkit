@@ -1,13 +1,6 @@
 package api
 
-// JDCloud Logs service (`logs` / `jcs:logs`) — describeLogTopics.
-//
-// Pattern-inferred against the JDCloud REST convention used by neighbouring
-// services in this codebase: list paths commonly follow
-// `/v1/regions/<region>/<resource>:<action>` with snake-cased query params.
-// Verify against the upstream JDCloud OpenAPI / SDK before relying on this
-// in production deployments; the cloudlist `log` asset path keeps the demo
-// surface working today.
+// JDCloud Logs service (`logs` / `jcs:logs`).
 
 import (
 	"context"
@@ -16,29 +9,32 @@ import (
 	"strconv"
 )
 
-type LogTopic struct {
-	LogTopicID   string `json:"logTopicId"`
-	LogTopicName string `json:"logTopicName"`
-	Description  string `json:"description"`
-	CreateTime   string `json:"createTime"`
-	UpdateTime   string `json:"updateTime"`
-	LogSetID     string `json:"logSetId"`
-	LogSetName   string `json:"logSetName"`
+// LogsetEnd is the SDK DescribeLogsets `LogsetEnd` shape.
+type LogsetEnd struct {
+	UID              string `json:"uID"`
+	CreateTime       string `json:"createTime"`
+	Description      string `json:"description"`
+	HasTopic         bool   `json:"hasTopic"`
+	LifeCycle        int64  `json:"lifeCycle"`
+	Name             string `json:"name"`
+	Region           string `json:"region"`
+	ResourceGroupUID string `json:"resourceGroupUID"`
 }
 
-type DescribeLogTopicsResponse struct {
+type DescribeLogsetsResponse struct {
 	RequestID string        `json:"requestId"`
 	Error     *APIErrorBody `json:"error,omitempty"`
 	Result    struct {
-		Topics     []LogTopic `json:"logTopics"`
-		TotalCount int        `json:"totalCount,omitempty"`
-		PageNumber int        `json:"pageNumber,omitempty"`
-		PageSize   int        `json:"pageSize,omitempty"`
+		Data          []LogsetEnd `json:"data"`
+		NumberPages   int64       `json:"numberPages,omitempty"`
+		NumberRecords int64       `json:"numberRecords,omitempty"`
+		PageNumber    int64       `json:"pageNumber,omitempty"`
+		PageSize      int64       `json:"pageSize,omitempty"`
 	} `json:"result"`
 }
 
-// DescribeLogTopics lists log topics in a JDCloud region.
-func (c *Client) DescribeLogTopics(ctx context.Context, region string, pageNumber, pageSize int) (DescribeLogTopicsResponse, error) {
+// DescribeLogsets lists logsets in a JDCloud region.
+func (c *Client) DescribeLogsets(ctx context.Context, region string, pageNumber, pageSize int) (DescribeLogsetsResponse, error) {
 	if region == "" || region == "all" {
 		region = "cn-north-1"
 	}
@@ -49,14 +45,15 @@ func (c *Client) DescribeLogTopics(ctx context.Context, region string, pageNumbe
 	if pageSize > 0 {
 		query.Set("pageSize", strconv.Itoa(pageSize))
 	}
-	var resp DescribeLogTopicsResponse
+	var resp DescribeLogsetsResponse
 	err := c.DoJSON(ctx, Request{
-		Service: "logs",
-		Region:  "",
-		Method:  http.MethodGet,
-		Version: "v1",
-		Path:    "/regions/" + region + "/logTopics:describe",
-		Query:   query,
+		Service:    "logs",
+		Region:     region,
+		Method:     http.MethodGet,
+		Version:    "v1",
+		Path:       "/regions/" + region + "/logsets",
+		Query:      query,
+		Idempotent: true,
 	}, &resp)
 	return resp, err
 }

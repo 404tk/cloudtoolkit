@@ -25,15 +25,15 @@ func newTestClient(baseURL string) *api.Client {
 	)
 }
 
-func TestGetLogsListsLogTopics(t *testing.T) {
+func TestGetLogsListsLogsets(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasSuffix(r.URL.Path, "/logTopics:describe") {
+		if !strings.HasSuffix(r.URL.Path, "/logsets") {
 			t.Fatalf("unexpected path: %s", r.URL.Path)
 		}
-		_, _ = w.Write([]byte(`{"requestId":"r1","result":{"logTopics":[
-  {"logTopicId":"lt-1","logTopicName":"prod-app","logSetId":"ls-1","logSetName":"prod","createTime":"2026-04-15T09:11:00Z","description":"prod app logs"},
-  {"logTopicId":"lt-2","logTopicName":"audit","logSetId":"ls-1","logSetName":"prod","createTime":"2026-04-16T10:00:00Z"}
-],"totalCount":2}}`))
+		_, _ = w.Write([]byte(`{"requestId":"r1","result":{"data":[
+  {"uID":"ls-1","name":"prod","region":"cn-north-1","createTime":"2026-04-15T09:11:00Z","description":"prod logs","hasTopic":true,"lifeCycle":30},
+  {"uID":"ls-2","name":"audit","region":"cn-north-1","createTime":"2026-04-16T10:00:00Z","hasTopic":true,"lifeCycle":90}
+],"numberRecords":2,"pageNumber":1,"pageSize":100}}`))
 	}))
 	defer server.Close()
 
@@ -43,15 +43,15 @@ func TestGetLogsListsLogTopics(t *testing.T) {
 		t.Fatalf("GetLogs: %v", err)
 	}
 	if len(logs) != 2 {
-		t.Fatalf("expected 2 topics, got %d", len(logs))
+		t.Fatalf("expected 2 logsets, got %d", len(logs))
 	}
-	if logs[0].ProjectName != "prod/prod-app" {
-		t.Errorf("expected logset/topic in name, got %q", logs[0].ProjectName)
+	if logs[0].ProjectName != "prod" {
+		t.Errorf("expected logset name, got %q", logs[0].ProjectName)
 	}
 	if logs[0].Region != "cn-north-1" {
 		t.Errorf("unexpected region: %s", logs[0].Region)
 	}
-	if logs[0].Description != "prod app logs" {
+	if logs[0].Description != "prod logs" {
 		t.Errorf("expected description carry-through, got %q", logs[0].Description)
 	}
 }
@@ -75,7 +75,7 @@ func TestGetLogsRejectsAPIError(t *testing.T) {
 
 func TestGetLogsHandlesEmptyResults(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"requestId":"r2","result":{"logTopics":[],"totalCount":0}}`))
+		_, _ = w.Write([]byte(`{"requestId":"r2","result":{"data":[]}}`))
 	}))
 	defer server.Close()
 
@@ -85,6 +85,6 @@ func TestGetLogsHandlesEmptyResults(t *testing.T) {
 		t.Fatalf("GetLogs: %v", err)
 	}
 	if len(logs) != 0 {
-		t.Errorf("expected 0 topics, got %d", len(logs))
+		t.Errorf("expected 0 logsets, got %d", len(logs))
 	}
 }
