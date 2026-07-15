@@ -63,3 +63,15 @@ func TestAllRegisteredPayloadsProduceStructuredResults(t *testing.T) {
 		}
 	}
 }
+
+func TestShouldPrintDonePreservesRemoteCommandOutput(t *testing.T) {
+	if ShouldPrintDone(InstanceCmdCheckResult{Output: "hello\n"}) {
+		t.Fatal("remote command result must not append Done")
+	}
+	if !ShouldPrintDone(CloudListResult{Provider: "replay"}) {
+		t.Fatal("regular structured result should append Done")
+	}
+	if ShouldPrintDone(nil) {
+		t.Fatal("nil result must not append Done")
+	}
+}

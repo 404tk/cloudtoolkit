@@ -49,3 +49,36 @@ func TestListPostgreSQLFiltersRegionsAndPrefersOpenedPublicAddress(t *testing.T)
 		}
 	}
 }
+
+func TestListPostgreSQLSkipsUnsupportedRegion(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Header.Get("X-TC-Action") {
+		case "DescribeRegions":
+			_, _ = w.Write([]byte(`{"Response":{"RegionSet":[{"Region":"ap-shanghai-wxp-ops","RegionState":"AVAILABLE"},{"Region":"ap-guangzhou","RegionState":"AVAILABLE"}],"RequestId":"req-regions"}}`))
+		case "DescribeDBInstances":
+			switch r.Header.Get("X-TC-Region") {
+			case "ap-shanghai-wxp-ops":
+				_, _ = w.Write([]byte(`{"Response":{"Error":{"Code":"UnsupportedRegion","Message":"The action does not support this region."},"RequestId":"req-unsupported"}}`))
+			case "ap-guangzhou":
+				_, _ = w.Write([]byte(`{"Response":{"DBInstanceSet":[{"DBInstanceId":"pg-supported","DBEngine":"postgresql","DBInstanceVersion":"15.3","Region":"ap-guangzhou"}],"RequestId":"req-db"}}`))
+			default:
+				t.Fatalf("unexpected region: %s", r.Header.Get("X-TC-Region"))
+			}
+		default:
+			t.Fatalf("unexpected action: %s", r.Header.Get("X-TC-Action"))
+		}
+	}))
+	defer server.Close()
+
+	driver := newTestDriver(server.URL, "all")
+	databases, err := driver.ListPostgreSQL(context.Background())
+	if err != nil {
+		t.Fatalf("ListPostgreSQL() error = %v", err)
+	}
+	if driver.PartialError() != nil {
+		t.Fatalf("ListPostgreSQL() partial error = %v", driver.PartialError())
+	}
+	if len(databases) != 1 || databases[0].InstanceId != "pg-supported" {
+		t.Fatalf("unexpected databases: %+v", databases)
+	}
+}

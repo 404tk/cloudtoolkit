@@ -20,10 +20,29 @@ func RunStructured(ctx context.Context, config map[string]string, producer Resul
 	if result.Value != nil {
 		if err := Render(ctx, result.Value); err != nil {
 			logger.Error(err.Error())
+			return
 		}
 	}
 	if result.Err != nil {
-		logger.Error(result.Err.Error())
+		if result.Code != CodePartialFailure {
+			logger.Error(result.Err.Error())
+		}
+		return
+	}
+	if ShouldPrintDone(result.Value) {
+		logger.Info("Done.")
+	}
+}
+
+// ShouldPrintDone reports whether the human-readable renderer should append a
+// completion marker. Remote command output is kept byte-for-byte compatible
+// for shell and script consumers.
+func ShouldPrintDone(value any) bool {
+	switch value.(type) {
+	case InstanceCmdCheckResult, *InstanceCmdCheckResult:
+		return false
+	default:
+		return value != nil
 	}
 }
 

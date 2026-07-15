@@ -152,7 +152,13 @@ func executeRun(parent context.Context, providerName, payloadName, metadataOverr
 		}
 	}
 	if result.Err != nil {
+		if result.Code == payloads.CodePartialFailure {
+			return exitCode
+		}
 		return failWithCode(false, exitCode, result.Code, result.Err)
+	}
+	if payloads.ShouldPrintDone(result.Value) {
+		logger.Info("Done.")
 	}
 	return exitCode
 }

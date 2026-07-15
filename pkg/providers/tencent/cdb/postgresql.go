@@ -49,12 +49,17 @@ func (d *Driver) ListPostgreSQL(ctx context.Context) ([]schema.Database, error) 
 		probeRegion := regions[0]
 		response, probeErr := client.DescribePostgresInstances(ctx, probeRegion)
 		if probeErr != nil {
-			if api.IsAccessDenied(probeErr) {
+			switch {
+			case unsupportedRegion(probeErr):
+				tracker.Update(probeRegion, 0)
+				trackerUsed = true
+			case api.IsAccessDenied(probeErr):
 				return list, probeErr
+			default:
+				seedErrs[probeRegion] = probeErr
+				tracker.Update(probeRegion, 0)
+				trackerUsed = true
 			}
-			seedErrs[probeRegion] = probeErr
-			tracker.Update(probeRegion, 0)
-			trackerUsed = true
 		} else {
 			for _, instance := range response.Response.DBInstanceSet {
 				_db := schema.Database{
@@ -92,6 +97,9 @@ func (d *Driver) ListPostgreSQL(ctx context.Context) ([]schema.Database, error) 
 		var regionList []schema.Database
 		response, err := client.DescribePostgresInstances(ctx, r)
 		if err != nil {
+			if unsupportedRegion(err) {
+				return regionList, nil
+			}
 			return regionList, err
 		}
 		for _, instance := range response.Response.DBInstanceSet {
