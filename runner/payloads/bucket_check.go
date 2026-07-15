@@ -6,10 +6,7 @@ import (
 	"fmt"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
-	"github.com/404tk/cloudtoolkit/utils"
 	"github.com/404tk/cloudtoolkit/utils/argparse"
-	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/404tk/table"
 )
 
 type BucketCheck struct{}
@@ -31,62 +28,7 @@ type bucketAction struct {
 }
 
 func (p BucketCheck) Run(ctx context.Context, config map[string]string) {
-	resultAny, err := p.Result(ctx, config)
-	if err != nil && resultAny == nil {
-		logger.Error(err.Error())
-		return
-	}
-
-	results, ok := resultAny.([]BucketCheckResult)
-	if !ok {
-		logger.Error("Invalid result type")
-		return
-	}
-	for _, result := range results {
-		if result.Status == "error" {
-			if result.Error != "" {
-				logger.Error(result.Error)
-			}
-			continue
-		}
-
-		switch result.Action {
-		case "list":
-			if result.BucketName != "" {
-				logger.Warning(fmt.Sprintf("%d objects found in %s.", result.ObjectCount, result.BucketName))
-			} else if result.Message != "" {
-				logger.Warning(result.Message)
-			}
-			if len(result.Objects) > 0 {
-				type objectRow struct {
-					Key  string `table:"Key"`
-					Size string `table:"Size"`
-				}
-				rows := make([]objectRow, 0, len(result.Objects))
-				for _, obj := range result.Objects {
-					label := obj.Key
-					if result.BucketName == "" && obj.BucketName != "" {
-						label = obj.BucketName + "/" + obj.Key
-					}
-					rows = append(rows, objectRow{
-						Key:  label,
-						Size: utils.ParseBytes(obj.Size),
-					})
-				}
-				table.Output(rows)
-			}
-		case "total":
-			if result.BucketName != "" {
-				logger.Warning(fmt.Sprintf("%s has %d objects.", result.BucketName, result.ObjectCount))
-			} else if result.Message != "" {
-				logger.Warning(result.Message)
-			}
-		default:
-			if result.Message != "" {
-				logger.Warning(result.Message)
-			}
-		}
-	}
+	RunStructured(ctx, config, p)
 }
 
 func (p BucketCheck) Result(ctx context.Context, config map[string]string) (any, error) {
@@ -100,7 +42,8 @@ func (p BucketCheck) Result(ctx context.Context, config map[string]string) (any,
 	}
 	mgr, ok := i.Providers.(schema.BucketManager)
 	if !ok {
-		return nil, fmt.Errorf("%s does not support bucket-check", i.Providers.Name())
+		err := fmt.Errorf("%s does not support bucket-check", i.Providers.Name())
+		return nil, NewResultError(nil, CodeUnsupported, err)
 	}
 
 	bucketResults, opErr := mgr.BucketDump(ctx, parsed.Action, parsed.BucketName)
@@ -134,7 +77,7 @@ func (p BucketCheck) Result(ctx context.Context, config map[string]string) (any,
 				Error:      opErr.Error(),
 			})
 		}
-		return results, NewResultError(results, 4, opErr)
+		return results, NewResultError(results, CodeExecutionFailed, opErr)
 	}
 	return results, nil
 }

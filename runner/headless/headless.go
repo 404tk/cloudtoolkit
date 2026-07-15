@@ -2,9 +2,13 @@ package headless
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/mattn/go-isatty"
 
@@ -20,6 +24,17 @@ import (
 )
 
 func Run(args []string) int {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	return RunContext(ctx, args)
+}
+
+// RunContext executes a headless command with a caller-controlled cancellation
+// and deadline boundary.
+func RunContext(ctx context.Context, args []string) int {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if wantsHelp(args) {
 		return writeHelp()
 	}
@@ -49,10 +64,10 @@ func Run(args []string) int {
 		return fail(flags.JSON, exitConfigError, fmt.Errorf("`-v` cannot be combined with other commands"))
 	}
 	if providers.Supports(command) {
-		return runShort(command, remaining[1:], flags)
+		return runShort(ctx, command, remaining[1:], flags)
 	}
 	if canInferProvider(flags) {
-		return runInferredProvider(command, remaining[1:], flags)
+		return runInferredProvider(ctx, command, remaining[1:], flags)
 	}
 	if isHeadlessCommand(command) {
 		return fail(flags.JSON, exitConfigError, fmt.Errorf("provider is required unless supplied by --profile, --creds, or --stdin"))
@@ -60,7 +75,7 @@ func Run(args []string) int {
 	return fail(flags.JSON, exitConfigError, fmt.Errorf("unsupported command: %s", command))
 }
 
-func runShort(provider string, args []string, flags commandFlags) int {
+func runShort(ctx context.Context, provider string, args []string, flags commandFlags) int {
 	if len(args) == 0 {
 		return fail(flags.JSON, exitConfigError, fmt.Errorf("missing payload or action for provider %s", provider))
 	}
@@ -68,18 +83,18 @@ func runShort(provider string, args []string, flags commandFlags) int {
 	if err != nil {
 		return fail(flags.JSON, exitConfigError, err)
 	}
-	return executeRun(provider, payloadName, metadata, flags)
+	return executeRun(ctx, provider, payloadName, metadata, flags)
 }
 
-func runInferredProvider(command string, args []string, flags commandFlags) int {
+func runInferredProvider(ctx context.Context, command string, args []string, flags commandFlags) int {
 	payloadName, metadata, err := resolveRunRequest(command, args, flags)
 	if err != nil {
 		return fail(flags.JSON, exitConfigError, err)
 	}
-	return executeRun("", payloadName, metadata, flags)
+	return executeRun(ctx, "", payloadName, metadata, flags)
 }
 
-func executeRun(providerName, payloadName, metadataOverride string, flags commandFlags) int {
+func executeRun(parent context.Context, providerName, payloadName, metadataOverride string, flags commandFlags) int {
 	provider := strings.TrimSpace(providerName)
 	payloadName = strings.TrimSpace(payloadName)
 	payload, resolved, ok := payloads.Lookup(payloadName)
@@ -113,38 +128,64 @@ func executeRun(providerName, payloadName, metadataOverride string, flags comman
 	env.SetActive(baseEnv)
 	defer env.SetActive(prev)
 
-	ctx := env.With(context.Background(), baseEnv)
-	if !flags.JSON {
-		payload.Run(ctx, config)
-		return exitSuccess
-	}
-	producer, ok := payload.(payloads.ResultProducer)
-	if !ok {
-		return fail(flags.JSON, exitUnsupported, fmt.Errorf("payload %s does not support structured headless output yet; retry without --json", payloadName))
-	}
-
-	result, err := producer.Result(ctx, config)
-	if err != nil {
-		if resultErr, ok := err.(payloads.ResultError); ok {
-			if writeCode := writeJSON(resultErr.ResultPayload()); writeCode != exitSuccess {
-				return writeCode
-			}
-			return resultErr.ExitCode()
+	runCtx, cancel := withRunTimeout(parent, baseEnv.RunTimeout)
+	defer cancel()
+	ctx := env.With(runCtx, baseEnv)
+	result := payloads.Execute(ctx, config, payload)
+	exitCode := exitCodeFor(result.Code)
+	if flags.JSON {
+		if writeCode := writeResultJSON(result, exitCode); writeCode != exitSuccess {
+			return writeCode
 		}
-		return fail(flags.JSON, exitConfigError, err)
+		return exitCode
 	}
 
-	code := exitSuccess
-	if cloud, ok := result.(*payloads.CloudListResult); ok && len(cloud.Errors) > 0 {
-		code = exitPartial
+	if result.Value != nil {
+		if err := payloads.Render(ctx, result.Value); err != nil {
+			code := payloads.CodeOutputFailed
+			if errors.Is(err, context.DeadlineExceeded) {
+				code = payloads.CodeDeadlineExceeded
+			} else if errors.Is(err, context.Canceled) {
+				code = payloads.CodeCanceled
+			}
+			return failWithCode(false, exitCodeFor(code), code, err)
+		}
 	}
-	if cloud, ok := result.(payloads.CloudListResult); ok && len(cloud.Errors) > 0 {
-		code = exitPartial
+	if result.Err != nil {
+		return failWithCode(false, exitCode, result.Code, result.Err)
 	}
-	if writeCode := writeJSON(result); writeCode != exitSuccess {
-		return writeCode
+	return exitCode
+}
+
+func withRunTimeout(parent context.Context, timeout time.Duration) (context.Context, context.CancelFunc) {
+	if parent == nil {
+		parent = context.Background()
 	}
-	return code
+	if timeout <= 0 {
+		timeout = env.Default().RunTimeout
+	}
+	return context.WithTimeout(parent, timeout)
+}
+
+func exitCodeFor(code payloads.ErrorCode) int {
+	switch code {
+	case "", payloads.CodeOK:
+		return exitSuccess
+	case payloads.CodePartialFailure:
+		return exitPartial
+	case payloads.CodeApprovalRequired, payloads.CodeApprovalRejected:
+		return exitApprovalRequired
+	case payloads.CodeInvalidArgument:
+		return exitConfigError
+	case payloads.CodeUnsupported:
+		return exitUnsupported
+	case payloads.CodeDeadlineExceeded:
+		return exitDeadlineExceeded
+	case payloads.CodeCanceled:
+		return exitCanceled
+	default:
+		return exitExecutionError
+	}
 }
 
 func requireApproval(config map[string]string, flags commandFlags) error {
@@ -160,12 +201,12 @@ func requireApproval(config map[string]string, flags commandFlags) error {
 			return nil
 		}
 		return headlessError{
-			code:    "approval_rejected",
+			code:    payloads.CodeApprovalRejected,
 			message: "sensitive action was not approved",
 		}
 	}
 	return headlessError{
-		code:    "approval_required",
+		code:    payloads.CodeApprovalRequired,
 		message: "sensitive action requires -y or --yes",
 	}
 }

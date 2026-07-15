@@ -14,23 +14,39 @@ import (
 )
 
 func (d *Driver) RunCommand(instanceID, osType, cmd string) string {
-	ctx := context.Background()
-	client, err := d.requireClient()
+	output, err := d.RunCommandContext(context.Background(), instanceID, osType, cmd)
 	if err != nil {
 		logger.Error(err)
-		return ""
+	}
+	return output
+}
+
+// RunCommandContext carries caller cancellation through Cloud Assistant
+// preflight, command lifecycle, and polling. RunCommand remains as a legacy
+// compatibility wrapper.
+func (d *Driver) RunCommandContext(ctx context.Context, instanceID, osType, cmd string) (string, error) {
+	if d == nil {
+		return "", errNilAPIClient
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	client, err := d.requireClient()
+	if err != nil {
+		return "", err
 	}
 
 	commandType, ok := resolveCommandType(osType)
 	if !ok {
-		logger.Error("Unknown ostype", osType)
-		return ""
+		return "", fmt.Errorf("volcengine ecs: unsupported os type %q", osType)
 	}
 
 	region := d.requestRegion()
 	if err := d.ensureCloudAssistantRunning(ctx, client, instanceID); err != nil {
-		logger.Error(err)
-		return ""
+		return "", err
 	}
 	commandContent := base64.StdEncoding.EncodeToString([]byte(cmd))
 
@@ -44,16 +60,18 @@ func (d *Driver) RunCommand(instanceID, osType, cmd string) string {
 		"Base64",
 	)
 	if err != nil {
-		logger.Error(err)
-		return ""
+		return "", err
 	}
 
 	commandID := strings.TrimSpace(createResp.Result.CommandID)
 	if commandID == "" {
-		logger.Error("Missing command id.")
-		return ""
+		return "", fmt.Errorf("volcengine ecs: missing command id")
 	}
-	defer d.deleteCommand(ctx, client, commandID)
+	defer func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		d.deleteCommand(cleanupCtx, client, commandID)
+	}()
 
 	invocationName := buildCloudAssistantName("ctk")
 	invokeResp, err := client.InvokeCommand(
@@ -64,14 +82,12 @@ func (d *Driver) RunCommand(instanceID, osType, cmd string) string {
 		[]string{instanceID},
 	)
 	if err != nil {
-		logger.Error(err)
-		return ""
+		return "", err
 	}
 
 	invocationID := strings.TrimSpace(invokeResp.Result.InvocationID)
 	if invocationID == "" {
-		logger.Error("Missing invocation id.")
-		return ""
+		return "", fmt.Errorf("volcengine ecs: missing invocation id")
 	}
 
 	return d.describeInvocationResults(ctx, client, instanceID, commandID, invocationID)
@@ -105,24 +121,24 @@ func (d *Driver) ensureCloudAssistantRunning(ctx context.Context, client *api.Cl
 	return fmt.Errorf("cloud assistant agent status is %s, command execution requires RUNNING", status)
 }
 
-func (d *Driver) describeInvocationResults(ctx context.Context, client *api.Client, instanceID, commandID, invocationID string) string {
+func (d *Driver) describeInvocationResults(ctx context.Context, client *api.Client, instanceID, commandID, invocationID string) (string, error) {
 	attempts := 0
 	lastStatus := ""
 	lastMessage := ""
 	for {
-		d.sleepFor(d.pollDelay())
+		if err := d.sleepFor(ctx, d.pollDelay()); err != nil {
+			return "", err
+		}
 		attempts++
 		resp, err := client.DescribeInvocationResults(ctx, d.requestRegion(), invocationID, commandID, instanceID, 1)
 		if err != nil {
-			logger.Error(err)
-			return ""
+			return "", err
 		}
 		if len(resp.Result.InvocationResults) == 0 {
 			if attempts < d.pollLimit() {
 				continue
 			}
-			logger.Error("Missing invocation result.")
-			return ""
+			return "", fmt.Errorf("volcengine ecs: missing invocation result after %d polls", d.pollLimit())
 		}
 
 		result := resp.Result.InvocationResults[0]
@@ -133,21 +149,17 @@ func (d *Driver) describeInvocationResults(ctx context.Context, client *api.Clie
 			if attempts < d.pollLimit() {
 				continue
 			}
-			logger.Error("Timeout: Wait 20s by default. Last status:", lastStatus, lastMessage)
-			return ""
+			return "", fmt.Errorf("volcengine ecs: command did not complete after %d polls (last status %s: %s)", d.pollLimit(), lastStatus, lastMessage)
 		case "SUCCESS", "FINISHED", "SUCCEEDED":
-			return decodeInvocationOutput(result.Output)
+			return decodeInvocationOutput(result.Output), nil
 		default:
 			if message := result.Message(); message != "" && result.ErrorCode != "" {
-				logger.Error("Exception status: " + status + " - " + result.ErrorCode + " - " + message)
-				return ""
+				return "", fmt.Errorf("volcengine ecs: command status %s: %s: %s", status, result.ErrorCode, message)
 			}
 			if message := result.Message(); message != "" {
-				logger.Error("Exception status: " + status + " - " + message)
-				return ""
+				return "", fmt.Errorf("volcengine ecs: command status %s: %s", status, message)
 			}
-			logger.Error("Exception status: " + status)
-			return ""
+			return "", fmt.Errorf("volcengine ecs: command status %s", status)
 		}
 	}
 }
@@ -205,10 +217,17 @@ func (d *Driver) pollLimit() int {
 	return 20
 }
 
-func (d *Driver) sleepFor(delay time.Duration) {
+func (d *Driver) sleepFor(ctx context.Context, delay time.Duration) error {
 	if d.sleep != nil {
 		d.sleep(delay)
-		return
+		return ctx.Err()
 	}
-	time.Sleep(delay)
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }

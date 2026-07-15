@@ -393,7 +393,10 @@ func (p *Provider) ExecuteCloudVMCommand(ctx context.Context, instanceID, cmd st
 			return schema.CommandResult{}, fmt.Errorf("headless shell requires explicit region")
 		}
 		driver := &_ssm.Driver{Client: p.apiClient, Region: region}
-		output := driver.RunCommand(instanceID, osType, command)
+		output, err := driver.RunCommandContext(ctx, instanceID, osType, command)
+		if err != nil {
+			return schema.CommandResult{}, err
+		}
 		return schema.CommandResult{Output: output}, nil
 	}
 
@@ -409,6 +412,9 @@ func (p *Provider) ExecuteCloudVMCommand(ctx context.Context, instanceID, cmd st
 		return schema.CommandResult{}, err
 	}
 	driver := &_ssm.Driver{Client: p.apiClient, Region: region}
-	output := driver.RunCommand(instanceID, osType, strings.TrimSpace(string(command)))
+	output, err := driver.RunCommandContext(ctx, instanceID, osType, strings.TrimSpace(string(command)))
+	if err != nil {
+		return schema.CommandResult{}, err
+	}
 	return schema.CommandResult{Output: output}, nil
 }

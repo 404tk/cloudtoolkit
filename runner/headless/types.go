@@ -3,14 +3,32 @@ package headless
 import (
 	"flag"
 	"strings"
+
+	"github.com/404tk/cloudtoolkit/runner/payloads"
+)
+
+// Stable process exit contract. Values are part of the headless automation
+// API and must not be reassigned.
+const (
+	ExitSuccess          = 0
+	ExitPartial          = 2
+	ExitApprovalRequired = 3
+	ExitConfigError      = 4
+	ExitUnsupported      = 5
+	ExitExecutionError   = 6
+	ExitDeadlineExceeded = 124
+	ExitCanceled         = 130
 )
 
 const (
-	exitSuccess          = 0
-	exitPartial          = 2
-	exitApprovalRequired = 3
-	exitConfigError      = 4
-	exitUnsupported      = 5
+	exitSuccess          = ExitSuccess
+	exitPartial          = ExitPartial
+	exitApprovalRequired = ExitApprovalRequired
+	exitConfigError      = ExitConfigError
+	exitUnsupported      = ExitUnsupported
+	exitExecutionError   = ExitExecutionError
+	exitDeadlineExceeded = ExitDeadlineExceeded
+	exitCanceled         = ExitCanceled
 )
 
 type commandFlags struct {
@@ -59,11 +77,11 @@ func (f commandFlags) providerOptions() map[string]string {
 
 type codedError interface {
 	error
-	ErrorCode() string
+	ErrorCode() payloads.ErrorCode
 }
 
 type headlessError struct {
-	code    string
+	code    payloads.ErrorCode
 	message string
 }
 
@@ -106,6 +124,6 @@ func (e headlessError) Error() string {
 	return e.message
 }
 
-func (e headlessError) ErrorCode() string {
+func (e headlessError) ErrorCode() payloads.ErrorCode {
 	return e.code
 }

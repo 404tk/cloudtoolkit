@@ -2,14 +2,12 @@ package payloads
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
-	"github.com/404tk/cloudtoolkit/utils"
-	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/404tk/table"
 )
 
 type CloudList struct{}
@@ -34,74 +32,16 @@ type cloudListExecution struct {
 }
 
 func (p CloudList) Run(ctx context.Context, config map[string]string) {
-	result, exec, err := p.result(ctx, config)
-	if err != nil {
-		logger.Error(err)
-		return
-	}
-	if result == nil {
-		return
-	}
-	select {
-	case <-ctx.Done():
-		return
-	default:
-		e := env.From(ctx)
-		printGroup := func(tag string, items interface{}) {
-			logger.Warning(tag + " results:")
-			table.Output(items)
-			if e.LogEnable {
-				utils.WriteLog(exec.path, tag+" results:")
-				table.FileOutput(exec.path, items)
-			}
-		}
-
-		if len(result.Hosts) > 0 {
-			printGroup("Hosts", result.Hosts)
-		}
-		if len(result.Storages) > 0 {
-			printGroup("Storages", result.Storages)
-		}
-		if len(result.Users) > 0 {
-			printGroup("Users", result.Users)
-		}
-		if len(result.Databases) > 0 {
-			printGroup("Databases", result.Databases)
-		}
-		for _, domain := range result.Domains {
-			if len(domain.Records) == 0 {
-				continue
-			}
-			printGroup("Domain "+domain.DomainName, domain.Records)
-		}
-		if len(result.Logs) > 0 {
-			printGroup("Log Service", result.Logs)
-		}
-
-		if len(result.SMS.Signs) > 0 {
-			printGroup("SMS Signs", result.SMS.Signs)
-		}
-		if len(result.SMS.Templates) > 0 {
-			printGroup("SMS Templates", result.SMS.Templates)
-		}
-		if result.SMS.DailySize > 0 {
-			msg := fmt.Sprintf("The total number of SMS messages sent today is %v.", result.SMS.DailySize)
-			logger.Info(msg)
-		}
-
-		for _, item := range result.Errors {
-			logger.Error(fmt.Sprintf("%s failed: %s", item.Scope, item.Message))
-		}
-		if e.LogEnable {
-			logger.Info(fmt.Sprintf("Output written to [%s]", exec.path))
-		}
-	}
+	RunStructured(ctx, config, p)
 }
 
 func (p CloudList) Result(ctx context.Context, config map[string]string) (any, error) {
 	result, _, err := p.result(ctx, config)
 	if err != nil {
 		return nil, err
+	}
+	if len(result.Errors) > 0 {
+		return result, NewResultError(result, CodePartialFailure, errors.New("one or more cloud resources could not be enumerated"))
 	}
 	return result, nil
 }
@@ -113,7 +53,8 @@ func (p CloudList) result(ctx context.Context, config map[string]string) (*Cloud
 	}
 	enum, ok := i.Providers.(schema.Enumerator)
 	if !ok {
-		return nil, cloudListExecution{}, fmt.Errorf("%s does not support cloud asset inventory", i.Providers.Name())
+		err := fmt.Errorf("%s does not support cloud asset inventory", i.Providers.Name())
+		return nil, cloudListExecution{}, NewResultError(nil, CodeUnsupported, err)
 	}
 
 	resources, err := enum.Resources(ctx)

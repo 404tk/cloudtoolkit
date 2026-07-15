@@ -3,6 +3,8 @@ package tat
 import (
 	"context"
 	"encoding/base64"
+	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -48,12 +50,28 @@ func (d *Driver) SetClientOptions(opts ...api.Option) {
 }
 
 func (d *Driver) RunCommand(instanceID, osType, cmd string) string {
-	ctx := context.Background()
+	output, err := d.RunCommandContext(context.Background(), instanceID, osType, cmd)
+	if err != nil {
+		logger.Error(err)
+	}
+	return output
+}
+
+// RunCommandContext is the cancellable provider-facing command path.
+func (d *Driver) RunCommandContext(ctx context.Context, instanceID, osType, cmd string) (string, error) {
+	if d == nil {
+		return "", errors.New("tencent tat: nil driver")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	client := d.newClient()
 	commandType, ok := resolveCommandType(osType)
 	if !ok {
-		logger.Error("Unknown ostype", osType)
-		return ""
+		return "", fmt.Errorf("tencent tat: unsupported os type %q", osType)
 	}
 	response, err := client.RunTATCommand(
 		ctx,
@@ -63,48 +81,43 @@ func (d *Driver) RunCommand(instanceID, osType, cmd string) string {
 		[]string{instanceID},
 	)
 	if err != nil {
-		logger.Error(err)
-		return ""
+		return "", err
 	}
 	invocationID := derefString(response.Response.InvocationID)
 	if invocationID == "" {
-		logger.Error("Missing invocation id.")
-		return ""
+		return "", errors.New("tencent tat: missing invocation id")
 	}
 	return d.describeInvocations(ctx, client, invocationID)
 }
 
-func (d *Driver) describeInvocations(ctx context.Context, client *api.Client, invocationID string) string {
+func (d *Driver) describeInvocations(ctx context.Context, client *api.Client, invocationID string) (string, error) {
 	response, err := client.DescribeTATInvocations(ctx, d.Region, []string{invocationID})
 	if err != nil {
-		logger.Error(err)
-		return ""
+		return "", err
 	}
 	if len(response.Response.InvocationSet) == 0 || len(response.Response.InvocationSet[0].InvocationTaskBasicInfoSet) == 0 {
-		logger.Error("Missing invocation task metadata.")
-		return ""
+		return "", errors.New("tencent tat: missing invocation task metadata")
 	}
 	taskID := derefString(response.Response.InvocationSet[0].InvocationTaskBasicInfoSet[0].InvocationTaskID)
 	if taskID == "" {
-		logger.Error("Missing invocation task id.")
-		return ""
+		return "", errors.New("tencent tat: missing invocation task id")
 	}
 	return d.describeInvocationTasks(ctx, client, taskID)
 }
 
-func (d *Driver) describeInvocationTasks(ctx context.Context, client *api.Client, taskID string) string {
+func (d *Driver) describeInvocationTasks(ctx context.Context, client *api.Client, taskID string) (string, error) {
 	attempts := 0
 	for {
-		d.sleepFor(d.pollDelay())
+		if err := d.sleepFor(ctx, d.pollDelay()); err != nil {
+			return "", err
+		}
 		attempts++
 		response, err := client.DescribeTATInvocationTasks(ctx, d.Region, []string{taskID}, false)
 		if err != nil {
-			logger.Error(err)
-			return ""
+			return "", err
 		}
 		if len(response.Response.InvocationTaskSet) == 0 {
-			logger.Error("Missing invocation task detail.")
-			return ""
+			return "", errors.New("tencent tat: missing invocation task detail")
 		}
 		task := response.Response.InvocationTaskSet[0]
 		status := strings.ToUpper(derefString(task.TaskStatus))
@@ -113,8 +126,7 @@ func (d *Driver) describeInvocationTasks(ctx context.Context, client *api.Client
 			if attempts < d.pollLimit() {
 				continue
 			}
-			logger.Error("Timeout: Wait 5s by default.")
-			return ""
+			return "", fmt.Errorf("tencent tat: Timeout: command did not complete after %d polls", d.pollLimit())
 		case "SUCCESS":
 			output := ""
 			if task.TaskResult != nil {
@@ -122,17 +134,14 @@ func (d *Driver) describeInvocationTasks(ctx context.Context, client *api.Client
 			}
 			raw, err := base64.StdEncoding.DecodeString(output)
 			if err != nil {
-				logger.Error(output, err)
-				return ""
+				return "", fmt.Errorf("tencent tat: decode command output: %w", err)
 			}
-			return string(raw)
+			return string(raw), nil
 		default:
 			if msg := derefString(task.ErrorInfo); msg != "" {
-				logger.Error("Exception status: " + status + " - " + msg)
-				return ""
+				return "", fmt.Errorf("tencent tat: Exception status: %s - %s", status, msg)
 			}
-			logger.Error("Exception status: " + status)
-			return ""
+			return "", fmt.Errorf("tencent tat: Exception status: %s", status)
 		}
 	}
 }
@@ -169,12 +178,19 @@ func (d *Driver) pollLimit() int {
 	return 20
 }
 
-func (d *Driver) sleepFor(delay time.Duration) {
+func (d *Driver) sleepFor(ctx context.Context, delay time.Duration) error {
 	if d.sleep != nil {
 		d.sleep(delay)
-		return
+		return ctx.Err()
 	}
-	time.Sleep(delay)
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func derefString(v *string) string {

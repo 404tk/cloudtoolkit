@@ -42,6 +42,12 @@ func (d *Driver) Execute(ctx context.Context, instanceID, command string) (schem
 	if d == nil || d.Client == nil {
 		return schema.CommandResult{}, errors.New("gcp compute: nil api client")
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return schema.CommandResult{}, err
+	}
 	if strings.TrimSpace(command) == "" {
 		return schema.CommandResult{}, errors.New("gcp compute: command is empty")
 	}

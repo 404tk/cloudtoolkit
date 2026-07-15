@@ -7,8 +7,6 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/argparse"
-	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/404tk/table"
 )
 
 type IAMUserCheck struct{}
@@ -32,37 +30,7 @@ type iamUserAction struct {
 }
 
 func (p IAMUserCheck) Run(ctx context.Context, config map[string]string) {
-	result, err := p.Result(ctx, config)
-	if err != nil {
-		logger.Error(err.Error())
-		return
-	}
-
-	iamResult, ok := result.(IAMUserCheckResult)
-	if !ok {
-		logger.Error("Invalid result type")
-		return
-	}
-
-	if iamResult.Status == "error" {
-		logger.Error(iamResult.Error)
-		return
-	}
-
-	if iamResult.LoginURL != "" {
-		type loginRow struct {
-			Username string `table:"Username"`
-			Password string `table:"Password"`
-			LoginURL string `table:"Login URL"`
-		}
-		table.Output([]loginRow{{
-			Username: iamResult.Username,
-			Password: iamResult.Password,
-			LoginURL: iamResult.LoginURL,
-		}})
-	} else {
-		logger.Warning(iamResult.Message)
-	}
+	RunStructured(ctx, config, p)
 }
 
 func (p IAMUserCheck) Result(ctx context.Context, config map[string]string) (any, error) {
@@ -78,7 +46,8 @@ func (p IAMUserCheck) Result(ctx context.Context, config map[string]string) (any
 
 	mgr, ok := i.Providers.(schema.IAMManager)
 	if !ok {
-		return nil, fmt.Errorf("%s does not support user management", i.Providers.Name())
+		err := fmt.Errorf("%s does not support user management", i.Providers.Name())
+		return nil, NewResultError(nil, CodeUnsupported, err)
 	}
 
 	iamResult, err := mgr.UserManagement(parsed.Action, parsed.Username, parsed.Password)
@@ -92,7 +61,7 @@ func (p IAMUserCheck) Result(ctx context.Context, config map[string]string) (any
 	if err != nil {
 		result.Status = "error"
 		result.Error = err.Error()
-		return result, NewResultError(result, 4, err)
+		return result, NewResultError(result, CodeExecutionFailed, err)
 	}
 
 	result.Password = iamResult.Password

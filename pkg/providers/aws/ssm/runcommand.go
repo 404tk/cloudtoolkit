@@ -34,8 +34,8 @@ func GetCacheHostList() []schema.Host {
 }
 
 type Driver struct {
-	Client       *api.Client
-	Region       string
+	Client *api.Client
+	Region string
 
 	// pollInterval / maxPolls / sleep are wired up by tests so the polling
 	// loop does not actually wait. Production paths use the defaults.
@@ -57,37 +57,50 @@ func (d *Driver) SetPollOptions(interval time.Duration, max int, sleep func(time
 // on hard failure — callers log via logger; the REPL surface is the same as
 // the existing alibaba/tencent ECS exec drivers.
 func (d *Driver) RunCommand(instanceID, osType, cmd string) string {
-	if d == nil || d.Client == nil {
-		logger.Error("aws ssm: nil client")
-		return ""
+	output, err := d.RunCommandContext(context.Background(), instanceID, osType, cmd)
+	if err != nil {
+		logger.Error(err)
 	}
-	ctx := context.Background()
+	return output
+}
+
+// RunCommandContext sends a command and polls SSM until completion. The
+// context is passed to every API request and also controls the poll delay, so
+// caller deadlines and interrupts stop remote work promptly.
+func (d *Driver) RunCommandContext(ctx context.Context, instanceID, osType, cmd string) (string, error) {
+	if d == nil || d.Client == nil {
+		return "", errors.New("aws ssm: nil client")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	doc, ok := resolveDocumentName(osType)
 	if !ok {
-		logger.Error("aws ssm: unsupported os type", osType)
-		return ""
+		return "", fmt.Errorf("aws ssm: unsupported os type %q", osType)
 	}
 	region := strings.TrimSpace(d.Region)
 	if region == "" || region == "all" {
-		logger.Error("aws ssm: empty region")
-		return ""
+		return "", errors.New("aws ssm: empty region")
 	}
 	resp, err := d.Client.SSMSendCommand(ctx, region, doc, []string{instanceID}, []string{cmd})
 	if err != nil {
-		logger.Error(err)
-		return ""
+		return "", err
 	}
 	commandID := strings.TrimSpace(resp.Command.CommandID)
 	if commandID == "" {
-		logger.Error("aws ssm: empty command id")
-		return ""
+		return "", errors.New("aws ssm: empty command id")
 	}
 	return d.pollInvocation(ctx, region, commandID, instanceID)
 }
 
-func (d *Driver) pollInvocation(ctx context.Context, region, commandID, instanceID string) string {
+func (d *Driver) pollInvocation(ctx context.Context, region, commandID, instanceID string) (string, error) {
 	for attempts := 0; attempts < d.pollLimit(); attempts++ {
-		d.sleepFor(d.pollDelay())
+		if err := d.sleepFor(ctx, d.pollDelay()); err != nil {
+			return "", err
+		}
 		invocation, err := d.Client.SSMGetCommandInvocation(ctx, region, commandID, instanceID)
 		if err != nil {
 			// SSM returns InvocationDoesNotExist for a brief window after
@@ -96,27 +109,24 @@ func (d *Driver) pollInvocation(ctx context.Context, region, commandID, instance
 			if isInvocationNotFound(err) && attempts+1 < d.pollLimit() {
 				continue
 			}
-			logger.Error(err)
-			return ""
+			return "", err
 		}
 		switch invocation.Status {
 		case "Pending", "InProgress", "Delayed":
 			continue
 		case "Success":
-			return invocation.StandardOutputContent
+			return invocation.StandardOutputContent, nil
 		case "":
 			continue
 		default:
 			if invocation.StandardErrorContent != "" {
-				logger.Error("Exception status: " + invocation.Status + " - " + invocation.StandardErrorContent)
+				return invocation.StandardOutputContent, fmt.Errorf("aws ssm: command status %s: %s", invocation.Status, invocation.StandardErrorContent)
 			} else {
-				logger.Error("Exception status: " + invocation.Status)
+				return invocation.StandardOutputContent, fmt.Errorf("aws ssm: command status %s", invocation.Status)
 			}
-			return invocation.StandardOutputContent
 		}
 	}
-	logger.Error("Timeout: SSM invocation did not complete in time.")
-	return ""
+	return "", fmt.Errorf("aws ssm: invocation did not complete after %d polls", d.pollLimit())
 }
 
 func resolveDocumentName(osType string) (string, bool) {
@@ -143,12 +153,19 @@ func (d *Driver) pollLimit() int {
 	return 20
 }
 
-func (d *Driver) sleepFor(delay time.Duration) {
+func (d *Driver) sleepFor(ctx context.Context, delay time.Duration) error {
 	if d.sleep != nil {
 		d.sleep(delay)
-		return
+		return ctx.Err()
 	}
-	time.Sleep(delay)
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func isInvocationNotFound(err error) bool {

@@ -4,13 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
-	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/argparse"
-	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/404tk/table"
 )
 
 type EventCheck struct{}
@@ -32,34 +28,7 @@ type eventAction struct {
 }
 
 func (p EventCheck) Run(ctx context.Context, config map[string]string) {
-	resultAny, err := p.Result(ctx, config)
-	if err != nil && resultAny == nil {
-		logger.Error(err.Error())
-		return
-	}
-
-	result, ok := resultAny.(EventCheckResult)
-	if !ok {
-		logger.Error("Invalid result type")
-		return
-	}
-	if result.Status == "error" {
-		logger.Error(result.Error)
-		return
-	}
-
-	if len(result.Events) > 0 {
-		table.Output(result.Events)
-		if e := env.From(ctx); e.LogEnable {
-			filename := time.Now().Format("20060102150405.log")
-			path := fmt.Sprintf("%s/%s_eventdump_%s", e.LogDir, result.Provider, filename)
-			table.FileOutput(path, result.Events)
-			logger.Info(fmt.Sprintf("Output written to [%s]", path))
-		}
-	}
-	if result.Message != "" {
-		logger.Warning(result.Message)
-	}
+	RunStructured(ctx, config, p)
 }
 
 func (p EventCheck) Result(ctx context.Context, config map[string]string) (any, error) {
@@ -74,7 +43,8 @@ func (p EventCheck) Result(ctx context.Context, config map[string]string) (any, 
 	}
 	reader, ok := i.Providers.(schema.EventReader)
 	if !ok {
-		return nil, fmt.Errorf("%s does not support event-check", i.Providers.Name())
+		err := fmt.Errorf("%s does not support event-check", i.Providers.Name())
+		return nil, NewResultError(nil, CodeUnsupported, err)
 	}
 
 	eventResult, err := reader.EventDump(ctx, parsed.Action, parsed.Scope)
@@ -89,7 +59,7 @@ func (p EventCheck) Result(ctx context.Context, config map[string]string) (any, 
 	if err != nil {
 		result.Status = "error"
 		result.Error = err.Error()
-		return result, NewResultError(result, 4, err)
+		return result, NewResultError(result, CodeExecutionFailed, err)
 	}
 	if result.Message == "" {
 		switch {

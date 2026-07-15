@@ -8,21 +8,19 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/argparse"
-	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/404tk/table"
 )
 
 type BucketACLCheck struct{}
 
 type BucketACLCheckResult struct {
-	Provider   string                  `json:"provider"`
-	Action     string                  `json:"action"`
-	Container  string                  `json:"container,omitempty"`
-	Level      string                  `json:"level,omitempty"`
-	Containers []bucketACLEntryJSON    `json:"containers,omitempty"`
-	Message    string                  `json:"message,omitempty"`
-	Status     string                  `json:"status"`
-	Error      string                  `json:"error,omitempty"`
+	Provider   string               `json:"provider"`
+	Action     string               `json:"action"`
+	Container  string               `json:"container,omitempty"`
+	Level      string               `json:"level,omitempty"`
+	Containers []bucketACLEntryJSON `json:"containers,omitempty"`
+	Message    string               `json:"message,omitempty"`
+	Status     string               `json:"status"`
+	Error      string               `json:"error,omitempty"`
 }
 
 type bucketACLEntryJSON struct {
@@ -38,40 +36,7 @@ type bucketACLAction struct {
 }
 
 func (p BucketACLCheck) Run(ctx context.Context, config map[string]string) {
-	resultAny, err := p.Result(ctx, config)
-	if err != nil && resultAny == nil {
-		logger.Error(err.Error())
-		return
-	}
-	result, ok := resultAny.(BucketACLCheckResult)
-	if !ok {
-		logger.Error("Invalid result type")
-		return
-	}
-	if result.Status == "error" {
-		logger.Error(result.Error)
-		return
-	}
-
-	if len(result.Containers) > 0 {
-		type aclRow struct {
-			Account   string `table:"Account"`
-			Container string `table:"Container"`
-			Level     string `table:"Public Access"`
-		}
-		rows := make([]aclRow, 0, len(result.Containers))
-		for _, entry := range result.Containers {
-			rows = append(rows, aclRow{
-				Account:   entry.Account,
-				Container: entry.Container,
-				Level:     entry.Level,
-			})
-		}
-		table.Output(rows)
-	}
-	if result.Message != "" {
-		logger.Warning(result.Message)
-	}
+	RunStructured(ctx, config, p)
 }
 
 func (p BucketACLCheck) Result(ctx context.Context, config map[string]string) (any, error) {
@@ -87,7 +52,8 @@ func (p BucketACLCheck) Result(ctx context.Context, config map[string]string) (a
 
 	mgr, ok := i.Providers.(schema.BucketACLManager)
 	if !ok {
-		return nil, fmt.Errorf("%s does not support bucket-acl-check", i.Providers.Name())
+		err := fmt.Errorf("%s does not support bucket-acl-check", i.Providers.Name())
+		return nil, NewResultError(nil, CodeUnsupported, err)
 	}
 
 	aclResult, err := mgr.BucketACL(ctx, parsed.Action, parsed.Container, parsed.Level)
@@ -101,7 +67,7 @@ func (p BucketACLCheck) Result(ctx context.Context, config map[string]string) (a
 	if err != nil {
 		result.Status = "error"
 		result.Error = err.Error()
-		return result, NewResultError(result, 4, err)
+		return result, NewResultError(result, CodeExecutionFailed, err)
 	}
 
 	if aclResult.Container != "" {

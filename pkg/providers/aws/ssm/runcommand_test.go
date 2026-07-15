@@ -2,9 +2,11 @@ package ssm
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -102,6 +104,35 @@ func TestRunCommandTimeoutWhenStuck(t *testing.T) {
 	driver := newTestDriver(t, server.URL)
 	if got := driver.RunCommand("i-3", "linux", "sleep 1"); got != "" {
 		t.Fatalf("expected empty output on timeout, got %q", got)
+	}
+}
+
+func TestRunCommandContextCancellationStopsBeforePolling(t *testing.T) {
+	var polls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Header.Get("X-Amz-Target") {
+		case "AmazonSSM.SendCommand":
+			_, _ = w.Write([]byte(`{"Command":{"CommandId":"cmd-cancel"}}`))
+		case "AmazonSSM.GetCommandInvocation":
+			polls.Add(1)
+			_, _ = w.Write([]byte(`{"Status":"Success","StandardOutputContent":"unexpected"}`))
+		}
+	}))
+	defer server.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	driver := newTestDriver(t, server.URL)
+	driver.sleep = func(time.Duration) { cancel() }
+
+	output, err := driver.RunCommandContext(ctx, "i-cancel", "linux", "sleep 30")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("RunCommandContext() error = %v, want context.Canceled", err)
+	}
+	if output != "" {
+		t.Fatalf("RunCommandContext() output = %q, want empty", output)
+	}
+	if polls.Load() != 0 {
+		t.Fatalf("RunCommandContext() performed %d polls after cancellation", polls.Load())
 	}
 }
 

@@ -255,14 +255,25 @@ func (c *ResourceCollector) Register(name string, handler ResourceHandler) *Reso
 }
 
 func (c *ResourceCollector) Collect(ctx context.Context, names []string) (Resources, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	list := NewResources()
 	list.Provider = c.provider
 	for _, name := range names {
+		if err := ctx.Err(); err != nil {
+			list.AddError(name, err)
+			break
+		}
 		handler, ok := c.handlers[name]
 		if !ok {
 			continue
 		}
 		handler(ctx, &list)
+		if err := ctx.Err(); err != nil {
+			list.AddError(name, err)
+			break
+		}
 	}
 	return list, list.Err()
 }

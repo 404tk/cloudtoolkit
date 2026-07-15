@@ -13,12 +13,12 @@ import (
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cdb"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cloudaudit"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cls"
-	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/sms"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cos"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/cvm"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/dns"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/iam"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/lighthouse"
+	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/sms"
 	"github.com/404tk/cloudtoolkit/pkg/providers/tencent/tat"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/env"
 	"github.com/404tk/cloudtoolkit/pkg/runtime/vmexecspec"
@@ -401,7 +401,10 @@ func (p *Provider) ExecuteCloudVMCommand(ctx context.Context, instanceID, cmd st
 		}
 		d := tat.Driver{Credential: p.apiCredential, Region: p.region}
 		d.SetClientOptions(p.clientOptions...)
-		output := d.RunCommand(instanceID, osType, command)
+		output, err := d.RunCommandContext(ctx, instanceID, osType, command)
+		if err != nil {
+			return schema.CommandResult{}, err
+		}
 		return schema.CommandResult{Output: output}, nil
 	}
 
@@ -415,7 +418,10 @@ func (p *Provider) ExecuteCloudVMCommand(ctx context.Context, instanceID, cmd st
 	if err != nil {
 		return schema.CommandResult{}, err
 	}
-	output := d.RunCommand(instanceID, host.OSType, string(command))
+	output, err := d.RunCommandContext(ctx, instanceID, host.OSType, string(command))
+	if err != nil {
+		return schema.CommandResult{}, err
+	}
 	return schema.CommandResult{Output: output}, nil
 }
 

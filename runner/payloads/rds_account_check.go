@@ -7,8 +7,6 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/argparse"
-	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/404tk/table"
 )
 
 type RDSAccountCheck struct{}
@@ -31,37 +29,7 @@ type rdsAction struct {
 }
 
 func (p RDSAccountCheck) Run(ctx context.Context, config map[string]string) {
-	resultAny, err := p.Result(ctx, config)
-	if err != nil && resultAny == nil {
-		logger.Error(err.Error())
-		return
-	}
-
-	result, ok := resultAny.(RDSAccountCheckResult)
-	if !ok {
-		logger.Error("Invalid result type")
-		return
-	}
-	if result.Status == "error" {
-		logger.Error(result.Error)
-		return
-	}
-
-	if result.Username != "" {
-		type accountRow struct {
-			Username  string `table:"Username"`
-			Password  string `table:"Password"`
-			Privilege string `table:"Privilege"`
-		}
-		table.Output([]accountRow{{
-			Username:  result.Username,
-			Password:  result.Password,
-			Privilege: result.Privilege,
-		}})
-	}
-	if result.Message != "" {
-		logger.Warning(result.Message)
-	}
+	RunStructured(ctx, config, p)
 }
 
 func (p RDSAccountCheck) Result(ctx context.Context, config map[string]string) (any, error) {
@@ -76,7 +44,8 @@ func (p RDSAccountCheck) Result(ctx context.Context, config map[string]string) (
 	}
 	mgr, ok := i.Providers.(schema.DBManager)
 	if !ok {
-		return nil, fmt.Errorf("%s does not support rds-account-check", i.Providers.Name())
+		err := fmt.Errorf("%s does not support rds-account-check", i.Providers.Name())
+		return nil, NewResultError(nil, CodeUnsupported, err)
 	}
 
 	dbResult, err := mgr.DBManagement(ctx, parsed.Action, parsed.InstanceID)
@@ -92,7 +61,7 @@ func (p RDSAccountCheck) Result(ctx context.Context, config map[string]string) (
 	if err != nil {
 		result.Status = "error"
 		result.Error = err.Error()
-		return result, NewResultError(result, 4, err)
+		return result, NewResultError(result, CodeExecutionFailed, err)
 	}
 	result.Status = "success"
 	return result, nil

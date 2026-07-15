@@ -7,8 +7,6 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/argparse"
-	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/404tk/table"
 )
 
 type IAMCredentialCheck struct{}
@@ -39,53 +37,7 @@ type iamCredentialAction struct {
 }
 
 func (p IAMCredentialCheck) Run(ctx context.Context, config map[string]string) {
-	resultAny, err := p.Result(ctx, config)
-	if err != nil && resultAny == nil {
-		logger.Error(err.Error())
-		return
-	}
-	result, ok := resultAny.(IAMCredentialCheckResult)
-	if !ok {
-		logger.Error("Invalid result type")
-		return
-	}
-	if result.Status == "error" {
-		logger.Error(result.Error)
-		return
-	}
-
-	if result.CredentialData != "" {
-		type keyRow struct {
-			Principal      string `table:"Principal"`
-			CredentialID   string `table:"Credential ID"`
-			CredentialData string `table:"Credential Data"`
-		}
-		table.Output([]keyRow{{
-			Principal:      result.Principal,
-			CredentialID:   result.CredentialID,
-			CredentialData: result.CredentialData,
-		}})
-	} else if len(result.Credentials) > 0 {
-		type keyRow struct {
-			CredentialID   string `table:"Credential ID"`
-			CredentialType string `table:"Type"`
-			ValidAfter     string `table:"Valid After"`
-			ValidBefore    string `table:"Valid Before"`
-		}
-		rows := make([]keyRow, 0, len(result.Credentials))
-		for _, k := range result.Credentials {
-			rows = append(rows, keyRow{
-				CredentialID:   k.CredentialID,
-				CredentialType: k.CredentialType,
-				ValidAfter:     k.ValidAfter,
-				ValidBefore:    k.ValidBefore,
-			})
-		}
-		table.Output(rows)
-	}
-	if result.Message != "" {
-		logger.Warning(result.Message)
-	}
+	RunStructured(ctx, config, p)
 }
 
 func (p IAMCredentialCheck) Result(ctx context.Context, config map[string]string) (any, error) {
@@ -101,7 +53,8 @@ func (p IAMCredentialCheck) Result(ctx context.Context, config map[string]string
 
 	mgr, ok := i.Providers.(schema.IAMCredentialManager)
 	if !ok {
-		return nil, fmt.Errorf("%s does not support iam-credential-check", i.Providers.Name())
+		err := fmt.Errorf("%s does not support iam-credential-check", i.Providers.Name())
+		return nil, NewResultError(nil, CodeUnsupported, err)
 	}
 
 	credResult, err := mgr.IAMCredential(ctx, parsed.Action, parsed.Principal, parsed.CredentialID)
@@ -115,7 +68,7 @@ func (p IAMCredentialCheck) Result(ctx context.Context, config map[string]string
 	if err != nil {
 		result.Status = "error"
 		result.Error = err.Error()
-		return result, NewResultError(result, 4, err)
+		return result, NewResultError(result, CodeExecutionFailed, err)
 	}
 
 	if credResult.Principal != "" {

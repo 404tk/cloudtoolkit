@@ -32,16 +32,32 @@ type Driver struct {
 var errNilAPIClient = errors.New("jdcloud assistant: nil api client")
 
 func (d *Driver) RunCommand(instanceID, osType, cmd string) string {
-	ctx := context.Background()
+	output, err := d.RunCommandContext(context.Background(), instanceID, osType, cmd)
+	if err != nil {
+		logger.Error(err)
+	}
+	return output
+}
+
+// RunCommandContext is the cancellable Cloud Assistant execution path used by
+// the provider capability. RunCommand is kept for compatibility.
+func (d *Driver) RunCommandContext(ctx context.Context, instanceID, osType, cmd string) (string, error) {
+	if d == nil {
+		return "", errNilAPIClient
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	if d.Client == nil {
-		logger.Error(errNilAPIClient)
-		return ""
+		return "", errNilAPIClient
 	}
 
 	region := strings.TrimSpace(d.Region)
 	if region == "" {
-		logger.Error("jdcloud assistant: empty region; run `cloudlist` to populate the host cache or set a region explicitly")
-		return ""
+		return "", errors.New("jdcloud assistant: empty region; run `cloudlist` to populate the host cache or set a region explicitly")
 	}
 
 	commandType := resolveCommandType(osType)
@@ -51,26 +67,22 @@ func (d *Driver) RunCommand(instanceID, osType, cmd string) string {
 
 	commandID, err := d.createCommand(ctx, region, commandName, commandType, commandContent)
 	if err != nil {
-		logger.Error(err)
-		return ""
+		return "", err
 	}
 	if commandID == "" {
-		logger.Error("Missing command id.")
-		return ""
+		return "", errors.New("jdcloud assistant: missing command id")
 	}
 	// The temporary command is always cleaned up; the console shell dispatches
 	// a fresh CreateCommand per keystroke so leaving these around would leak
 	// into the customer's command library and hit per-account quotas.
-	defer d.deleteCommand(context.Background(), region, commandID)
+	defer d.deleteCommand(context.WithoutCancel(ctx), region, commandID)
 
 	invokeID, err := d.invokeCommand(ctx, region, commandID, instanceID)
 	if err != nil {
-		logger.Error(err)
-		return ""
+		return "", err
 	}
 	if invokeID == "" {
-		logger.Error("Missing invocation id.")
-		return ""
+		return "", errors.New("jdcloud assistant: missing invocation id")
 	}
 
 	return d.pollInvocation(ctx, region, invokeID)
@@ -123,10 +135,12 @@ func (d *Driver) invokeCommand(ctx context.Context, region, commandID, instanceI
 	return strings.TrimSpace(resp.Result.InvokeID), nil
 }
 
-func (d *Driver) pollInvocation(ctx context.Context, region, invokeID string) string {
+func (d *Driver) pollInvocation(ctx context.Context, region, invokeID string) (string, error) {
 	attempts := 0
 	for {
-		d.sleepFor(d.pollDelay())
+		if err := d.sleepFor(ctx, d.pollDelay()); err != nil {
+			return "", err
+		}
 		attempts++
 		body, err := json.Marshal(api.DescribeInvocationsRequest{
 			RegionID:   region,
@@ -135,8 +149,7 @@ func (d *Driver) pollInvocation(ctx context.Context, region, invokeID string) st
 			InvokeIDs:  []string{invokeID},
 		})
 		if err != nil {
-			logger.Error(err)
-			return ""
+			return "", err
 		}
 		var resp api.DescribeInvocationsResponse
 		if err := d.Client.DoJSON(ctx, api.Request{
@@ -147,15 +160,13 @@ func (d *Driver) pollInvocation(ctx context.Context, region, invokeID string) st
 			Path:    "/regions/" + region + "/describeInvocations",
 			Body:    body,
 		}, &resp); err != nil {
-			logger.Error(err)
-			return ""
+			return "", err
 		}
 		if len(resp.Result.Invocations) == 0 {
 			if attempts < d.pollLimit() {
 				continue
 			}
-			logger.Error("Missing invocation record.")
-			return ""
+			return "", fmt.Errorf("jdcloud assistant: missing invocation record after %d polls", d.pollLimit())
 		}
 
 		inv := resp.Result.Invocations[0]
@@ -165,21 +176,18 @@ func (d *Driver) pollInvocation(ctx context.Context, region, invokeID string) st
 			if attempts < d.pollLimit() {
 				continue
 			}
-			logger.Error("Timeout: Wait for command to finish. Last status:", status)
-			return ""
+			return "", fmt.Errorf("jdcloud assistant: command did not complete after %d polls (last status %s)", d.pollLimit(), status)
 		case "finish":
-			return decodeOutput(invocationOutput(inv))
+			return decodeOutput(invocationOutput(inv)), nil
 		default:
 			// failed / partial_failed / stopped / per-instance invalid / timeout
 			// / terminated / aborted / cancel / error all land here. Surface the
 			// ErrorInfo — that's where "agent offline" / "instance unreachable"
 			// signals live since JDCloud has no agent-status preflight.
 			if info := invocationErrorInfo(inv); info != "" {
-				logger.Error("Exception status: " + status + " - " + info)
-				return ""
+				return "", fmt.Errorf("jdcloud assistant: command status %s: %s", status, info)
 			}
-			logger.Error("Exception status: " + status)
-			return ""
+			return "", fmt.Errorf("jdcloud assistant: command status %s", status)
 		}
 	}
 }
@@ -283,10 +291,17 @@ func (d *Driver) pollLimit() int {
 	return 20
 }
 
-func (d *Driver) sleepFor(delay time.Duration) {
+func (d *Driver) sleepFor(ctx context.Context, delay time.Duration) error {
 	if d.sleep != nil {
 		d.sleep(delay)
-		return
+		return ctx.Err()
 	}
-	time.Sleep(delay)
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }

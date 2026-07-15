@@ -18,12 +18,15 @@ type Page[Item, Cursor any] struct {
 
 // Fetch calls fn repeatedly starting from the zero value of Cursor, appending
 // each page's Items to the result. It stops when fn returns Done=true, returns
-// an error, or ctx is cancelled (already-collected items are returned, err nil
-// on cancellation — matches the partial-failure convention used elsewhere).
+// an error, or ctx is cancelled. Cancellation preserves already-collected
+// items and returns ctx.Err so callers do not mistake partial data for success.
 func Fetch[Item, Cursor any](
 	ctx context.Context,
 	fn func(ctx context.Context, cursor Cursor) (Page[Item, Cursor], error),
 ) ([]Item, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	var (
 		cursor Cursor
 		out    []Item
@@ -31,7 +34,7 @@ func Fetch[Item, Cursor any](
 	for {
 		select {
 		case <-ctx.Done():
-			return out, nil
+			return out, ctx.Err()
 		default:
 		}
 		page, err := fn(ctx, cursor)

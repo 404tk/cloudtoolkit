@@ -7,23 +7,21 @@ import (
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/argparse"
-	"github.com/404tk/cloudtoolkit/utils/logger"
-	"github.com/404tk/table"
 )
 
 type RoleBindingCheck struct{}
 
 type RoleBindingCheckResult struct {
-	Provider     string                `json:"provider"`
-	Action       string                `json:"action"`
-	Principal    string                `json:"principal,omitempty"`
-	Role         string                `json:"role,omitempty"`
-	Scope        string                `json:"scope,omitempty"`
-	AssignmentID string                `json:"assignment_id,omitempty"`
-	Bindings     []roleBindingRowJSON  `json:"bindings,omitempty"`
-	Message      string                `json:"message,omitempty"`
-	Status       string                `json:"status"`
-	Error        string                `json:"error,omitempty"`
+	Provider     string               `json:"provider"`
+	Action       string               `json:"action"`
+	Principal    string               `json:"principal,omitempty"`
+	Role         string               `json:"role,omitempty"`
+	Scope        string               `json:"scope,omitempty"`
+	AssignmentID string               `json:"assignment_id,omitempty"`
+	Bindings     []roleBindingRowJSON `json:"bindings,omitempty"`
+	Message      string               `json:"message,omitempty"`
+	Status       string               `json:"status"`
+	Error        string               `json:"error,omitempty"`
 }
 
 type roleBindingRowJSON struct {
@@ -41,43 +39,7 @@ type roleBindingAction struct {
 }
 
 func (p RoleBindingCheck) Run(ctx context.Context, config map[string]string) {
-	resultAny, err := p.Result(ctx, config)
-	if err != nil && resultAny == nil {
-		logger.Error(err.Error())
-		return
-	}
-
-	result, ok := resultAny.(RoleBindingCheckResult)
-	if !ok {
-		logger.Error("Invalid result type")
-		return
-	}
-	if result.Status == "error" {
-		logger.Error(result.Error)
-		return
-	}
-
-	if len(result.Bindings) > 0 {
-		type bindingRow struct {
-			Principal    string `table:"Principal"`
-			Role         string `table:"Role"`
-			Scope        string `table:"Scope"`
-			AssignmentID string `table:"Assignment ID"`
-		}
-		rows := make([]bindingRow, 0, len(result.Bindings))
-		for _, b := range result.Bindings {
-			rows = append(rows, bindingRow{
-				Principal:    b.Principal,
-				Role:         b.Role,
-				Scope:        b.Scope,
-				AssignmentID: b.AssignmentID,
-			})
-		}
-		table.Output(rows)
-	}
-	if result.Message != "" {
-		logger.Warning(result.Message)
-	}
+	RunStructured(ctx, config, p)
 }
 
 func (p RoleBindingCheck) Result(ctx context.Context, config map[string]string) (any, error) {
@@ -93,7 +55,8 @@ func (p RoleBindingCheck) Result(ctx context.Context, config map[string]string) 
 
 	mgr, ok := i.Providers.(schema.RoleBindingManager)
 	if !ok {
-		return nil, fmt.Errorf("%s does not support role-binding-check", i.Providers.Name())
+		err := fmt.Errorf("%s does not support role-binding-check", i.Providers.Name())
+		return nil, NewResultError(nil, CodeUnsupported, err)
 	}
 
 	bindingResult, err := mgr.RoleBinding(ctx, parsed.Action, parsed.Principal, parsed.Role, parsed.Scope)
@@ -109,7 +72,7 @@ func (p RoleBindingCheck) Result(ctx context.Context, config map[string]string) 
 	if err != nil {
 		result.Status = "error"
 		result.Error = err.Error()
-		return result, NewResultError(result, 4, err)
+		return result, NewResultError(result, CodeExecutionFailed, err)
 	}
 
 	if bindingResult.Scope != "" {

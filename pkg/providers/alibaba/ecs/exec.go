@@ -2,6 +2,8 @@ package ecs
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -29,12 +31,29 @@ func GetCacheHostList() []schema.Host {
 }
 
 func (d *Driver) RunCommand(instanceID, osType, cmd string) string {
-	ctx := context.Background()
+	output, err := d.RunCommandContext(context.Background(), instanceID, osType, cmd)
+	if err != nil {
+		logger.Error(err)
+	}
+	return output
+}
+
+// RunCommandContext is the cancellable form used by provider capabilities.
+// RunCommand remains as a compatibility wrapper for existing integrations.
+func (d *Driver) RunCommandContext(ctx context.Context, instanceID, osType, cmd string) (string, error) {
+	if d == nil {
+		return "", errors.New("alibaba ecs: nil driver")
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	client := d.newClient()
 	commandType, ok := resolveCommandType(osType)
 	if !ok {
-		logger.Error("Unknown ostype", osType)
-		return ""
+		return "", fmt.Errorf("alibaba ecs: unsupported os type %q", osType)
 	}
 
 	contentEncoding := ""
@@ -46,32 +65,30 @@ func (d *Driver) RunCommand(instanceID, osType, cmd string) string {
 
 	response, err := client.RunECSCommand(ctx, d.Region, commandType, commandContent, contentEncoding, []string{instanceID})
 	if err != nil {
-		logger.Error(err)
-		return ""
+		return "", err
 	}
 	if response.CommandID == "" {
-		logger.Error("Missing command id.")
-		return ""
+		return "", errors.New("alibaba ecs: missing command id")
 	}
 	return d.describeInvocationResults(ctx, client, response.CommandID)
 }
 
 func (d *Driver) describeInvocationResults(ctx context.Context, client interface {
 	DescribeECSInvocationResults(context.Context, string, string) (api.DescribeECSInvocationResultsResponse, error)
-}, commandID string) string {
+}, commandID string) (string, error) {
 	attempts := 0
 	for {
-		d.sleepFor(d.pollDelay())
+		if err := d.sleepFor(ctx, d.pollDelay()); err != nil {
+			return "", err
+		}
 		attempts++
 
 		response, err := client.DescribeECSInvocationResults(ctx, d.Region, commandID)
 		if err != nil {
-			logger.Error(err)
-			return ""
+			return "", err
 		}
 		if len(response.Invocation.InvocationResults.InvocationResult) == 0 {
-			logger.Error("Missing invocation result.")
-			return ""
+			return "", errors.New("alibaba ecs: missing invocation result")
 		}
 
 		result := response.Invocation.InvocationResults.InvocationResult[0]
@@ -80,17 +97,14 @@ func (d *Driver) describeInvocationResults(ctx context.Context, client interface
 			if attempts < d.pollLimit() {
 				continue
 			}
-			logger.Error("Timeout: Wait 5s by default.")
-			return ""
+			return "", fmt.Errorf("alibaba ecs: Timeout: command did not complete after %d polls", d.pollLimit())
 		case "Finished":
-			return result.Output
+			return result.Output, nil
 		default:
 			if result.ErrorInfo != "" {
-				logger.Error("Exception status: " + status + " - " + result.ErrorInfo)
-				return ""
+				return "", fmt.Errorf("alibaba ecs: Exception status: %s - %s", status, result.ErrorInfo)
 			}
-			logger.Error("Exception status: " + status)
-			return ""
+			return "", fmt.Errorf("alibaba ecs: Exception status: %s", status)
 		}
 	}
 }
@@ -120,10 +134,17 @@ func (d *Driver) pollLimit() int {
 	return 20
 }
 
-func (d *Driver) sleepFor(delay time.Duration) {
+func (d *Driver) sleepFor(ctx context.Context, delay time.Duration) error {
 	if d.sleep != nil {
 		d.sleep(delay)
-		return
+		return ctx.Err()
 	}
-	time.Sleep(delay)
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }

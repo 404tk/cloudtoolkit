@@ -46,6 +46,12 @@ func (d *Driver) RunCommand(ctx context.Context, instanceID, osType, command str
 	if d == nil || d.Client == nil {
 		return "", errors.New("azure compute: nil api client")
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	target, err := d.resolveRunCommandTarget(instanceID)
 	if err != nil {
 		return "", err

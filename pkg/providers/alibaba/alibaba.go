@@ -335,7 +335,10 @@ func (p *Provider) ExecuteCloudVMCommand(ctx context.Context, instanceID, cmd st
 		if p.region == "" || p.region == "all" {
 			return schema.CommandResult{}, fmt.Errorf("headless shell requires explicit region")
 		}
-		output := p.newECSDriver(p.region).RunCommand(instanceID, osType, command)
+		output, err := p.newECSDriver(p.region).RunCommandContext(ctx, instanceID, osType, command)
+		if err != nil {
+			return schema.CommandResult{}, err
+		}
 		return schema.CommandResult{Output: output}, nil
 	}
 
@@ -348,7 +351,10 @@ func (p *Provider) ExecuteCloudVMCommand(ctx context.Context, instanceID, cmd st
 	if err != nil {
 		return schema.CommandResult{}, err
 	}
-	output := d.RunCommand(instanceID, host.OSType, string(command))
+	output, err := d.RunCommandContext(ctx, instanceID, host.OSType, string(command))
+	if err != nil {
+		return schema.CommandResult{}, err
+	}
 	return schema.CommandResult{Output: output}, nil
 }
 

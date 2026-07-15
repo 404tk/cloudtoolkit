@@ -4,11 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/404tk/cloudtoolkit/pkg/schema"
 	"github.com/404tk/cloudtoolkit/utils/argparse"
-	"github.com/404tk/cloudtoolkit/utils/logger"
 )
 
 type InstanceCmdCheck struct{}
@@ -28,27 +26,7 @@ type instanceCommand struct {
 }
 
 func (p InstanceCmdCheck) Run(ctx context.Context, config map[string]string) {
-	resultAny, err := p.Result(ctx, config)
-	if err != nil && resultAny == nil {
-		logger.Error(err.Error())
-		return
-	}
-
-	result, ok := resultAny.(InstanceCmdCheckResult)
-	if !ok {
-		logger.Error("Invalid result type")
-		return
-	}
-	if result.Status == "error" {
-		logger.Error(result.Error)
-		return
-	}
-	if result.Output == "" {
-		return
-	}
-	if _, err := os.Stdout.WriteString(result.Output); err != nil {
-		logger.Error(err.Error())
-	}
+	RunStructured(ctx, config, p)
 }
 
 func (p InstanceCmdCheck) Result(ctx context.Context, config map[string]string) (any, error) {
@@ -63,7 +41,8 @@ func (p InstanceCmdCheck) Result(ctx context.Context, config map[string]string) 
 	}
 	execer, ok := i.Providers.(schema.VMExecutor)
 	if !ok {
-		return nil, fmt.Errorf("%s does not support instance-cmd-check", i.Providers.Name())
+		err := fmt.Errorf("%s does not support instance-cmd-check", i.Providers.Name())
+		return nil, NewResultError(nil, CodeUnsupported, err)
 	}
 
 	commandResult, err := execer.ExecuteCloudVMCommand(ctx, parsed.InstanceID, parsed.Command)
@@ -76,7 +55,7 @@ func (p InstanceCmdCheck) Result(ctx context.Context, config map[string]string) 
 	if err != nil {
 		result.Status = "error"
 		result.Error = err.Error()
-		return result, NewResultError(result, 4, err)
+		return result, NewResultError(result, CodeExecutionFailed, err)
 	}
 	result.Status = "success"
 	return result, nil

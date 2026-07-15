@@ -101,8 +101,9 @@ func (e PartialError) sortedRegions() []string {
 // If tracker is non-nil, each region's completion emits a progress update
 // (serialised — tracker updates are not thread-safe on their own caller side).
 // Returns the aggregated slice and a map of region -> error for regions that
-// failed. Honours ctx.Done() by stopping dispatch of new regions; in-flight
-// fns receive the same ctx and are expected to bail out.
+// failed. Honours ctx.Done() by stopping dispatch of new regions and recording
+// ctx.Err for regions not dispatched; in-flight fns receive the same ctx and
+// are expected to bail out.
 func ForEach[T any](
 	ctx context.Context,
 	regions []string,
@@ -110,6 +111,9 @@ func ForEach[T any](
 	tracker *processbar.RegionTracker,
 	fn func(ctx context.Context, region string) ([]T, error),
 ) ([]T, map[string]error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if concurrency <= 0 {
 		concurrency = DefaultConcurrency
 	}
@@ -120,12 +124,30 @@ func ForEach[T any](
 		errs = map[string]error{}
 		wg   sync.WaitGroup
 	)
-	for _, r := range regions {
+	addPendingErrors := func(pending []string, err error) {
+		mu.Lock()
+		defer mu.Unlock()
+		for _, region := range pending {
+			errs[region] = err
+		}
+	}
+	for i, r := range regions {
+		// Check before attempting to acquire a slot. This avoids dispatching a
+		// new provider request after cancellation when a semaphore is available.
+		if err := ctx.Err(); err != nil {
+			addPendingErrors(regions[i:], err)
+			break
+		}
 		select {
 		case <-ctx.Done():
-			wg.Wait()
-			return out, errs
+			addPendingErrors(regions[i:], ctx.Err())
+			goto wait
 		case sem <- struct{}{}:
+		}
+		if err := ctx.Err(); err != nil {
+			<-sem
+			addPendingErrors(regions[i:], err)
+			break
 		}
 		wg.Add(1)
 		region := r
@@ -148,6 +170,8 @@ func ForEach[T any](
 			}
 		}()
 	}
+
+wait:
 	wg.Wait()
 	return out, errs
 }

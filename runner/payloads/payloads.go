@@ -2,6 +2,7 @@ package payloads
 
 import (
 	"context"
+	"errors"
 	"sort"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 
 type Payload interface {
 	Run(context.Context, map[string]string)
+	Result(context.Context, map[string]string) (any, error)
 	Desc() string
 }
 
@@ -33,6 +35,73 @@ type ResultProducer interface {
 	Result(context.Context, map[string]string) (any, error)
 }
 
+// ResultStatus is the provider-independent execution outcome consumed by all
+// output renderers.
+type ResultStatus string
+
+const (
+	ResultSuccess ResultStatus = "success"
+	ResultPartial ResultStatus = "partial"
+	ResultFailure ResultStatus = "error"
+)
+
+// ErrorCode is the stable, machine-readable error contract shared by payloads
+// and headless output. New codes may be added, but existing meanings must not
+// be changed.
+type ErrorCode string
+
+const (
+	CodeOK               ErrorCode = "ok"
+	CodeInvalidArgument  ErrorCode = "invalid_argument"
+	CodePartialFailure   ErrorCode = "partial_failure"
+	CodeApprovalRequired ErrorCode = "approval_required"
+	CodeApprovalRejected ErrorCode = "approval_rejected"
+	CodeUnsupported      ErrorCode = "unsupported"
+	CodeExecutionFailed  ErrorCode = "execution_failed"
+	CodeOutputFailed     ErrorCode = "output_failed"
+	CodeCanceled         ErrorCode = "canceled"
+	CodeDeadlineExceeded ErrorCode = "deadline_exceeded"
+)
+
+// Result is the single execution kernel used by JSON and human-readable
+// renderers. Value is the payload-specific structured result.
+type Result struct {
+	Value  any
+	Status ResultStatus
+	Code   ErrorCode
+	Err    error
+}
+
+// Execute invokes a payload ResultProducer exactly once and normalizes its
+// outcome. Plain errors are treated as invalid input/configuration errors;
+// provider operations should return NewResultError with a stable code.
+func Execute(ctx context.Context, config map[string]string, producer ResultProducer) Result {
+	value, err := producer.Result(ctx, config)
+	if err == nil {
+		return Result{Value: value, Status: ResultSuccess, Code: CodeOK}
+	}
+	if errors.Is(err, context.Canceled) {
+		return Result{Value: value, Status: ResultFailure, Code: CodeCanceled, Err: err}
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return Result{Value: value, Status: ResultFailure, Code: CodeDeadlineExceeded, Err: err}
+	}
+
+	var resultErr ResultError
+	if errors.As(err, &resultErr) {
+		status := ResultFailure
+		if resultErr.ErrorCode() == CodePartialFailure {
+			status = ResultPartial
+		}
+		if value == nil {
+			value = resultErr.ResultPayload()
+		}
+		return Result{Value: value, Status: status, Code: resultErr.ErrorCode(), Err: err}
+	}
+
+	return Result{Value: value, Status: ResultFailure, Code: CodeInvalidArgument, Err: err}
+}
+
 // CapabilityProvider lets a payload declare which provider capability it needs
 // (e.g. "iam", "bucket", "vm"). headless uses this to short-circuit before
 // calling into the provider for a payload it cannot satisfy. Payloads that do
@@ -44,13 +113,13 @@ type CapabilityProvider interface {
 type ResultError interface {
 	error
 	ResultPayload() any
-	ExitCode() int
+	ErrorCode() ErrorCode
 }
 
 type structuredResultError struct {
-	payload  any
-	err      error
-	exitCode int
+	payload any
+	err     error
+	code    ErrorCode
 }
 
 func (e structuredResultError) Error() string {
@@ -60,25 +129,29 @@ func (e structuredResultError) Error() string {
 	return e.err.Error()
 }
 
+func (e structuredResultError) Unwrap() error {
+	return e.err
+}
+
 func (e structuredResultError) ResultPayload() any {
 	return e.payload
 }
 
-func (e structuredResultError) ExitCode() int {
-	if e.exitCode <= 0 {
-		return 1
+func (e structuredResultError) ErrorCode() ErrorCode {
+	if e.code == "" {
+		return CodeExecutionFailed
 	}
-	return e.exitCode
+	return e.code
 }
 
-func NewResultError(payload any, exitCode int, err error) error {
+func NewResultError(payload any, code ErrorCode, err error) error {
 	if err == nil {
 		return nil
 	}
 	return structuredResultError{
-		payload:  payload,
-		err:      err,
-		exitCode: exitCode,
+		payload: payload,
+		err:     err,
+		code:    code,
 	}
 }
 

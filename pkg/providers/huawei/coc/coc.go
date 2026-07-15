@@ -47,12 +47,19 @@ func (d *Driver) client() *api.Client {
 	return d.Client
 }
 
-func (d *Driver) sleep(dur time.Duration) {
+func (d *Driver) sleep(ctx context.Context, dur time.Duration) error {
 	if d.nowSleep != nil {
 		d.nowSleep(dur)
-		return
+		return ctx.Err()
 	}
-	time.Sleep(dur)
+	timer := time.NewTimer(dur)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func (d *Driver) region() string {
@@ -82,6 +89,9 @@ func (d *Driver) ExecuteOS(ctx context.Context, instanceID, osType, command stri
 	}
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	if err := ctx.Err(); err != nil {
+		return schema.CommandResult{}, err
 	}
 	if strings.TrimSpace(command) == "" {
 		return schema.CommandResult{}, errors.New("huawei coc: command is empty")
@@ -114,7 +124,9 @@ func (d *Driver) ExecuteOS(ctx context.Context, instanceID, osType, command stri
 		return schema.CommandResult{}, errors.New("huawei coc: empty script uuid from create script")
 	}
 	defer func() {
-		_, _ = d.client().COCDeleteScript(context.WithoutCancel(ctx), region, projectID, scriptUUID)
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+		_, _ = d.client().COCDeleteScript(cleanupCtx, region, projectID, scriptUUID)
 	}()
 
 	executeBody, err := json.Marshal(api.COCExecuteScriptRequest{
@@ -168,7 +180,9 @@ func (d *Driver) ExecuteOS(ctx context.Context, instanceID, osType, command stri
 			}
 			return schema.CommandResult{Output: aggregateBatchOutput(batch, executeUUID, status)}, nil
 		}
-		d.sleep(pollInterval)
+		if err := d.sleep(ctx, pollInterval); err != nil {
+			return schema.CommandResult{}, err
+		}
 	}
 	return schema.CommandResult{Output: fmt.Sprintf("execution %s still running after %d polls", executeUUID, pollAttempts)}, nil
 }
